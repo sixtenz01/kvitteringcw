@@ -29,6 +29,10 @@
       onlyMember: false,
       onlyDup: false,
       pant: '',
+      bong: '',
+      item: '',
+      groups: [],
+      onlyAnom: false,
       sort: 'none'
     };
   }
@@ -77,8 +81,23 @@
       if (String(item.memberNumber).toLowerCase().indexOf(String(f.member).toLowerCase()) === -1) return false;
     }
     if (f.onlyDup && !(ctx && ctx.dupIds && ctx.dupIds[item.transactionId])) return false;
+    if (f.bong) {
+      if (String(item.bongnr || item.transactionId || '').toLowerCase().indexOf(String(f.bong).toLowerCase()) === -1) return false;
+    }
+    if (f.item) {
+      var sc = ctx && ctx.scan && ctx.scan[item.transactionId];
+      if (!sc) return false;
+      var q = String(f.item).toUpperCase();
+      var hit = sc.items.some(function (i) { return String(i.c).indexOf(q) !== -1 || String(i.n).toUpperCase().indexOf(q) !== -1; });
+      if (!hit) return false;
+    }
+    if (f.groups && f.groups.length) {
+      var gs = ctx && ctx.groupsOf && ctx.groupsOf(item.transactionId);
+      if (!gs || !gs.some(function (g) { return f.groups.indexOf(g) !== -1; })) return false;
+    }
+    if (f.onlyAnom && !(ctx && ctx.anom && ctx.anom[item.transactionId] && ctx.anom[item.transactionId].length)) return false;
     if (f.pant) {
-      var info = ctx && ctx.pant && ctx.pant[item.transactionId];
+      var info = ctx && ctx.scan && ctx.scan[item.transactionId];
       if (!info) return false;
       if (f.pant === 'any' && !(info.sale !== 0 || info.ret !== 0)) return false;
       if (f.pant === 'sale' && !(info.sale > 0)) return false;
@@ -133,30 +152,210 @@
   }
 
   var PANT_LINE = /^\s*\d{1,4}\s+PANT(ELAPP)?\b/i;
+  var ITEM_ROW = /^\s*(\d{1,14})\s+(.+)$/;
+  var QTY_ROW = /^Antall:\s*([\d.,]+)\s*\S*\s*à\s*Kr\s*([\d.,]+)/i;
 
   function round2(n) { return Math.round(n * 100) / 100; }
 
-  function parseReceipt(rows) {
-    var sale = 0, ret = 0, saleLines = 0, retLines = 0;
-    (rows || []).forEach(function (cells) {
-      if (!cells || cells.length < 2) return;
-      if (!PANT_LINE.test(cells[0])) return;
-      var amount = null;
-      for (var i = cells.length - 1; i > 0 && amount === null; i--) amount = parseAmount(cells[i]);
-      if (amount === null) return;
-      if (amount < 0) { ret += amount; retLines++; } else { sale += amount; saleLines++; }
-    });
-    return { sale: round2(sale), ret: round2(ret), saleLines: saleLines, retLines: retLines };
+  function lastAmount(cells) {
+    for (var i = cells.length - 1; i > 0; i--) {
+      var a = parseAmount(cells[i]);
+      if (a !== null) return a;
+    }
+    return null;
   }
 
-  function sumPant(items, pantMap) {
+  function parseReceipt(rows) {
+    var items = [], pay = {}, last = null;
+    var sale = 0, ret = 0, saleLines = 0, retLines = 0, np = 0;
+    (rows || []).forEach(function (cells) {
+      if (!cells || !cells.length) return;
+      var c0 = String(cells[0] || '').trim();
+      var q = QTY_ROW.exec(c0);
+      if (q) { if (last) last.q = parseAmount(q[1].replace(',', '.')); return; }
+      if (cells.length < 2) return;
+      if (parseAmount(c0) !== null) return;
+      var amount = lastAmount(cells);
+      if (amount === null) return;
+      if (/:\s*$/.test(c0)) {
+        var label = c0.replace(/:\s*$/, '');
+        pay[label] = round2((pay[label] || 0) + amount);
+        last = null;
+        return;
+      }
+      var m = ITEM_ROW.exec(c0);
+      if (!m) return;
+      last = { c: m[1], n: m[2].trim(), a: amount };
+      items.push(last);
+      if (PANT_LINE.test(c0)) {
+        if (amount < 0) { ret += amount; retLines++; } else { sale += amount; saleLines++; }
+      } else np++;
+    });
+    return { v: 2, items: items, pay: pay, np: np, sale: round2(sale), ret: round2(ret), saleLines: saleLines, retLines: retLines };
+  }
+
+  function sumPant(items, scanMap) {
     var sale = 0, ret = 0, scanned = 0;
     items.forEach(function (it) {
-      var p = pantMap && pantMap[it.transactionId];
+      var p = scanMap && scanMap[it.transactionId];
       if (!p) return;
       scanned++; sale += p.sale; ret += p.ret;
     });
     return { sale: round2(sale), ret: round2(ret), net: round2(sale + ret), scanned: scanned, total: items.length };
+  }
+
+  // ---- varegrupper -------------------------------------------------------
+  function esc(t) { return String(t).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
+  var reCache = {};
+  function kwTest(code, name, kw) {
+    kw = String(kw || '').trim();
+    if (!kw) return false;
+    if (kw.charAt(0) === '#') {
+      var c = kw.slice(1);
+      return c.slice(-1) === '*' ? String(code).indexOf(c.slice(0, -1)) === 0 : String(code) === c;
+    }
+    var key = kw.toUpperCase();
+    var re = reCache[key];
+    if (!re) {
+      re = key.charAt(0) === '*'
+        ? new RegExp(esc(key.slice(1)))
+        : new RegExp('(^|[^A-ZÆØÅ0-9])' + esc(key));
+      reCache[key] = re;
+    }
+    return re.test(String(name).toUpperCase());
+  }
+
+  function classify(item, rules) {
+    for (var i = 0; i < rules.length; i++) {
+      var r = rules[i];
+      var ex = (r.exclude || []).some(function (k) {
+        k = String(k || '').trim();
+        return kwTest(item.c, item.n, k.charAt(0) === '#' || k.charAt(0) === '*' ? k : '*' + k);
+      });
+      if (ex) continue;
+      if ((r.include || []).some(function (k) { return kwTest(item.c, item.n, k); })) return r.name;
+    }
+    return null;
+  }
+
+  var NO_GROUP = 'Uten gruppe';
+
+  function groupsOfScan(scan, rules) {
+    var seen = {}, out = [];
+    scan.items.forEach(function (it) {
+      var g = classify(it, rules) || NO_GROUP;
+      if (!seen[g]) { seen[g] = true; out.push(g); }
+    });
+    return out;
+  }
+
+  function groupSums(chosenIds, scanMap, rules) {
+    var acc = {};
+    chosenIds.forEach(function (id) {
+      var sc = scanMap[id];
+      if (!sc) return;
+      sc.items.forEach(function (it) {
+        var g = classify(it, rules) || NO_GROUP;
+        var e = acc[g] || (acc[g] = { group: g, lines: 0, sum: 0 });
+        e.lines++; e.sum += it.a;
+      });
+    });
+    return Object.keys(acc).map(function (k) { acc[k].sum = round2(acc[k].sum); return acc[k]; })
+      .sort(function (a, b) { return Math.abs(b.sum) - Math.abs(a.sum); });
+  }
+
+  function unmatched(scanMap, rules, limit) {
+    var acc = {};
+    Object.keys(scanMap).forEach(function (id) {
+      scanMap[id].items.forEach(function (it) {
+        if (classify(it, rules)) return;
+        var k = it.n.toUpperCase();
+        var e = acc[k] || (acc[k] = { name: k, code: it.c, count: 0, sum: 0 });
+        e.count++; e.sum += it.a;
+      });
+    });
+    return Object.keys(acc).map(function (k) { acc[k].sum = round2(acc[k].sum); return acc[k]; })
+      .sort(function (a, b) { return b.count - a.count || Math.abs(b.sum) - Math.abs(a.sum); })
+      .slice(0, limit || 15);
+  }
+
+  function defaultRules() {
+    return [
+      { name: 'Pant', include: ['#220', '#399'], exclude: [] },
+      { name: 'Tobakk', include: ['SKRUF', 'PRINCE', 'MARLBORO', 'CAMEL', 'WINSTON', 'LD', 'FIFTY FIVE', 'GENERAL', 'SNUS', 'ZYN', 'VELO', 'SIGARETT', 'LUCKY STRIKE'], exclude: [] },
+      { name: 'Brus', include: ['PEPSI', 'COCA-COLA', 'COLA', 'FANTA', 'SPRITE', 'SOLO', '7UP', 'MIRINDA', 'MOUNTAIN DEW', 'BRUS'], exclude: [] },
+      { name: 'Energidrikk', include: ['MONSTER', 'RED BULL', 'NOCCO', 'BURN'], exclude: [] },
+      { name: 'Frukt', include: ['BANAN', 'EPLE', 'APPELSIN', 'CLEMENTIN', 'PÆRE', 'DRUER', 'SITRON', 'LIME', 'MANGO', 'AVOKADO', 'KIWI', 'MELON', 'JORDBÆR', 'BLÅBÆR'], exclude: ['YOGHURT', 'BIOLA', 'KNUTE', 'SYLTE', 'SAFT', 'BOLLE'] },
+      { name: 'Grønt', include: ['AGURK', 'TOMAT', 'PAPRIKA', 'SALAT', 'GULROT', 'LØK', 'POTET', 'BROKKOLI', 'BLOMKÅL', 'KÅL', 'SOPP', 'SPINAT', 'PURRE', 'SELLERI'], exclude: ['CHIPS', 'SAUS', 'SUPPE', 'PIZZA', 'FERDIG'] },
+      { name: 'Bakeri', include: ['*BRØD', 'CROISSANT', 'DONUT', '*KNUTE', '*BOLLE', 'BAGUETTE', 'TOAST'], exclude: [] },
+      { name: 'Meieri', include: ['MELK', 'YOGHURT', 'BIOLA', 'SMØR', 'OST', 'FLØTE', '*EGG'], exclude: [] },
+      { name: 'Kjøtt og pålegg', include: ['KYLLING', 'KJØTTDEIG', 'PØLSE', 'BACON', 'SKINKE'], exclude: [] },
+      { name: 'Ferdigmat', include: ['BOWL', 'PIZZA', 'LASAGNE', 'TORO'], exclude: [] },
+      { name: 'Snacks og godteri', include: ['*CHIPS', '*SJOKOLADE', 'GODTERI'], exclude: [] },
+      { name: 'Kaffe og te', include: ['NESCAFE', 'KAFFE'], exclude: [] }
+    ];
+  }
+
+  function sanitizeRules(raw) {
+    if (!Array.isArray(raw)) return defaultRules();
+    var out = raw.filter(function (r) { return r && typeof r.name === 'string' && r.name.trim(); }).map(function (r) {
+      var list = function (v) { return Array.isArray(v) ? v.map(String).map(function (x) { return x.trim(); }).filter(Boolean) : []; };
+      return { name: r.name.trim(), include: list(r.include), exclude: list(r.exclude) };
+    });
+    return out.length ? out : defaultRules();
+  }
+
+  // ---- avvik -------------------------------------------------------------
+  function defaultAnom() {
+    return { bigReturn: '300', manyLapper: '8', roundMin: '500', cashNoSale: true };
+  }
+
+  function sanitizeAnom(raw) {
+    var d = defaultAnom();
+    if (!raw || typeof raw !== 'object') return d;
+    ['bigReturn', 'manyLapper', 'roundMin'].forEach(function (k) { if (k in raw) d[k] = String(raw[k]); });
+    if ('cashNoSale' in raw) d.cashNoSale = !!raw.cashNoSale;
+    return d;
+  }
+
+  function anomalies(item, scan, cfg) {
+    var out = [];
+    if (hasNum(cfg.roundMin) && typeof item.totalAmount === 'number') {
+      var cents = Math.round(Math.abs(item.totalAmount) * 100);
+      if (cents >= Number(cfg.roundMin) * 100 && cents % 10000 === 0) out.push('Rundt beløp');
+    }
+    if (scan) {
+      if (hasNum(cfg.bigReturn) && Math.abs(scan.ret) >= Number(cfg.bigReturn)) out.push('Stor panteretur (' + Math.abs(scan.ret) + ' kr)');
+      if (hasNum(cfg.manyLapper) && scan.retLines >= Number(cfg.manyLapper)) out.push('Mange pantelapper (' + scan.retLines + ')');
+      if (cfg.cashNoSale && scan.np === 0 && scan.retLines > 0 && (scan.pay['Kontant tilbake'] || 0) > 0) out.push('Kontant tilbake uten salg');
+    }
+    return out;
+  }
+
+  // ---- butikknavn ----------------------------------------------------------
+  function storeLabel(num, map) {
+    var n = map && map[String(num)];
+    if (!n) return String(num);
+    return /^\s*\d+\s*[-–]/.test(n) ? n : num + ' – ' + n;
+  }
+
+  function parseStoreText(text) {
+    var out = {};
+    String(text || '').split(/\r?\n/).forEach(function (line) {
+      var m = /^\s*(\d{2,6})\s*[=\-–:]\s*(.+?)\s*$/.exec(line);
+      if (m) out[m[1]] = m[2];
+    });
+    return out;
+  }
+
+  // ---- CSV ------------------------------------------------------------------
+  function toCsv(rows) {
+    var q = function (v) {
+      v = v === null || v === undefined ? '' : String(v);
+      return /[;"\n\r]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+    };
+    return '﻿' + rows.map(function (r) { return r.map(q).join(';'); }).join('\r\n');
   }
 
   function pad(n) { return n < 10 ? '0' + n : String(n); }
@@ -207,6 +406,19 @@
     findDuplicates: findDuplicates,
     sumSelected: sumSelected,
     parseReceipt: parseReceipt,
+    classify: classify,
+    groupsOfScan: groupsOfScan,
+    groupSums: groupSums,
+    unmatched: unmatched,
+    defaultRules: defaultRules,
+    sanitizeRules: sanitizeRules,
+    NO_GROUP: NO_GROUP,
+    defaultAnom: defaultAnom,
+    sanitizeAnom: sanitizeAnom,
+    anomalies: anomalies,
+    storeLabel: storeLabel,
+    parseStoreText: parseStoreText,
+    toCsv: toCsv,
     parseAmount: parseAmount,
     sumPant: sumPant,
     quickRange: quickRange,

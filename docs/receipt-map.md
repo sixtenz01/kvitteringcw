@@ -116,3 +116,11 @@ Beslutning: pluginen kaller ikke Lindbaks API. Kun gridets data og iframens DOM 
 
 - Lindbaks DOM og grid-datamodell kan endres uten varsel; isoler parsing i ett lag med tester.
 - Kvitteringer kan inneholde persondata; ingenting skal forlate enheten.
+
+## Fra den gamle pluginen (verifisert i produksjon)
+
+- API-rot: `/LindbakRetail_1/Journal/Viewer/Api/`. `POST GetReceiptDetails` med `{endDateTime, journalSourceName:'main', retailStoreNum, sequenceNum, workstationNum}`, headere `Content-Type: application/json`, `X-Requested-With: XMLHttpRequest` og `__RequestVerificationToken` (fra hidden input). Svaret er HTML (ev. JSON-kodet streng).
+- Bongnr (kolonne `td[data-field="receiptIdentifier"]`) har formatet `butikk-kasse-sekvens`. Datokolonne: `td[data-field="endDateTime"]`.
+- Butikklisten: `jQuery('#storesWrapper div.k-widget.k-multiselect').eq(1).data('kendoMultiSelect')`; `dataSource.data()[i].get('number')` og `.get('text')`. Sette butikker: `ms.value([nr…]); ms.trigger('change')`.
+- CW-filter: `#fromDatePicker`, `#toDatePicker` (format `dd.mm.åååå`), `[ng-model="vm.selectedFilters.memberNumber"]`, `[ng-model="vm.selectedFilters.externalLoyaltyNumber"]`, `#freetextSearchInput`, `#receiptNumber`. Oppdater: `[ng-click="vm.applyFilters()"]`, nullstill: `[ng-click="vm.resetFilters()"]`. Verdier settes med native `value`-setter + `input`/`change`/`blur`.
+- Gamle pluginen setter inn en egen avkrysningskolonne (`.kv-cb-cell`, `#kv-select-all`) og bruker `#kv-panel`, `.kv-cb`, `.kv-tag`, `.kv-checked`. Den nye bruker prefikset `kvr-` for å unngå kollisjon, men begge bør ikke kjøre samtidig.

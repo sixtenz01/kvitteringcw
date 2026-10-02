@@ -42,18 +42,81 @@ assert.strictEqual(L.activeCount(F({ types: ['1'], onlyNegative: true, sort: 'su
 assert.strictEqual(L.typeLabel(11), 'PDA-operasjon (uavklart)');
 assert.strictEqual(L.typeLabel(99), 'Type 99');
 const r47 = [['Beskrivelse', '', 'Beløp'], ['RETUR VARE'], ['399 PANTELAPP', '', '-150.00'], ['RETUR VARE'], ['399 PANTELAPP', '', '-109.00'], ['RETUR VARE'], ['399 PANTELAPP', '', '-125.00'], ['RETUR VARE'], ['399 PANTELAPP', '', '-172.00'], ['', 'Totalt', '-556.00'], ['Kontant tilbake:', '', '556.00']];
-assert.deepStrictEqual(L.parseReceipt(r47), { sale: 0, ret: -556, saleLines: 0, retLines: 4 });
+const sub = (o, k) => k.reduce((a, x) => (a[x] = o[x], a), {});
+assert.deepStrictEqual(sub(L.parseReceipt(r47), ['sale', 'ret', 'saleLines', 'retLines']), { sale: 0, ret: -556, saleLines: 0, retLines: 4 });
 const r97 = [['7025110196576 COOP FROKOSTEGG 6PK', '', '31.90'], ['399 PANTELAPP', '', '-61.00'], ['399 PANTELAPP', '', '-33.00'], ['399 PANTELAPP', '', '-4.00'], ['7038010002274 BIOLA JORDBÆR 1000G (SLETT', '', '39.90']];
-assert.deepStrictEqual(L.parseReceipt(r97), { sale: 0, ret: -98, saleLines: 0, retLines: 3 });
+assert.deepStrictEqual(sub(L.parseReceipt(r97), ['sale', 'ret', 'saleLines', 'retLines']), { sale: 0, ret: -98, saleLines: 0, retLines: 3 });
 const rSale = [['7044610877488 PEPSI MAX LEMON 0.5L', '', '32.90'], ['220 PANT', '', '2.00'], ['7044610877999 KARTOFFEL PANT 1KG', '', '10.00'], ['81.52', '25 %', '20.38', '101.90', '']];
-assert.deepStrictEqual(L.parseReceipt(rSale), { sale: 2, ret: 0, saleLines: 1, retLines: 0 });
-assert.deepStrictEqual(L.parseReceipt([]), { sale: 0, ret: 0, saleLines: 0, retLines: 0 });
+assert.deepStrictEqual(sub(L.parseReceipt(rSale), ['sale', 'ret', 'saleLines', 'retLines']), { sale: 2, ret: 0, saleLines: 1, retLines: 0 });
+assert.deepStrictEqual(sub(L.parseReceipt([]), ['sale', 'ret']), { sale: 0, ret: 0 });
 assert.strictEqual(L.parseAmount('1\u00a0000.00'), 1000);
 assert.strictEqual(L.parseAmount('-0,70'), -0.7);
-const pm = { 'a-1': { sale: 0, ret: -556 }, 'a-4': { sale: 2, ret: 0 }, 'a-3': { sale: 0, ret: 0 } };
-assert.deepStrictEqual(ids(F({ pant: 'any' }), { pant: pm }), ['a-1', 'a-4']);
-assert.deepStrictEqual(ids(F({ pant: 'sale' }), { pant: pm }), ['a-4']);
-assert.deepStrictEqual(ids(F({ pant: 'return' }), { pant: pm }), ['a-1']);
+const pm = { 'a-1': { sale: 0, ret: -556, items: [] }, 'a-4': { sale: 2, ret: 0, items: [] }, 'a-3': { sale: 0, ret: 0, items: [] } };
+assert.deepStrictEqual(ids(F({ pant: 'any' }), { scan: pm }), ['a-1', 'a-4']);
+assert.deepStrictEqual(ids(F({ pant: 'sale' }), { scan: pm }), ['a-4']);
+assert.deepStrictEqual(ids(F({ pant: 'return' }), { scan: pm }), ['a-1']);
 assert.deepStrictEqual(ids(F({ pant: 'any' })), []);
 assert.deepStrictEqual(L.sumPant(rows, pm), { sale: 2, ret: -556, net: -554, scanned: 3, total: 5 });
+
+// ---- varelinjer, grupper, avvik, butikknavn, CSV
+const full = L.parseReceipt([
+  ['Beskrivelse', '', 'Beløp'],
+  ['7330196001042 SKRUF NO4 FRESH S4', '', '101.90'],
+  ['7044610877488 PEPSI MAX LEMON 0.5L', '', '32.90'],
+  ['220 PANT', '', '2.00'],
+  ['1024 FROKOSTBRØD FIN', '', '95.40'],
+  ['Antall: 6.000 stk à Kr 15.90'],
+  ['7038010002274 BIOLA JORDBÆR 1000G (SLETT', '', '39.90'],
+  ['7044416015367 REGAL HVETEMEL 1KG', '', '20.50'],
+  ['Øreavrunding', '-0.30'],
+  ['Totalt', '293.35'],
+  ['Bank:', '', '293.35'],
+  ['Kontant tilbake:', '', '5.00'],
+  ['Referanse: 59778'],
+  ['81.52', '25 %', '20.38', '101.90', '']
+]);
+assert.strictEqual(full.items.length, 6);
+assert.strictEqual(full.items[3].q, 6);
+assert.deepStrictEqual(full.pay, { 'Bank': 293.35, 'Kontant tilbake': 5 });
+assert.strictEqual(full.np, 5);
+const R = L.defaultRules();
+const g = (name, code) => L.classify({ c: code || '7000000000000', n: name }, R);
+assert.strictEqual(g('SKRUF NO4 FRESH S4'), 'Tobakk');
+assert.strictEqual(g('PRINCE WHITE 28PK'), 'Tobakk');
+assert.strictEqual(g('PEPSI MAX LEMON 0.5L'), 'Brus');
+assert.strictEqual(g('BANAN KG'), 'Frukt');
+assert.strictEqual(g('BIOLA JORDBÆR 1000G (SLETT'), 'Meieri');
+assert.strictEqual(g('JORDBÆR 250G'), 'Frukt');
+assert.strictEqual(g('BLÅBÆRKNUTE VANILJE'), 'Bakeri');
+assert.strictEqual(g('FROKOSTBRØD FIN'), 'Bakeri');
+assert.strictEqual(g('AGURK STK'), 'Grønt');
+assert.strictEqual(g('POTETCHIPS SALT'), 'Snacks og godteri');
+assert.strictEqual(g('PANT', '220'), 'Pant');
+assert.strictEqual(g('PANTELAPP', '399'), 'Pant');
+assert.strictEqual(g('REGAL HVETEMEL 1KG'), null);
+assert.strictEqual(L.classify({ c: '7044999', n: 'X' }, [{ name: 'Pre', include: ['#7044*'], exclude: [] }]), 'Pre');
+assert.deepStrictEqual(L.groupsOfScan(full, R).sort(), ['Bakeri', 'Brus', 'Meieri', 'Pant', 'Tobakk', 'Uten gruppe']);
+const sc = { s1: full };
+const gs = L.groupSums(['s1', 'missing'], sc, R);
+assert.strictEqual(gs.find(x => x.group === 'Tobakk').sum, 101.9);
+assert.strictEqual(L.unmatched(sc, R)[0].name, 'REGAL HVETEMEL 1KG');
+assert.strictEqual(L.sanitizeRules('x').length, R.length);
+
+const cfg = L.defaultAnom();
+assert.deepStrictEqual(L.anomalies({ totalAmount: 1000 }, null, cfg), ['Rundt beløp']);
+assert.deepStrictEqual(L.anomalies({ totalAmount: 1000.5 }, null, cfg), []);
+assert.deepStrictEqual(L.anomalies({ totalAmount: 300 }, null, cfg), []);
+const pr = L.parseReceipt([['399 PANTELAPP', '', '-150.00'], ['399 PANTELAPP', '', '-250.00'], ['Kontant tilbake:', '', '400.00']]);
+assert.deepStrictEqual(L.anomalies({ totalAmount: -400 }, pr, cfg), ['Stor panteretur (400 kr)', 'Kontant tilbake uten salg']);
+const lapper = L.parseReceipt(Array.from({ length: 9 }, () => ['399 PANTELAPP', '', '-5.00']));
+assert.deepStrictEqual(L.anomalies({ totalAmount: -45 }, lapper, cfg), ['Mange pantelapper (9)']);
+assert.deepStrictEqual(L.anomalies({ totalAmount: 1000 }, null, Object.assign({}, cfg, { roundMin: '' })), []);
+
+assert.strictEqual(L.storeLabel(1005, { 1005: 'Coop Mega Kolbotn' }), '1005 – Coop Mega Kolbotn');
+assert.strictEqual(L.storeLabel(1005, { 1005: '1005 - Coop Mega Kolbotn' }), '1005 - Coop Mega Kolbotn');
+assert.strictEqual(L.storeLabel(2000, {}), '2000');
+assert.deepStrictEqual(L.parseStoreText('1005=Coop Mega Kolbotn\nrusk\n1010 - Extra X'), { 1005: 'Coop Mega Kolbotn', 1010: 'Extra X' });
+assert.strictEqual(L.toCsv([['a;b', 'c"d'], [1, null]]), '\ufeff"a;b";"c""d"\r\n1;');
+assert.deepStrictEqual(ids(F({ bong: '1005-6' })), []);
+assert.deepStrictEqual(L.matches({ bongnr: '1005-6-12', transactionId: 'x' }, F({ bong: '6-12' })), true);
 console.log('logic: ok');

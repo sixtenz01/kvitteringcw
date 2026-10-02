@@ -11,9 +11,19 @@ Chrome MV3-utvidelse for Lindbak Chain Web → Kvitteringsjournal. Leser kun gri
 - Skanning av pant: åpner hver synlige salgskvittering (type 1) i Lindbaks eget visningsfelt, leser linjene `NNN PANT` (salg) og `NNN PANTELAPP` (retur), og cacher beløp lokalt per kvittering. Filter «Pant» og pant-total for valgte. Ca. 0,5–1 s per kvittering; avbrytes med Stopp.
 - Lagrede filtre (localStorage på chainweb.coop.no).
 
+## Funksjoner i v3
+
+- **Søk i CW** (hele journalen): dato, butikker (med navn fra CW), medlem, lojalitets-ID, vare/EAN, bongnr. Fyller CW sine egne felt og trykker OPPDATER.
+- **Butikknavn** hentes fra CW sin butikkliste og vises i alle filtre og i CSV.
+- **Skanning:** leser varelinjer, betaling og pant fra kvitteringene. Standard åpner hver kvittering i visningsfeltet; «Rask skanning» henter direkte via `GetReceiptDetails` (samme kall som gamle pluginen).
+- **Varegrupper** med nøkkelord (`ord` = starten av ord, `*ord` = inneholder, `#kode` = varenr/EAN). Ekskluder-ord treffer hvor som helst. Regelsettet bygges opp fra «Varer uten gruppe», og kan eksporteres/importeres.
+- **Avvik** (kun på knapp): stor panteretur, mange pantelapper, kontant tilbake uten salg, rundt beløp.
+- **Eksport:** CSV (semikolon, UTF-8 med BOM) for synlige eller valgte kvitteringer.
+
 ## Bruk av panelet
 
 - Dra i toppfeltet for å flytte. Plassering huskes. Dobbeltklikk toppfeltet for å nullstille plassering.
+- Panelet kan også dras i hjørnet nede til høyre for å endre størrelse; størrelsen huskes.
 - `–`/`+`-knappen, klikk på den lille pillen eller `Alt+K` skjuler og viser panelet.
 - Seksjoner kan åpnes og lukkes; valget huskes.
 - Panelet holdes innenfor skjermen ved endret vindusstørrelse.
