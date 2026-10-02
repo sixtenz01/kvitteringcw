@@ -7,6 +7,8 @@
   var SAVED_KEY = 'kvr.saved.v1';
   var COLLAPSE_KEY = 'kvr.collapsed.v1';
   var PANT_KEY = 'kvr.pant.v1';
+  var POS_KEY = 'kvr.pos.v1';
+  var SEC_KEY = 'kvr.sec.v1';
   var SCAN_TIMEOUT = 6000;
 
   var filters = L.defaultFilters();
@@ -137,16 +139,19 @@
   }
 
   function summary() {
-    if (!ui.summary) return;
+    if (!ui.stVisible) return;
     var chosen = Object.keys(selected).map(function (k) { return selected[k]; });
-    var s = L.sumSelected(chosen);
-    var dupGroups = ui.dup ? ui.dup.groups.length : 0;
+    var sm = L.sumSelected(chosen);
     var p = L.sumPant(chosen, pantMap);
-    ui.summary.textContent = 'Viser ' + (ui.visible || 0) + ' av ' + recs.length +
-      ' · Valgt: ' + s.count + ' · Sum valgt: ' + fmt(s.sum) + ' kr · Duplikatgrupper: ' + dupGroups +
-      ' · Pant valgte: salg ' + fmt(p.sale) + ', retur ' + fmt(p.ret) + ', netto ' + fmt(p.net) +
+    var active = L.activeCount(filters);
+    ui.stVisible.textContent = (ui.visible || 0) + ' / ' + recs.length;
+    ui.stSelected.textContent = String(sm.count);
+    ui.stSum.textContent = fmt(sm.sum);
+    ui.stDup.textContent = String(ui.dup ? ui.dup.groups.length : 0);
+    ui.pantLine.textContent = 'Pant valgte: salg ' + fmt(p.sale) + ' · retur ' + fmt(p.ret) + ' · netto ' + fmt(p.net) +
       ' kr (' + p.scanned + ' av ' + p.total + ' skannet)';
-    ui.active.textContent = L.activeCount(filters) ? L.activeCount(filters) + ' filter aktive' : 'Ingen filter';
+    ui.badge.textContent = (active ? active + ' filter' : 'ingen filter') + (sm.count ? ' · ' + sm.count + ' valgt' : '');
+    ui.badge.classList.toggle('kv-on', active > 0);
   }
 
   var optsKey = '';
@@ -284,56 +289,147 @@
     Object.keys(list).sort().forEach(function (k) { ui.saved.appendChild(el('option', { value: k, text: k })); });
   }
 
+  function section(id, title, kids, open) {
+    var body = el('div', { class: 'kv-secbody' }, kids);
+    var d = el('details', { class: 'kv-sec' }, [el('summary', { text: title }), body]);
+    var st = store(SEC_KEY) || {};
+    d.open = id in st ? !!st[id] : open;
+    d.addEventListener('toggle', function () {
+      var m = store(SEC_KEY) || {};
+      m[id] = d.open;
+      store(SEC_KEY, m);
+    });
+    return d;
+  }
+
+  function tile(label) {
+    var v = el('b', { text: '–' });
+    return { node: el('div', { class: 'kv-tile' }, [v, el('span', { text: label })]), value: v };
+  }
+
+  function btn(text, onclick, cls) {
+    return el('button', { type: 'button', class: 'kv-btn' + (cls ? ' ' + cls : ''), text: text, onclick: onclick });
+  }
+
+  function clamp(panel) {
+    var w = panel.offsetWidth, h = panel.offsetHeight;
+    var left = Math.min(Math.max(0, parseFloat(panel.style.left) || 0), Math.max(0, window.innerWidth - w));
+    var top = Math.min(Math.max(0, parseFloat(panel.style.top) || 0), Math.max(0, window.innerHeight - 40));
+    panel.style.left = left + 'px';
+    panel.style.top = top + 'px';
+    panel.style.maxHeight = Math.max(160, window.innerHeight - top - 12) + 'px';
+    return h;
+  }
+
+  function placePanel(panel) {
+    var pos = store(POS_KEY);
+    if (pos && typeof pos.left === 'number' && typeof pos.top === 'number') {
+      panel.style.left = pos.left + 'px';
+      panel.style.top = pos.top + 'px';
+    } else {
+      panel.style.left = Math.max(0, window.innerWidth - 352) + 'px';
+      panel.style.top = '70px';
+    }
+    clamp(panel);
+  }
+
+  function enableDrag(panel, head, onTap) {
+    var start = null;
+    head.addEventListener('pointerdown', function (e) {
+      if (e.button !== 0 || e.target.closest('button')) return;
+      start = { x: e.clientX, y: e.clientY, left: parseFloat(panel.style.left) || 0, top: parseFloat(panel.style.top) || 0, moved: false };
+      head.setPointerCapture(e.pointerId);
+      e.preventDefault();
+    });
+    head.addEventListener('pointermove', function (e) {
+      if (!start) return;
+      var dx = e.clientX - start.x, dy = e.clientY - start.y;
+      if (Math.abs(dx) + Math.abs(dy) > 4) start.moved = true;
+      if (!start.moved) return;
+      panel.style.left = (start.left + dx) + 'px';
+      panel.style.top = (start.top + dy) + 'px';
+      panel.classList.add('kv-dragging');
+      clamp(panel);
+    });
+    function end() {
+      if (!start) return;
+      var moved = start.moved;
+      start = null;
+      panel.classList.remove('kv-dragging');
+      if (moved) store(POS_KEY, { left: parseFloat(panel.style.left), top: parseFloat(panel.style.top) });
+      else onTap();
+    }
+    head.addEventListener('pointerup', end);
+    head.addEventListener('pointercancel', function () { start = null; panel.classList.remove('kv-dragging'); });
+    head.addEventListener('dblclick', function (e) {
+      if (e.target.closest('button')) return;
+      store(POS_KEY, null);
+      placePanel(panel);
+    });
+  }
+
   function buildPanel() {
     var panel = el('div', { id: 'kv-panel' });
-    var head = el('div', { class: 'kv-head' });
-    ui.active = el('span', { class: 'kv-badge', text: 'Ingen filter' });
-    var toggle = el('button', { type: 'button', class: 'kv-btn', text: '–' });
-    head.appendChild(el('strong', { text: 'Kvitteringshenter' }));
-    head.appendChild(ui.active);
-    head.appendChild(toggle);
-    var body = el('div', { class: 'kv-body' });
 
-    ui.summary = el('div', { class: 'kv-summary', text: '' });
-    body.appendChild(ui.summary);
+    ui.badge = el('span', { class: 'kv-badge', text: 'ingen filter' });
+    var toggle = el('button', { type: 'button', class: 'kv-icon', title: 'Skjul/vis (Alt+K)', text: '–' });
+    var head = el('div', { class: 'kv-head', title: 'Dra for å flytte · dobbeltklikk for å nullstille plassering' }, [
+      el('span', { class: 'kv-grip', text: '⠿' }),
+      el('span', { class: 'kv-title', text: 'Kvitteringshenter' }),
+      ui.badge,
+      toggle
+    ]);
 
-    var quick = el('div', { class: 'kv-quick' });
+    var t1 = tile('Viser'), t2 = tile('Valgt'), t3 = tile('Sum valgt (kr)'), t4 = tile('Duplikater');
+    ui.stVisible = t1.value; ui.stSelected = t2.value; ui.stSum = t3.value; ui.stDup = t4.value;
+    ui.pantLine = el('div', { class: 'kv-pantline', text: '' });
+    var stats = el('div', { class: 'kv-stats' }, [
+      el('div', { class: 'kv-tiles' }, [t1.node, t2.node, t3.node, t4.node]),
+      ui.pantLine
+    ]);
+
+    // Tid
+    var quick = el('div', { class: 'kv-chips' });
     [['today', 'I dag'], ['yesterday', 'I går'], ['last24h', 'Siste 24 t'], ['night', 'Natt 00–06'], ['day', 'Dag 06–18'], ['evening', 'Kveld 18–24']].forEach(function (q) {
-      quick.appendChild(el('button', {
-        type: 'button', class: 'kv-btn', text: q[1],
-        onclick: function () {
-          var r = L.quickRange(q[0]);
-          if (q[0] === 'night' || q[0] === 'day' || q[0] === 'evening') { filters.timeFrom = r.timeFrom; filters.timeTo = r.timeTo; }
-          else { filters.dateFrom = r.dateFrom; filters.dateTo = r.dateTo; filters.timeFrom = ''; filters.timeTo = ''; }
-          writeForm(); apply();
-        }
-      }));
+      quick.appendChild(btn(q[1], function () {
+        var r = L.quickRange(q[0]);
+        if (q[0] === 'night' || q[0] === 'day' || q[0] === 'evening') { filters.timeFrom = r.timeFrom; filters.timeTo = r.timeTo; }
+        else { filters.dateFrom = r.dateFrom; filters.dateTo = r.dateTo; filters.timeFrom = ''; filters.timeTo = ''; }
+        writeForm(); apply();
+      }, 'kv-chip'));
     });
-    body.appendChild(quick);
-
     ui.dateFrom = input('date'); ui.dateTo = input('date');
     ui.timeFrom = input('time'); ui.timeTo = input('time');
-    body.appendChild(el('div', { class: 'kv-row' }, [field('Dato fra', ui.dateFrom), field('Dato til', ui.dateTo)]));
-    body.appendChild(el('div', { class: 'kv-row' }, [field('Tid fra', ui.timeFrom), field('Tid til', ui.timeTo)]));
+    var secTime = section('time', 'Dato og tid', [
+      quick,
+      el('div', { class: 'kv-row' }, [field('Dato fra', ui.dateFrom), field('Dato til', ui.dateTo)]),
+      el('div', { class: 'kv-row' }, [field('Tid fra', ui.timeFrom), field('Tid til', ui.timeTo)])
+    ], true);
 
+    // Hvem og hva
     ui.stores = multi(3); ui.workstations = multi(4); ui.cashiers = multi(4); ui.types = multi(3);
-    body.appendChild(el('div', { class: 'kv-row' }, [field('Butikk', ui.stores), field('Kasse', ui.workstations)]));
-    body.appendChild(el('div', { class: 'kv-row' }, [field('Kasserer', ui.cashiers), field('Type', ui.types)]));
+    var secWho = section('who', 'Butikk, kasse og type', [
+      el('div', { class: 'kv-row' }, [field('Butikk', ui.stores), field('Kasse', ui.workstations)]),
+      el('div', { class: 'kv-row' }, [field('Kasserer', ui.cashiers), field('Type', ui.types)]),
+      el('div', { class: 'kv-hint', text: 'Hold Ctrl for flere valg.' })
+    ], true);
 
+    // Sum og medlem
     ui.sumMin = input('number', { step: '0.01', placeholder: 'min' });
     ui.sumMax = input('number', { step: '0.01', placeholder: 'maks' });
-    body.appendChild(el('div', { class: 'kv-row' }, [field('Sum fra', ui.sumMin), field('Sum til', ui.sumMax)]));
-
     var neg = check('Negativ sum (retur/panteretur)'); ui.onlyNegative = neg.box;
     ui.member = input('text', { placeholder: 'medlemsnr' });
     var mem = check('Kun med medlem'); ui.onlyMember = mem.box;
     var dp = check('Kun mulige duplikater'); ui.onlyDup = dp.box;
-    body.appendChild(neg.node);
-    body.appendChild(field('Medlemssøk', ui.member));
-    body.appendChild(mem.node);
-    body.appendChild(dp.node);
+    var secSum = section('sum', 'Sum, medlem og duplikater', [
+      el('div', { class: 'kv-row' }, [field('Sum fra', ui.sumMin), field('Sum til', ui.sumMax)]),
+      neg.node,
+      field('Medlemssøk', ui.member),
+      mem.node,
+      dp.node
+    ], true);
 
-
+    // Pant
     ui.pant = el('select', {}, [
       el('option', { value: '', text: 'Alle' }),
       el('option', { value: 'any', text: 'Har pant eller panteretur' }),
@@ -341,16 +437,19 @@
       el('option', { value: 'return', text: 'Har panteretur' })
     ]);
     ui.pant.addEventListener('change', onChange);
-    body.appendChild(field('Pant (krever skanning)', ui.pant));
-    ui.scanBtn = el('button', { type: 'button', class: 'kv-btn', text: 'Skann pant (synlige)', onclick: scanPant });
-    ui.stopBtn = el('button', { type: 'button', class: 'kv-btn', text: 'Stopp', disabled: 'disabled', onclick: function () { cancelScan = true; } });
-    body.appendChild(el('div', { class: 'kv-row' }, [ui.scanBtn, ui.stopBtn,
-      el('button', { type: 'button', class: 'kv-btn', text: 'Tøm pant-cache', onclick: function () {
+    ui.scanBtn = btn('Skann pant (synlige)', scanPant, 'kv-primary');
+    ui.stopBtn = btn('Stopp', function () { cancelScan = true; });
+    ui.stopBtn.disabled = true;
+    ui.scanStatus = el('div', { class: 'kv-note', text: '' });
+    var secPant = section('pant', 'Pant', [
+      field('Pant (krever skanning)', ui.pant),
+      el('div', { class: 'kv-row' }, [ui.scanBtn, ui.stopBtn, btn('Tøm cache', function () {
         pantMap = {}; store(PANT_KEY, pantMap); ui.scanStatus.textContent = 'Cache tømt.'; apply();
-      } })]));
-    ui.scanStatus = el('div', { class: 'kv-summary', text: '' });
-    body.appendChild(ui.scanStatus);
+      })]),
+      ui.scanStatus
+    ], true);
 
+    // Sortering
     ui.sort = el('select', {}, [
       el('option', { value: 'none', text: 'Standard' }),
       el('option', { value: 'sumDesc', text: 'Sum høyest først' }),
@@ -359,22 +458,13 @@
       el('option', { value: 'timeAsc', text: 'Eldste først' })
     ]);
     ui.sort.addEventListener('change', onChange);
-    body.appendChild(field('Sortering', ui.sort));
+    var secSort = section('sort', 'Sortering', [field('Sortering', ui.sort)], true);
 
-    body.appendChild(el('div', { class: 'kv-row' }, [
-      el('button', { type: 'button', class: 'kv-btn', text: 'Velg synlige', onclick: function () {
-        recs.forEach(function (r) { if (r.show) selected[r.item.transactionId] = r.item; });
-        apply();
-      } }),
-      el('button', { type: 'button', class: 'kv-btn', text: 'Fjern valg', onclick: function () { selected = {}; apply(); } }),
-      el('button', { type: 'button', class: 'kv-btn', text: 'Nullstill', onclick: function () { filters = L.defaultFilters(); writeForm(); apply(); } })
-    ]));
-
+    // Lagrede filtre
     ui.name = el('input', { type: 'text', placeholder: 'navn på filter' });
     ui.saved = el('select', {});
-    body.appendChild(el('div', { class: 'kv-row' }, [
-      ui.name,
-      el('button', { type: 'button', class: 'kv-btn', text: 'Lagre', onclick: function () {
+    var secSaved = section('saved', 'Lagrede filtre', [
+      el('div', { class: 'kv-row' }, [ui.name, btn('Lagre', function () {
         var n = ui.name.value.trim();
         if (!n) return;
         var list = store(SAVED_KEY) || {};
@@ -383,35 +473,52 @@
         store(SAVED_KEY, list);
         renderSaved();
         ui.saved.value = n;
-      } })
-    ]));
-    body.appendChild(el('div', { class: 'kv-row' }, [
-      ui.saved,
-      el('button', { type: 'button', class: 'kv-btn', text: 'Last', onclick: function () {
+      })]),
+      el('div', { class: 'kv-row' }, [ui.saved, btn('Last', function () {
         var list = store(SAVED_KEY) || {};
         if (!list[ui.saved.value]) return;
         filters = L.sanitizeFilters(list[ui.saved.value]);
         writeForm(); apply();
         optsKey = ''; refreshOptions();
-      } }),
-      el('button', { type: 'button', class: 'kv-btn', text: 'Slett', onclick: function () {
+      }), btn('Slett', function () {
         var list = store(SAVED_KEY) || {};
         delete list[ui.saved.value];
         store(SAVED_KEY, list);
         renderSaved();
-      } })
-    ]));
+      })])
+    ], false);
 
-    toggle.addEventListener('click', function () {
-      var c = panel.classList.toggle('kv-collapsed');
-      toggle.textContent = c ? '+' : '–';
-      store(COLLAPSE_KEY, c);
-    });
-    if (store(COLLAPSE_KEY)) { panel.classList.add('kv-collapsed'); toggle.textContent = '+'; }
+    var scroll = el('div', { class: 'kv-scroll' }, [secTime, secWho, secSum, secPant, secSort, secSaved]);
+    var foot = el('div', { class: 'kv-foot' }, [
+      btn('Nullstill', function () { filters = L.defaultFilters(); writeForm(); apply(); }),
+      btn('Velg synlige', function () {
+        recs.forEach(function (r) { if (r.show) selected[r.item.transactionId] = r.item; });
+        apply();
+      }),
+      btn('Fjern valg', function () { selected = {}; apply(); })
+    ]);
 
+    var body = el('div', { class: 'kv-main' }, [stats, scroll, foot]);
     panel.appendChild(head);
     panel.appendChild(body);
     document.body.appendChild(panel);
+
+    function setCollapsed(c) {
+      panel.classList.toggle('kv-collapsed', c);
+      toggle.textContent = c ? '+' : '–';
+      store(COLLAPSE_KEY, c);
+      clamp(panel);
+    }
+    function flip() { setCollapsed(!panel.classList.contains('kv-collapsed')); }
+    toggle.addEventListener('click', flip);
+    enableDrag(panel, head, function () { if (panel.classList.contains('kv-collapsed')) flip(); });
+    document.addEventListener('keydown', function (e) {
+      if (e.altKey && !e.ctrlKey && !e.metaKey && (e.key === 'k' || e.key === 'K')) { e.preventDefault(); flip(); }
+    });
+    window.addEventListener('resize', function () { clamp(panel); });
+
+    placePanel(panel);
+    if (store(COLLAPSE_KEY)) setCollapsed(true);
     renderSaved();
   }
 

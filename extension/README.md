@@ -11,6 +11,13 @@ Chrome MV3-utvidelse for Lindbak Chain Web → Kvitteringsjournal. Leser kun gri
 - Skanning av pant: åpner hver synlige salgskvittering (type 1) i Lindbaks eget visningsfelt, leser linjene `NNN PANT` (salg) og `NNN PANTELAPP` (retur), og cacher beløp lokalt per kvittering. Filter «Pant» og pant-total for valgte. Ca. 0,5–1 s per kvittering; avbrytes med Stopp.
 - Lagrede filtre (localStorage på chainweb.coop.no).
 
+## Bruk av panelet
+
+- Dra i toppfeltet for å flytte. Plassering huskes. Dobbeltklikk toppfeltet for å nullstille plassering.
+- `–`/`+`-knappen, klikk på den lille pillen eller `Alt+K` skjuler og viser panelet.
+- Seksjoner kan åpnes og lukkes; valget huskes.
+- Panelet holdes innenfor skjermen ved endret vindusstørrelse.
+
 ## Installere
 
 `chrome://extensions` → Utviklermodus → Last inn upakket → velg denne mappen. Krever Chrome 111+ (content script kjører i `MAIN` for å nå Kendo-gridet).

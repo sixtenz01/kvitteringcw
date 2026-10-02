@@ -44,7 +44,8 @@ window.jQuery=function(el){return {data:function(){return grid}}};
   const vis = () => page.$$eval('tbody tr', trs => trs.filter(t => t.style.display !== 'none').map(t => t.getAttribute('data-id')));
   assert.deepStrictEqual(await vis(), ['t-1', 't-2', 't-3', 't-4', 't-5']);
   assert.strictEqual(await page.$$eval('tr.kv-dup', n => n.length), 2);
-  assert.match(await page.textContent('.kv-summary'), /Viser 5 av 5.*Duplikatgrupper: 1/);
+  assert.match(await page.innerText('.kv-tiles'), /5 \/ 5\s+Viser/);
+  assert.match(await page.innerText('.kv-tiles'), /1\s+Duplikater/);
 
   await page.click('text=Negativ sum');
   assert.deepStrictEqual(await vis(), ['t-1']);
@@ -60,13 +61,15 @@ window.jQuery=function(el){return {data:function(){return grid}}};
   assert.deepStrictEqual(order, ['t-3', 't-4', 't-5', 't-1', 't-2']);
 
   await page.click('text=Velg synlige');
-  assert.match(await page.textContent('.kv-summary'), /Valgt: 5 · Sum valgt: 87,60 kr|Valgt: 5 · Sum valgt: 87,60/);
+  assert.match(await page.innerText('.kv-tiles'), /5\s+Valgt/);
+  assert.match(await page.innerText('.kv-tiles'), /87,60\s+Sum valgt/);
+  await page.click('summary:has-text("Lagrede filtre")');
   await page.fill('input[placeholder="navn på filter"]', 'test');
-  await page.click('text=Lagre');
+  await page.click('button:text-is("Lagre")');
   assert.ok(await page.evaluate(() => !!JSON.parse(localStorage.getItem('kvr.saved.v1')).test));
 
   await page.click('text=Nullstill');
-  await page.click('text=Skann pant');
+  await page.click('text=Skann pant (synlige)');
   await page.waitForFunction(() => /Ferdig|Ingenting/.test(document.getElementById('kv-panel').innerText), null, { timeout: 15000 });
   assert.match(await page.textContent('#kv-panel'), /Skannet 4/);
   await page.selectOption('.kv-f:has-text("Pant (krever") select', 'return');
@@ -75,8 +78,34 @@ window.jQuery=function(el){return {data:function(){return grid}}};
   assert.deepStrictEqual(await vis(), ['t-3']);
   await page.selectOption('.kv-f:has-text("Pant (krever") select', '');
   await page.click('text=Velg synlige');
-  assert.match(await page.textContent('.kv-summary'), /salg 2,00, retur [-\u2212]256,00, netto [-\u2212]254,00 kr \(4 av 5 skannet\)/);
+  assert.match(await page.textContent('.kv-pantline'), /salg 2,00 · retur [-\u2212]256,00 · netto [-\u2212]254,00 kr \(4 av 5 skannet\)/);
   assert.ok(await page.evaluate(() => JSON.parse(localStorage.getItem('kvr.pant.v1'))['t-1'].ret === -256));
+
+
+  // flytting, skjuling og tastatursnarvei
+  const box = async () => page.$eval('#kv-panel', e => { const r = e.getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width }; });
+  const b0 = await box();
+  const h = await page.$eval('.kv-head', e => { const r = e.getBoundingClientRect(); return { x: r.x + 40, y: r.y + 12 }; });
+  await page.mouse.move(h.x, h.y); await page.mouse.down(); await page.mouse.move(h.x - 300, h.y + 120, { steps: 5 }); await page.mouse.up();
+  const b1 = await box();
+  assert.ok(Math.abs((b0.x - b1.x) - 300) < 3 && Math.abs((b1.y - b0.y) - 120) < 3, 'panel flyttet');
+  assert.ok(await page.evaluate(() => JSON.parse(localStorage.getItem('kvr.pos.v1')).top > 100));
+  await page.keyboard.press('Alt+k');
+  assert.ok(await page.$eval('#kv-panel', e => e.classList.contains('kv-collapsed')));
+  await page.click('.kv-head');
+  assert.ok(await page.$eval('#kv-panel', e => !e.classList.contains('kv-collapsed')));
+  await page.setViewportSize({ width: 500, height: 400 });
+  await page.waitForTimeout(200);
+  const b2 = await box();
+  assert.ok(b2.x >= 0 && b2.x + b2.w <= 500 && b2.y < 400, 'panel innenfor etter resize');
+  await page.setViewportSize({ width: 1100, height: 800 });
+  await page.evaluate(() => localStorage.removeItem('kvr.pos.v1'));
+  await page.reload();
+  await page.addScriptTag({ path: path.join(dir, 'src/logic.js') });
+  await page.addStyleTag({ path: path.join(dir, 'src/panel.css') });
+  await page.addScriptTag({ path: path.join(dir, 'src/content.js') });
+  await page.waitForSelector('#kv-panel');
+  if (process.env.SHOT) await page.screenshot({ path: process.env.SHOT });
 
   assert.deepStrictEqual(errors, []);
   await browser.close();
