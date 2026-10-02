@@ -72,3 +72,6 @@ input.kvr-cb{margin-right:4px;vertical-align:middle;width:16px;height:16px}
 #kvr-panel .kvr-sm{padding:3px 6px;flex:0 0 auto}
 #kvr-panel .kvr-mt{margin-top:8px}
 tr.kvr-flag>td:first-child{box-shadow:inset 4px 0 0 #d93025}
+
+#kvr-panel .kvr-barwrap{height:6px;background:var(--kv-line);border-radius:3px;margin-top:6px;overflow:hidden}
+#kvr-panel .kvr-bar{height:100%;width:0;background:var(--kv-accent);transition:width .2s}

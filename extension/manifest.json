@@ -7,7 +7,7 @@
   "content_scripts": [
     {
       "matches": ["https://chainweb.coop.no/LindbakRetail_1/Journal/*"],
-      "js": ["src/logic.js", "src/content.js"],
+      "js": ["src/pre.js", "lib/html2canvas.min.js", "lib/jszip.min.js", "src/post.js", "src/logic.js", "src/content.js"],
       "css": ["src/panel.css"],
       "run_at": "document_idle",
       "world": "MAIN"

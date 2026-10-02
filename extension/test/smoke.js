@@ -23,7 +23,8 @@ const html = `<!doctype html><html><body>
 <input id="fromDatePicker"><input id="toDatePicker"><input id="freetextSearchInput"><input id="receiptNumber">
 <input ng-model="vm.selectedFilters.memberNumber"><input ng-model="vm.selectedFilters.externalLoyaltyNumber">
 <button ng-click="vm.applyFilters()" onclick="window.__applied=(window.__applied||0)+1">Oppdater</button>
-<table id="g" data-role="grid"><tbody>
+<div class="k-grid-header"><table><colgroup><col><col><col></colgroup><thead><tr><th>DATO</th><th>TID</th><th>SUM</th></tr></thead></table></div>
+<table id="g" data-role="grid"><colgroup><col><col><col></colgroup><tbody>
 ${rows.map(r => `<tr data-id="${r.transactionId}"><td></td><td>${r.endDateTime}</td><td>${r.totalAmount}</td></tr>`).join('')}
 </tbody></table>
 <div data-w="1"></div><div data-w="2"></div>
@@ -62,13 +63,17 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   });
   const load = async () => {
     await page.goto('https://chainweb.coop.no/LindbakRetail_1/Journal/Viewer');
+    await page.addScriptTag({ path: path.join(dir, 'lib/html2canvas.min.js') });
+    await page.addScriptTag({ path: path.join(dir, 'lib/jszip.min.js') });
     await page.addScriptTag({ path: path.join(dir, 'src/logic.js') });
     await page.addStyleTag({ path: path.join(dir, 'src/panel.css') });
     await page.addScriptTag({ path: path.join(dir, 'src/content.js') });
     await page.waitForSelector('#kvr-panel');
   };
   await load();
+  await page.evaluate(() => localStorage.setItem('lindbak-own', 'uendret'));
 
+  const idbGet = (store, key) => page.evaluate(([st, k]) => new Promise(res => { const rq = indexedDB.open('kvr-store', 1); rq.onsuccess = () => { const g = rq.result.transaction(st).objectStore(st).get(k); g.onsuccess = () => res(g.result === undefined ? null : g.result); }; }), [store, key]);
   const vis = () => page.$$eval('tbody tr', trs => trs.filter(t => t.style.display !== 'none').map(t => t.getAttribute('data-id')));
   const tiles = () => page.innerText('.kvr-tiles');
   const sec = (name) => page.click(`summary:text-is("${name}")`);
@@ -78,6 +83,13 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   assert.deepStrictEqual(await vis(), ['t-1', 't-2', 't-3', 't-4', 't-5']);
   assert.strictEqual(await page.$$eval('tr.kvr-dup', n => n.length), 2);
   assert.match(await tiles(), /5 \/ 5\s+Viser/);
+  assert.strictEqual(await page.$$eval('th.kvr-cb-cell', n => n.length), 1);
+  assert.strictEqual(await page.$$eval('tbody td.kvr-cb-cell', n => n.length), 5);
+  assert.strictEqual(await page.$$eval('.k-grid-header .kvr-col, #g .kvr-col', n => n.length), 2);
+  await page.click('#kvr-select-all');
+  assert.match(await tiles(), /5\s+Valgt/);
+  await page.click('#kvr-select-all');
+  assert.match(await tiles(), /0\s+Valgt/);
 
   // butikknavn fra CW-widgeten
   const opts = await page.$$eval('#kvr-panel option', o => o.map(x => x.textContent));
@@ -125,7 +137,8 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   await page.click('.kvr-um button:text-is("Legg til")');
   await grp('Bakeri'); assert.deepStrictEqual(await vis(), ['t-4']);
   await grp(''); await wipe();
-  assert.ok(await page.evaluate(() => JSON.parse(localStorage.getItem('kvr.rules.v1')).find(r => r.name === 'Bakeri').include.includes('REGAL HVETEMEL 1KG')));
+  await page.waitForTimeout(300);
+  assert.ok((await idbGet('kv', 'kvr.rules.v1')).find(r => r.name === 'Bakeri').include.includes('REGAL HVETEMEL 1KG'));
   await page.click('button:text-is("Velg synlige")');
   assert.match(await page.innerText('.kvr-table'), /Tobakk/);
 
@@ -176,7 +189,27 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   await sec('Lagrede filtre');
   await page.fill('input[placeholder="navn på filter"]', 'test');
   await page.click('button:text-is("Lagre")');
-  assert.ok(await page.evaluate(() => !!JSON.parse(localStorage.getItem('kvr.saved.v1')).test));
+  await page.waitForTimeout(300);
+  assert.ok(!!(await idbGet('kv', 'kvr.saved.v1')).test);
+
+  // PNG-eksport (rask modus er på: t-2 har ingen kvittering og skal feile)
+  await page.click('button:text-is("Velg synlige")');
+  const [pd] = await Promise.all([page.waitForEvent('download', { timeout: 60000 }), page.click('button:text-is("PNG: valgte (ZIP)")')]);
+  const zipBuf = fs.readFileSync(await pd.path());
+  assert.strictEqual(zipBuf.slice(0, 2).toString(), 'PK');
+  assert.ok(zipBuf.includes(Buffer.from('\x89PNG', 'latin1')), 'PNG-data i zip');
+  assert.strictEqual((zipBuf.toString('latin1').match(/\.png/g) || []).length >= 4, true);
+  await page.waitForFunction(() => /Ferdig\. 4 PNG, feilet 1/.test(document.getElementById('kvr-panel').innerText));
+  assert.match(await page.textContent('button:has-text("Prøv feilede på nytt (1)") >> nth=0'), /\(1\)/);
+
+  // lagring: kun IndexedDB, aldri localStorage; overlever omlasting
+  await load();
+  assert.deepStrictEqual(await page.evaluate(() => Object.keys(localStorage).filter(k => k.indexOf('kvr') === 0)), []);
+  assert.strictEqual(await page.evaluate(() => localStorage.getItem('lindbak-own')), 'uendret');
+  await sec('Lagrede filtre');
+  assert.ok((await page.$$eval('#kvr-panel select option', o => o.map(x => x.textContent))).includes('test'), 'lagret filter overlever omlasting');
+  await page.click('text=Skann innhold (synlige)');
+  assert.match(await page.textContent('#kvr-panel'), /Ingenting å skanne/);
 
   // flytting, skjuling og tastatursnarvei
   const box = async () => page.$eval('#kvr-panel', e => { const r = e.getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width }; });

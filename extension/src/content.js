@@ -9,9 +9,11 @@
     size: 'kvr.size.v1', sec: 'kvr.sec.v1', rules: 'kvr.rules.v1', anom: 'kvr.anom.v1',
     stores: 'kvr.stores.v1', fast: 'kvr.fast.v1'
   };
+  var failedRecs = [];
+  var lastRetry = null;
   var API_ROOT = '/LindbakRetail_1/Journal/Viewer/Api/';
   var SCAN_TIMEOUT = 6000;
-  var SCAN_LIMIT = 3000;
+  var SCAN_LIMIT = 2000;
 
   var filters = L.defaultFilters();
   var selected = {};
@@ -27,28 +29,77 @@
   var cwStoreList = [];
   var storeMap = {};
 
-  function store(key, value) {
-    try {
-      if (value === undefined) return JSON.parse(localStorage.getItem(key));
-      localStorage.setItem(key, JSON.stringify(value));
-    } catch (e) { return null; }
+  // Lagring: kun egen IndexedDB ('kvr-store'). Ingenting skrives til localStorage/sessionStorage,
+  // slik at Lindbaks egne data aldri påvirkes. Hard grense på antall cachede kvitteringer.
+  var mem = {};
+  var scanMap = {};
+  var dirty = {};
+  var db = null;
+  var rules, anomCfg, manualStores, fastScan;
+
+  function openDb() {
+    return new Promise(function (res) {
+      try {
+        var rq = indexedDB.open('kvr-store', 1);
+        rq.onupgradeneeded = function () { rq.result.createObjectStore('kv'); rq.result.createObjectStore('scan'); };
+        rq.onsuccess = function () { res(rq.result); };
+        rq.onerror = rq.onblocked = function () { res(null); };
+      } catch (e) { res(null); }
+    });
   }
 
-  var scanMap = (function () {
-    var raw = store(K.scan) || {};
-    var out = {};
-    Object.keys(raw).forEach(function (k) { if (raw[k] && raw[k].v === 2) out[k] = raw[k]; });
-    return out;
-  })();
-  var rules = L.sanitizeRules(store(K.rules));
-  var anomCfg = L.sanitizeAnom(store(K.anom));
-  var manualStores = store(K.stores) || '';
-  var fastScan = !!store(K.fast);
+  function readAll(d, name) {
+    return new Promise(function (res) {
+      var out = {};
+      try {
+        var rq = d.transaction(name).objectStore(name).openCursor();
+        rq.onsuccess = function () { var c = rq.result; if (c) { out[c.key] = c.value; c.continue(); } else res(out); };
+        rq.onerror = function () { res(out); };
+      } catch (e) { res(out); }
+    });
+  }
+
+  function put(name, key, val) {
+    if (!db) return;
+    try {
+      var tx = db.transaction(name, 'readwrite');
+      if (val === null || val === undefined) tx.objectStore(name).delete(key); else tx.objectStore(name).put(val, key);
+      tx.onabort = tx.onerror = function () { db = null; };
+    } catch (e) { db = null; }
+  }
+
+  function store(key, value) {
+    if (value === undefined) return mem[key] === undefined ? null : mem[key];
+    if (value === null) delete mem[key]; else mem[key] = value;
+    put('kv', key, value);
+  }
 
   function saveScan() {
-    var keys = Object.keys(scanMap);
-    if (keys.length > SCAN_LIMIT) keys.slice(0, keys.length - SCAN_LIMIT).forEach(function (k) { delete scanMap[k]; });
-    store(K.scan, scanMap);
+    var keys = Object.keys(scanMap).sort(function (a, b) { return (scanMap[a].t || 0) - (scanMap[b].t || 0); });
+    if (keys.length > SCAN_LIMIT) {
+      keys.slice(0, keys.length - SCAN_LIMIT).forEach(function (k) { delete scanMap[k]; delete dirty[k]; put('scan', k, null); });
+    }
+    Object.keys(dirty).forEach(function (k) { if (scanMap[k]) put('scan', k, scanMap[k]); });
+    dirty = {};
+  }
+
+  function clearScan() {
+    scanMap = {}; dirty = {}; gcache = {};
+    if (db) { try { db.transaction('scan', 'readwrite').objectStore('scan').clear(); } catch (e) { db = null; } }
+  }
+
+  // Rydd bort evt. gamle kvr.*-nøkler i localStorage fra tidligere versjoner (flytter innstillinger til IndexedDB).
+  function migrateLocal() {
+    try {
+      var keys = [];
+      for (var i = 0; i < localStorage.length; i++) { var k = localStorage.key(i); if (k && k.indexOf('kvr.') === 0) keys.push(k); }
+      keys.forEach(function (k) {
+        if (k !== 'kvr.scan.v2' && k !== 'kvr.pant.v1' && mem[k] === undefined) {
+          try { mem[k] = JSON.parse(localStorage.getItem(k)); put('kv', k, mem[k]); } catch (e) { /* ignorer */ }
+        }
+        localStorage.removeItem(k);
+      });
+    } catch (e) { /* ignorer */ }
   }
 
   function el(tag, attrs, kids) {
@@ -242,18 +293,28 @@
   async function scanList(todo) {
     if (scanning || !todo.length) return { done: 0, failed: 0 };
     scanning = true; cancelScan = false;
-    ui.scanBtn.disabled = true; ui.anomBtn.disabled = true; ui.stopBtn.disabled = false;
+    ui.scanBtn.disabled = true; ui.anomBtn.disabled = true; ui.stopBtn.disabled = false; ui.retryBtn.disabled = true; if (ui.retryBtn2) ui.retryBtn2.disabled = true;
     var prev = grid.select();
     var prevTr = prev && prev[0];
-    var done = 0, failed = 0;
+    var done = 0, failed = 0, t0 = Date.now();
+    failedRecs = [];
     for (var i = 0; i < todo.length && !cancelScan; i++) {
-      ui.scanStatus.textContent = 'Skanner ' + (i + 1) + ' av ' + todo.length + (failed ? ' · feilet: ' + failed : '');
+      progress(i, todo.length, t0, 'Skanner', failed);
       var rows = null;
       try { rows = fastScan ? await loadViaApi(todo[i]) : await loadViaDom(todo[i]); } catch (e) { rows = null; }
-      if (rows) { scanMap[todo[i].item.transactionId] = L.parseReceipt(rows); done++; } else failed++;
+      if (rows) {
+        var id = todo[i].item.transactionId;
+        scanMap[id] = L.parseReceipt(rows);
+        scanMap[id].t = Date.now();
+        dirty[id] = true;
+        done++;
+      } else { failed++; failedRecs.push(todo[i]); }
       if (fastScan) await wait(120);
     }
     saveScan();
+    setProgress(0);
+    lastRetry = failedRecs.length ? retryScan : null;
+    syncRetry();
     gcache = {};
     if (!fastScan) {
       if (prevTr) grid.select(prevTr); else if (typeof grid.clearSelection === 'function') grid.clearSelection();
@@ -266,6 +327,41 @@
 
   function todoVisible() {
     return recs.filter(function (r) { return r.show && r.item.receiptType === 1 && !scanMap[r.item.transactionId]; });
+  }
+
+  function etaText(sec) {
+    if (!(sec > 0)) return '';
+    return ' ≈ ' + (sec >= 60 ? Math.floor(sec / 60) + 'm ' + (sec % 60) + 's' : sec + 's') + ' igjen';
+  }
+
+  function progress(i, total, t0, label, failed) {
+    var elapsed = (Date.now() - t0) / 1000;
+    var rem = i > 0 ? Math.round(elapsed / i * (total - i)) : 0;
+    var pct = Math.round(i / total * 100);
+    setProgress(pct);
+    var msg = label + ' ' + (i + 1) + ' av ' + total + ' (' + pct + '%)' + etaText(rem) + (failed ? ' · feilet: ' + failed : '');
+    ui.scanStatus.textContent = msg;
+    ui.exportStatus.textContent = msg;
+  }
+
+  function setProgress(pct) {
+    if (!ui.bar) return;
+    ui.barWrap.style.display = pct > 0 ? 'block' : 'none';
+    ui.bar.style.width = pct + '%';
+  }
+
+  function syncRetry() {
+    [ui.retryBtn, ui.retryBtn2].forEach(function (b) {
+      if (!b) return;
+      b.disabled = !lastRetry;
+      b.textContent = lastRetry ? 'Prøv feilede på nytt (' + failedRecs.length + ')' : 'Prøv feilede på nytt';
+    });
+  }
+
+  async function retryScan() {
+    var list = failedRecs.slice();
+    await scanList(list);
+    apply();
   }
 
   async function scanVisible() {
@@ -296,21 +392,63 @@
     return gcache[id] || (gcache[id] = L.groupsOfScan(sc, rules));
   }
 
-  function ensureCheckbox(r) {
-    var td = r.tr.children[0];
-    if (!td) return;
-    var cb = td.querySelector('input.kvr-cb');
+  function recById(id) {
+    for (var i = 0; i < recs.length; i++) if (recs[i].item.transactionId === id) return recs[i];
+    return null;
+  }
+
+  function syncChecks() {
+    if (!grid || !grid.tbody[0]) return;
+    Array.prototype.forEach.call(grid.tbody[0].querySelectorAll('input.kvr-cb'), function (cb) { cb.checked = !!selected[cb.getAttribute('data-id')]; });
+    var sa = document.getElementById('kvr-select-all');
+    if (sa) {
+      var vis = recs.filter(function (r) { return r.show; });
+      sa.checked = vis.length > 0 && vis.every(function (r) { return selected[r.item.transactionId]; });
+    }
+  }
+
+  function ensureColumn() {
+    var dataTable = grid.tbody[0].closest('table');
+    var hdr = document.querySelector('.k-grid-header table');
+    [dataTable, hdr].forEach(function (t) {
+      if (!t) return;
+      var cg = t.querySelector('colgroup');
+      if (cg && !cg.querySelector('.kvr-col')) cg.insertBefore(el('col', { class: 'kvr-col', style: 'width:40px;min-width:40px;' }), cg.firstChild);
+    });
+    if (hdr && !hdr.querySelector('th.kvr-cb-cell')) {
+      var htr = hdr.querySelector('thead tr');
+      if (htr) {
+        var sa = el('input', { type: 'checkbox', id: 'kvr-select-all', title: 'Velg alle synlige' });
+        sa.addEventListener('change', function () {
+          recs.forEach(function (r) {
+            if (!r.show) return;
+            if (sa.checked) selected[r.item.transactionId] = r.item; else delete selected[r.item.transactionId];
+          });
+          syncChecks(); summary();
+        });
+        htr.insertBefore(el('th', { class: 'kvr-cb-cell', style: 'width:40px;text-align:center;padding:0;' }, [sa]), htr.firstChild);
+      }
+    }
+  }
+
+  function ensureCell(r) {
     var id = r.item.transactionId;
-    if (!cb) {
-      cb = el('input', { type: 'checkbox', class: 'kvr-cb', title: 'Velg kvittering' });
+    var td = r.tr.querySelector(':scope > td.kvr-cb-cell');
+    if (!td) {
+      var cb = el('input', { type: 'checkbox', class: 'kvr-cb', title: 'Velg kvittering', 'data-id': id });
       cb.addEventListener('click', function (e) { e.stopPropagation(); });
       cb.addEventListener('change', function () {
-        if (cb.checked) selected[id] = r.item; else delete selected[id];
-        summary();
+        var rec = recById(cb.getAttribute('data-id'));
+        if (cb.checked) { if (rec) selected[cb.getAttribute('data-id')] = rec.item; } else delete selected[cb.getAttribute('data-id')];
+        syncChecks(); summary();
       });
-      td.insertBefore(cb, td.firstChild);
+      td = el('td', { class: 'kvr-cb-cell', style: 'width:40px;text-align:center;padding:0;vertical-align:middle;' }, [cb]);
+      td.addEventListener('click', function (e) { e.stopPropagation(); });
+      r.tr.insertBefore(td, r.tr.firstChild);
     }
-    cb.checked = !!selected[id];
+    var box = td.querySelector('input.kvr-cb');
+    box.setAttribute('data-id', id);
+    box.checked = !!selected[id];
   }
 
   function distinct(key) {
@@ -355,6 +493,7 @@
     var dup = L.findDuplicates(items);
     var ctx = { dupIds: dup.ids, scan: scanMap, groupsOf: groupsOf, anom: anomMap };
     var visible = 0;
+    ensureColumn();
     recs.forEach(function (r) {
       var id = r.item.transactionId;
       var show = L.matches(r.item, filters, ctx);
@@ -368,10 +507,11 @@
       var gs = groupsOf(id);
       if (gs) tips.push('Varegrupper: ' + gs.join(', '));
       if (tips.length) r.tr.title = tips.join('\n'); else r.tr.removeAttribute('title');
-      ensureCheckbox(r);
+      ensureCell(r);
       if (show) visible++;
     });
     reorder();
+    syncChecks();
     ui.dup = dup;
     ui.visible = visible;
     refreshOptions();
@@ -510,6 +650,111 @@
         el('span', { class: 'kvr-hint', text: 'Ekskluder' }), exc
       ]));
     });
+  }
+
+
+  // ---- PNG av hel kvittering --------------------------------------------------
+  var PNG_CSS = 'body{font-family:Verdana,Arial,sans-serif;margin:12px;width:480px;background:#fff;color:#000;}' +
+    'table{width:100%;border-collapse:collapse;}.ReceiptTable{background:#e8e8e8;}' +
+    '.ReceiptTable td,.ReceiptTable th{padding:3px 6px;font-size:11px;}.Subtotal{font-size:13px;font-weight:bold;background:#ccc;}' +
+    '.Report,.report{white-space:pre;font-family:Courier,monospace;font-size:10px;}div[align="center"]{text-align:center;}' +
+    '.kvr-h{font-size:12px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid #999;}';
+
+  function esc(t) { return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+  function pngHeader(it) {
+    var lines = ['Butikk: ' + sLabel(it.storeNumber), 'Kasse ' + it.workstationNumber + ' · Kasserer ' + it.cashierNumber, 'Bongnr: ' + it.bongnr, it.endDateTime];
+    if (ui.pngMember.checked && it.memberNumber) lines.push('Medlem: ' + it.memberNumber);
+    return '<div class="kvr-h">' + lines.map(esc).join('<br>') + '</div>';
+  }
+
+  function htmlToPng(full) {
+    return new Promise(function (resolve, reject) {
+      var f = document.createElement('iframe');
+      f.setAttribute('sandbox', 'allow-same-origin');
+      f.style.cssText = 'position:fixed;top:-10000px;left:-10000px;width:510px;height:2000px;border:none;visibility:hidden;';
+      var fail = function (e) { f.remove(); reject(e); };
+      f.onload = function () {
+        setTimeout(function () {
+          try {
+            var b = f.contentDocument.body;
+            var h = b.scrollHeight || 800;
+            f.style.height = (h + 40) + 'px';
+            window.html2canvas(b, { scale: 2, logging: false, allowTaint: true, useCORS: false, backgroundColor: '#ffffff', width: 510, height: h, windowWidth: 510, windowHeight: h })
+              .then(function (c) { f.remove(); c.toBlob(function (bl) { if (bl) resolve(bl); else reject(new Error('toBlob')); }, 'image/png'); })
+              .catch(fail);
+          } catch (e) { fail(e); }
+        }, 300);
+      };
+      f.srcdoc = full;
+      document.body.appendChild(f);
+    });
+  }
+
+  async function receiptHtml(r) {
+    if (fastScan) {
+      var tokenEl = document.querySelector('input[name="__RequestVerificationToken"]');
+      var it = r.item;
+      var resp = await fetch(API_ROOT + 'GetReceiptDetails', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', '__RequestVerificationToken': tokenEl ? tokenEl.value : '' },
+        body: JSON.stringify({ endDateTime: it.endDateTime, journalSourceName: it.journalSourceName || 'main', retailStoreNum: it.storeNumber, sequenceNum: seqOf(it.transactionId), workstationNum: it.workstationNumber })
+      });
+      if (!resp.ok) return null;
+      var text = await resp.text();
+      try { text = JSON.parse(text); } catch (e) { /* allerede HTML */ }
+      return typeof text === 'string' && text ? text : null;
+    }
+    if (!r.tr) return null;
+    var rows = await loadViaDom(r);
+    var d = iframeDoc();
+    return rows && d ? d.body.innerHTML : null;
+  }
+
+  async function exportPng(list) {
+    if (scanning) return;
+    if (!window.html2canvas || !window.JSZip) { ui.exportStatus.textContent = 'Biblioteker (html2canvas/JSZip) er ikke lastet.'; return; }
+    if (!list.length) { ui.exportStatus.textContent = 'Velg kvitteringer først.'; return; }
+    scanning = true; cancelScan = false;
+    ui.scanBtn.disabled = true; ui.anomBtn.disabled = true; ui.stopBtn.disabled = false; ui.retryBtn.disabled = true; if (ui.retryBtn2) ui.retryBtn2.disabled = true;
+    var prev = grid.select();
+    var prevTr = prev && prev[0];
+    var files = [], failed = [], t0 = Date.now();
+    for (var i = 0; i < list.length && !cancelScan; i++) {
+      progress(i, list.length, t0, 'PNG', failed.length);
+      try {
+        var html = await receiptHtml(list[i]);
+        if (!html) throw new Error('ingen kvittering');
+        var clean = html.replace(/xmlns[^=]*="[^"]*"/g, '').replace(/<link[^>]*>/gi, '').replace(/<script[\s\S]*?<\/script>/gi, '');
+        var full = '<!DOCTYPE html><html><head><meta charset="UTF-8"><style>' + PNG_CSS + '</style></head><body>' +
+          (ui.pngHeaderOn.checked ? pngHeader(list[i].item) : '') + clean + '</body></html>';
+        var blob = await htmlToPng(full);
+        var it = list[i].item;
+        files.push({ name: it.endDateTime.replace(/[^0-9]/g, '') + '_' + String(it.bongnr).replace(/[^A-Za-z0-9_-]/g, '-') + '.png', blob: blob });
+      } catch (e) { failed.push(list[i]); }
+      if (fastScan) await wait(120);
+    }
+    if (!fastScan) {
+      if (prevTr) grid.select(prevTr); else if (typeof grid.clearSelection === 'function') grid.clearSelection();
+    }
+    setProgress(0);
+    if (files.length === 1) download(files[0].blob, files[0].name);
+    else if (files.length > 1) {
+      var zip = new window.JSZip();
+      files.forEach(function (f) { zip.file(f.name, f.blob); });
+      var zb = await zip.generateAsync({ type: 'blob', compression: 'STORE' });
+      download(zb, 'kvitteringer_' + new Date().toISOString().slice(0, 10) + '.zip');
+    }
+    failedRecs = failed;
+    lastRetry = failed.length ? function () { return exportPng(failedRecs.slice()); } : null;
+    scanning = false;
+    ui.scanBtn.disabled = false; ui.anomBtn.disabled = false; ui.stopBtn.disabled = true;
+    syncRetry();
+    ui.exportStatus.textContent = (cancelScan ? 'Stoppet. ' : 'Ferdig. ') + files.length + ' PNG' + (failed.length ? ', feilet ' + failed.length : '') + '.';
+  }
+
+  function selectedRecs() {
+    return Object.keys(selected).map(function (id) { return recById(id) || { item: selected[id], tr: null }; });
   }
 
   // ---- CSV ------------------------------------------------------------------
@@ -705,7 +950,9 @@
     var t1 = tile('Viser'), t2 = tile('Valgt'), t3 = tile('Sum valgt (kr)'), t4 = tile('Duplikater');
     ui.stVisible = t1.value; ui.stSelected = t2.value; ui.stSum = t3.value; ui.stDup = t4.value;
     ui.pantLine = el('div', { class: 'kvr-pantline', text: '' });
-    var stats = el('div', { class: 'kvr-stats' }, [el('div', { class: 'kvr-tiles' }, [t1.node, t2.node, t3.node, t4.node]), ui.pantLine]);
+    ui.bar = el('div', { class: 'kvr-bar' });
+    ui.barWrap = el('div', { class: 'kvr-barwrap', style: 'display:none' }, [ui.bar]);
+    var stats = el('div', { class: 'kvr-stats' }, [el('div', { class: 'kvr-tiles' }, [t1.node, t2.node, t3.node, t4.node]), ui.pantLine, ui.barWrap]);
 
     // --- Søk i CW
     var cwFrom = el('input', { type: 'date' }), cwTo = el('input', { type: 'date' });
@@ -791,13 +1038,16 @@
     ui.scanBtn = btn('Skann innhold (synlige)', scanVisible, 'kvr-primary');
     ui.stopBtn = btn('Stopp', function () { cancelScan = true; });
     ui.stopBtn.disabled = true;
+    ui.retryBtn = btn('Prøv feilede på nytt', function () { if (lastRetry) lastRetry(); });
+    ui.retryBtn.disabled = true;
     ui.scanStatus = el('div', { class: 'kvr-note', text: '' });
     var fast = check('Rask skanning via CW-API (som gamle pluginen)', function () { fastScan = fast.box.checked; store(K.fast, fastScan); });
     fast.box.checked = fastScan;
     var secScan = section('scan', 'Skanning og pant', [
       field('Pant (krever skanning)', ui.pant),
-      el('div', { class: 'kvr-row' }, [ui.scanBtn, ui.stopBtn, btn('Tøm cache', function () {
-        scanMap = {}; gcache = {}; anomMap = {}; store(K.scan, scanMap); ui.scanStatus.textContent = 'Cache tømt.'; apply();
+      el('div', { class: 'kvr-row' }, [ui.scanBtn, ui.stopBtn]),
+      el('div', { class: 'kvr-row' }, [ui.retryBtn, btn('Tøm cache', function () {
+        clearScan(); anomMap = {}; failedRecs = []; lastRetry = null; syncRetry(); ui.scanStatus.textContent = 'Cache tømt.'; apply();
       })]),
       fast.node,
       el('div', { class: 'kvr-hint', text: 'Standard åpner hver kvittering i visningsfeltet (ca. 1 s). Rask skanning henter kvitteringene direkte fra CW.' }),
@@ -895,9 +1145,13 @@
     ], false);
 
     // --- Eksport
+    var pH = check('PNG: legg på topptekst (butikk, kasse, kasserer, bongnr, tid)', function () {}); ui.pngHeaderOn = pH.box; pH.box.checked = true;
+    var pM = check('PNG: ta med medlemsnr i topptekst', function () {}); ui.pngMember = pM.box;
     ui.exportStatus = el('div', { class: 'kvr-note', text: '' });
     var secExport = section('export', 'Eksport', [
       el('div', { class: 'kvr-row' }, [btn('CSV: synlige', function () { exportCsv(false); }), btn('CSV: valgte', function () { exportCsv(true); })]),
+      el('div', { class: 'kvr-row' }, [btn('PNG: valgte (ZIP)', function () { exportPng(selectedRecs()); }, 'kvr-primary'), ui.retryBtn2 = btn('Prøv feilede på nytt', function () { if (lastRetry) lastRetry(); })]),
+      pH.node, pM.node,
       el('div', { class: 'kvr-hint', text: 'Semikolon-separert, åpnes direkte i Excel. Varegrupper og pant tas med for skannede kvitteringer.' }),
       ui.exportStatus
     ], false);
@@ -946,6 +1200,8 @@
     if (!g) return;
     if (g.__kvBound) {
       if (refreshStoreMap()) { optsKey = ''; renderCwStores(); }
+      var tb = g.tbody && g.tbody[0];
+      if (tb && !scanning && tb.querySelectorAll(':scope > tr').length !== tb.querySelectorAll(':scope > tr > td.kvr-cb-cell').length) apply();
       return;
     }
     grid = g;
@@ -956,6 +1212,19 @@
     renderCwStores();
   }
 
-  setInterval(attach, 1500);
-  attach();
+  openDb().then(async function (d) {
+    db = d;
+    if (db) {
+      mem = await readAll(db, 'kv');
+      var raw = await readAll(db, 'scan');
+      Object.keys(raw).forEach(function (k) { if (raw[k] && raw[k].v === 2) scanMap[k] = raw[k]; });
+    }
+    migrateLocal();
+    rules = L.sanitizeRules(store(K.rules));
+    anomCfg = L.sanitizeAnom(store(K.anom));
+    manualStores = store(K.stores) || '';
+    fastScan = !!store(K.fast);
+    setInterval(attach, 1500);
+    attach();
+  });
 })();

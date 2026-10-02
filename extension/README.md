@@ -20,6 +20,16 @@ Chrome MV3-utvidelse for Lindbak Chain Web → Kvitteringsjournal. Leser kun gri
 - **Avvik** (kun på knapp): stor panteretur, mange pantelapper, kontant tilbake uten salg, rundt beløp.
 - **Eksport:** CSV (semikolon, UTF-8 med BOM) for synlige eller valgte kvitteringer.
 
+## Lagring (påvirker ikke Lindbak)
+
+All lagring (innstillinger, lagrede filtre, regler, skannecache) ligger i en egen IndexedDB (`kvr-store`). Ingenting skrives til localStorage eller sessionStorage, så Lindbaks egne data kan ikke bli påvirket. Cachen er begrenset til 2000 kvitteringer (eldste fjernes). Gamle `kvr.*`-nøkler i localStorage fra tidligere versjoner flyttes og slettes ved oppstart.
+
+## Avkrysning, fremdrift og PNG
+
+- Egen avkrysningskolonne (col/th/td, samme teknikk som gamle pluginen) med «velg alle synlige». Settes inn på nytt når gridet tegnes om.
+- Skanning og eksport viser fremdriftslinje, prosent og tid igjen. «Prøv feilede på nytt» kjører bare de som feilet.
+- PNG: valgte kvitteringer blir hele kvitteringen som PNG (ZIP ved flere), med valgfri topptekst fra listen (butikk med navn, kasse, kasserer, bongnr, tid). Medlemsnr tas bare med hvis du huker av.
+
 ## Bruk av panelet
 
 - Dra i toppfeltet for å flytte. Plassering huskes. Dobbeltklikk toppfeltet for å nullstille plassering.
