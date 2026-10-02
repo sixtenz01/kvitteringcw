@@ -527,5 +527,28 @@ for (let k = 0; k < 10; k++) { dcs['y-' + k] = rcpt([['7000 V', '', '50.00'], ..
 const dcdsc = L.discounts(dci, dcs, dbase);
 assert.deepStrictEqual(dcdsc.findings.filter(f => f.code === 'discCash').map(f => [f.cashier, f.flag]), [['Z', false]]);
 assert.strictEqual(dcdsc.findings.filter(f => f.code === 'discNoReason').length, 0);
+// rabattårsaker (tekstnr 1–6 eller tekst)
+assert.deepStrictEqual(L.DISC_REASONS, ['Datovare', 'Feil pris', 'Prisløfte', 'Reserveløsning kupong', 'Annen rabattårsak', 'Best før']);
+assert.deepStrictEqual(['', ' ', '1', '6', '4 ', 'datovare', '2 Feil pris', 'ANNEN RABATTÅRSAK', 'Reserveløsning kupong', '9', 'Medarbeider'].map(L.reasonName),
+  ['Uten årsak', 'Uten årsak', 'Datovare', 'Best før', 'Reserveløsning kupong', 'Datovare', 'Feil pris', 'Annen rabattårsak', 'Reserveløsning kupong', '9', 'Medarbeider']);
+const qrs = { 'e-1': rcpt([['7000 A', '', '10.00'], ['Rabatt: Kr 2.00 (16.7%)'], ['Rabatt årsak: 1'], ['7001 B', '', '5.00'], ['Rabatt: Kr 5.00 (50.0%)'], ['Rabatt årsak: Best før']]),
+  'e-2': rcpt([['7000 A', '', '10.00'], ['Rabatt: Kr 3.00 (23.1%)'], ['Rabatt årsak: Datovare']]),
+  'e-3': rcpt([['7000 A', '', '10.00'], ['Rabatt: Kr 1.00 (9.1%)'], ['Rabatt årsak: Medarbeider']]),
+  'e-4': rcpt([['7000 A', '', '10.00'], ['Rabatt: Kr 1.00 (9.1%)'], ['Rabatt årsak: ']]) };
+const qit = [['e-1', 'A'], ['e-2', 'B'], ['e-3', 'B'], ['e-4', 'B']].map(x => dmeta(x[0], { cashierNumber: x[1] }));
+const qrf = (v) => qit.filter(r => L.matches(r, F({ disc: v }), { scan: qrs })).map(r => r.transactionId);
+assert.deepStrictEqual(qrf('r:Datovare'), ['e-1', 'e-2']);
+assert.deepStrictEqual(qrf('r:Best før'), ['e-1']);
+assert.deepStrictEqual(qrf('r:Prisløfte'), []);
+assert.deepStrictEqual(qrf('noreason'), ['e-4']);
+assert.strictEqual(L.evalRule(drul('rabattarsak', '=', 'Best før'), qit[0], qrs['e-1']), true);
+assert.strictEqual(L.evalRule(drul('rabattarsak', '=', 'Best før'), qit[1], qrs['e-2']), false);
+const qrd2 = L.discounts(qit, qrs, dbase);
+assert.deepStrictEqual(qrd2.reasons.map(r => [r.name, r.lines, r.bongs, r.sum, r.known]),
+  [['Datovare', 2, 2, 5, true], ['Best før', 1, 1, 5, true], ['Uten årsak', 1, 1, 1, false], ['Medarbeider', 1, 1, 1, false]]);
+assert.strictEqual(qrd2.reasons.find(r => r.name === 'Datovare').avgPct, 19.9);
+assert.deepStrictEqual(qrd2.matrix.cols, qrd2.reasons.map(r => r.name));
+assert.deepStrictEqual(qrd2.matrix.rows.find(r => r.id === 'A').counts, { 'Datovare': 1, 'Best før': 1 });
+assert.deepStrictEqual(qrd2.matrix.rows.find(r => r.id === 'B').counts, { 'Datovare': 1, 'Medarbeider': 1, 'Uten årsak': 1 });
 assert.ok(L.reasonWeight('Rabatt uten årsak', W) > 0 && L.RISK_WEIGHTS['Mange rabatter uten årsak'] > 0);
 console.log('logic: ok');

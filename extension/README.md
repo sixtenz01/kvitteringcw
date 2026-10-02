@@ -53,14 +53,15 @@ Skanningen leser nå to ting fra kvitteringen (skannepost v3):
 
 Bruk:
 
-- **Filter:** «Rabatt (krever skanning)» under Skann: har rabatt, uten årsak, med årsak, har kupong.
-- **Analyse → Detaljer → Rabatter og kuponger:** per kasserer antall bonger med rabatt, rabatt i kr, uten årsak, kuponger; butikksum; de vanligste kampanjene. Test «Rabatt uten årsak» flagger rabattlinjer på minst 30 % uten årsak (terskel kan endres, tom = av). «Mange rabatter uten årsak» flagger kasserere som ligger minst 1,5× butikkens andel.
-- **Egne regler:** felt for rabatt (kr), høyeste rabatt (%), rabattlinjer uten årsak, antall kuponger og kupong (id/navn).
+- **Rabattårsaker** (tekstnr i Lindbak): 1 Datovare, 2 Feil pris, 3 Prisløfte, 4 Reserveløsning kupong, 5 Annen rabattårsak, 6 Best før. Pluginen kjenner igjen både nummer og tekst på kvitteringen; ukjent tekst vises som den står.
+- **Filter:** «Rabatt (krever skanning)» under Skann: har rabatt, uten årsak, med årsak, har kupong, eller én bestemt årsak.
+- **Analyse → Detaljer → Rabatter og kuponger:** per kasserer antall bonger med rabatt, rabatt i kr, uten årsak, kuponger; butikksum; tabell «Rabatt per årsak» (klikk en årsak for å filtrere listen) og matrisen «Kasserer × årsak»; de vanligste kampanjene. Test «Rabatt uten årsak» flagger rabattlinjer på minst 30 % uten årsak (terskel kan endres, tom = av). «Mange rabatter uten årsak» flagger kasserere som ligger minst 1,5× butikkens andel.
+- **Egne regler:** felt for rabatt (kr), høyeste rabatt (%), rabattårsak, rabattlinjer uten årsak, antall kuponger og kupong (id/navn).
 - **Fokus:** rabatt og kuponger per kasserer eller kasse.
 
 Skanner fra tidligere versjoner (v2) har ikke rabattdata. «Skann synlige» skanner dem på nytt, og filteret skjuler dem til de er skannet (gul stripe viser antallet).
 
-Ikke verifisert: at rabatt uten årsak betyr «gitt i butikken», og hvordan lokale kampanjer ser ut. Dette trenger eksempler fra ekte kvitteringer.
+Ikke verifisert: om kvitteringen skriver årsaken som nummer eller tekst (begge håndteres), og hvordan lokale kampanjer ser ut. Dette trenger eksempler fra ekte kvitteringer.
 
 ## Kontroll-fanen
 

@@ -106,7 +106,8 @@ TransId: DK7TVRW5F2PC5
 
 - Rabatt: `Rabatt: Kr <beløp> (<prosent>%)` hører til varelinjen over; `Rabatt årsak:` følger.
 - Kupong: `Kupong (<id> - <navn>):` med beløp (0.00 her). Kupongvarene sto ikke på bongen, så linjene viser trolig kampanjer knyttet til bongen, ikke innløsning. Må bekreftes.
-- Tolkning i pluginen (ubekreftet): rabattlinje uten årsak = gitt i butikken; kupong = sentral kampanje (CN/VPI). Lokale kampanjer er ikke sett.
+- Rabattårsaker (tekstnr i Lindbak): 1 Datovare, 2 Feil pris, 3 Prisløfte, 4 Reserveløsning kupong, 5 Annen Rabattårsak, 6 Best før. Hvordan årsaken skrives på kvitteringen (nummer eller tekst) er ikke sett; pluginen leser begge.
+- Tolkning i pluginen (ubekreftet): kupong = sentral kampanje (CN/VPI). Lokale kampanjer er ikke sett.
 - Betaling `Coopay:`; kvitteringsbunn har kortterminaltekst og `Kjøpeutbytte`-tabell (`Grunnlag | Kjøpeutbytte | MVA bonus`).
 
 ## Ikke i bruk: API-endepunkt

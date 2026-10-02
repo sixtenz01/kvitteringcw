@@ -6,13 +6,13 @@ const T = (a, c) => `<tr><td>${a}</td><td></td><td>${c}</td></tr>`;
 const SPAN = (t) => `<tr><td colspan="3">${t}</td></tr>`;
 const R = (store, ws, seq, cashier, day, time, total, type, lines) => ({ store, ws, seq, cashier, day, time, total, type: type || 1, lines });
 const ROWS = [
-  R(1005, 1, 100, 'A', '2026-09-28', '10:00', 100, 1, [T('7000111 VARE X', '100.00'), T('Bank:', '100.00')]),
+  R(1005, 1, 100, 'A', '2026-09-28', '10:00', 100, 1, [T('7000111 VARE X', '100.00'), SPAN('Rabatt: Kr 10.00 (9.1%)'), SPAN('Rabatt årsak: 6'), T('Bank:', '100.00')]),
   R(1005, 1, 101, 'A', '2026-09-28', '10:20', -100, 1, [T('7000111 VARE X', '-100.00'), T('Kontant tilbake:', '100.00')]),
   R(1005, 1, 102, 'B', '2026-09-28', '11:00', -50, 1, [T('9999999 UKJENT VARE', '-50.00'), T('Kontant tilbake:', '50.00')]),
   R(1005, 1, 103, 'A', '2026-09-28', '22:00', null, 2, [T('Sum', '240.00'), T('Differanse', ''), T('Sum', '-40.00')]),
   R(1005, 1, 104, 'C', '2026-09-28', '22:15', 120, 1, [T('7000222 VARE Y', '120.00'), T('Kontant:', '120.00')]),
   R(1005, 1, 109, 'C', '2026-09-28', '22:30', 30, 1, [T('7000333 VARE Z', '30.00'), T('Kontant:', '30.00')]),
-  R(1005, 1, 110, 'A', '2026-10-01', '09:00', 80, 1, [T('7000111 VARE X', '80.00'), SPAN('Rabatt: Kr 5.00 (6.0%)'), SPAN('Rabatt årsak: Utgått dato'), T('Bank:', '80.00')]),
+  R(1005, 1, 110, 'A', '2026-10-01', '09:00', 80, 1, [T('7000111 VARE X', '80.00'), SPAN('Rabatt: Kr 5.00 (6.0%)'), SPAN('Rabatt årsak: Datovare'), T('Bank:', '80.00')]),
   R(1005, 1, 111, 'A', '2026-10-01', '22:00', null, 2, [T('Sum', '240.00'), T('Differanse', ''), T('Sum', '-30.00')]),
   R(1005, 2, 200, 'D', '2026-10-01', '10:00', 60, 1, [T('7000444 VARE W', '60.00'), T('Bank:', '60.00')]),
   R(1005, 2, 201, 'D', '2026-10-01', '21:30', null, 2, [T('Sum', '100.00'), T('Differanse', ''), T('Sum', '-35.00')]),
@@ -116,10 +116,12 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   assert.ok(await page.$('[data-sec=ch-benford]') === null, 'Benford-diagrammet ligger under Diagram');
   // rabatt og kupong: rabatt uten årsak er et funn, rabatt med årsak og kupong er bare tall
   assert.match(fnd, /Rabatt: Rabatt uten årsak Kasse 5 10:00 kasserer E: VARE V −40 kr \(50 %\) uten rabattårsak/);
-  assert.ok(!/Utgått dato|VARE X −5/.test(fnd), 'rabatt med årsak flagges ikke');
+  assert.ok(!/Datovare|Best før|VARE X −/.test(fnd), 'rabatt med årsak flagges ikke');
   const dsc = (await page.innerText('[data-sec=disc]')).replace(/\s+/g, ' ');
-  assert.match(dsc, /2 bonger har rabattlinje \(45,00 kr\), 1 av dem uten årsak \(40,00 kr\)\. 1 bonger har kupong\/kampanje \(1 kuponger\)/);
+  assert.match(dsc, /3 bonger har rabattlinje \(55,00 kr\), 1 av dem uten årsak \(40,00 kr\)\. 1 bonger har kupong\/kampanje \(1 kuponger\)/);
   assert.match(dsc, /Kasserer E 1 1 40,00 1 40,00 100 % 1 1/);
+  assert.match(dsc, /Rabatt per årsak Årsak Linjer Bonger Rabatt kr Snitt % Datovare 1 1 5,00 6 Best før 1 1 10,00 9,1 Uten årsak 1 1 40,00 50/);
+  assert.match(dsc, /Kasserer × årsak \(antall rabattlinjer\) Kasserer Datovare Best før Uten årsak Kasserer A 1 1 · Kasserer E · · 1/);
   assert.match(dsc, /1ESD2P6DRVPCCJY1 Gruppe - Coop koppnudler, 65 g 1 0,00/);
   if (process.env.SHOT) { await page.evaluate(() => { document.querySelector('[data-sec=findings]').scrollIntoView({ block: 'start' }); }); await page.waitForTimeout(200); await (await page.$('#kvr-panel')).screenshot({ path: process.env.SHOT.replace('.png', '-funn.png') }); await page.evaluate(() => { document.querySelector('[data-sec=diff]').scrollIntoView({ block: 'start' }); }); await page.waitForTimeout(200); await (await page.$('#kvr-panel')).screenshot({ path: process.env.SHOT.replace('.png', '-diff.png') }); }
 

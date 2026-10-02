@@ -117,6 +117,10 @@
       if (f.disc === 'noreason' && !(ds.discNR > 0)) return false;
       if (f.disc === 'reason' && !(ds.discN > ds.discNR)) return false;
       if (f.disc === 'coupon' && !(ds.coupons && ds.coupons.length)) return false;
+      if (f.disc.indexOf('r:') === 0) {
+        var rn = f.disc.slice(2);
+        if (!ds.items.some(function (l) { return l.d && reasonName(l.dr) === rn; })) return false;
+      }
     }
     return true;
   }
@@ -237,6 +241,19 @@
       disc: round2(disc), discN: discN, discNR: discNR, discNRsum: round2(discNRsum), coupons: coupons };
   }
 
+  // Rabattårsaker i Lindbak (tekstnr 1–6). Kvitteringen kan vise nummer eller tekst.
+  var DISC_REASONS = ['Datovare', 'Feil pris', 'Prisløfte', 'Reserveløsning kupong', 'Annen rabattårsak', 'Best før'];
+  var NO_REASON = 'Uten årsak';
+
+  function reasonName(raw) {
+    var t = String(raw || '').trim();
+    if (!t) return NO_REASON;
+    if (/^\d+$/.test(t)) return DISC_REASONS[Number(t) - 1] || t;
+    var low = t.toLowerCase();
+    for (var i = 0; i < DISC_REASONS.length; i++) if (low.indexOf(DISC_REASONS[i].toLowerCase()) !== -1) return DISC_REASONS[i];
+    return t;
+  }
+
   // Rabattdata finnes først fra v3; eldre skanninger må skannes på nytt.
   function hasDisc(sc) { return !!sc && sc.v >= 3; }
   function couponSum(sc) { return round2(((sc && sc.coupons) || []).reduce(function (a, c) { return a + (c.a || 0); }, 0)); }
@@ -332,6 +349,7 @@
     rabatt: { label: 'Rabatt på bongen (kr)', scan: true },
     rabattpst: { label: 'Høyeste rabatt (%)', scan: true },
     rabattuten: { label: 'Rabattlinjer uten årsak (antall)', scan: true },
+    rabattarsak: { label: 'Rabattårsak', scan: true, multi: true },
     kuponger: { label: 'Kuponger/kampanjer (antall)', scan: true },
     kupong: { label: 'Kupong (id/navn)', scan: true, multi: true },
     kassadiff: { label: 'Kassadifferanse (kr, uten fortegn)', scan: true },
@@ -362,6 +380,7 @@
       case 'kontanttilbake': return scan.pay['Kontant tilbake'] || 0;
       case 'rabatt': return hasDisc(scan) ? scan.disc : undefined;
       case 'rabattpst': return hasDisc(scan) ? scan.items.reduce(function (a, i) { return Math.max(a, i.dp || 0); }, 0) : undefined;
+      case 'rabattarsak': return hasDisc(scan) ? scan.items.filter(function (i) { return i.d; }).map(function (i) { return reasonName(i.dr); }) : undefined;
       case 'rabattuten': return hasDisc(scan) ? scan.discNR : undefined;
       case 'kuponger': return hasDisc(scan) ? scan.coupons.length : undefined;
       case 'kupong': return hasDisc(scan) ? scan.coupons.reduce(function (a, c) { a.push(c.i, c.n); return a; }, []) : undefined;
@@ -1236,7 +1255,7 @@
   function discounts(items, scanMap, cfg) {
     var pctMin = cnum(cfg.discPct, null), cashCmp = hasNum(cfg.discCash), f = cnum(cfg.profFactor, 1.5), minN = cnum(cfg.profMin, 5);
     var fresh = function () { return { n: 0, withDisc: 0, disc: 0, withNR: 0, nr: 0, withCpn: 0, cpn: 0, cpnSum: 0 }; };
-    var acc = {}, tot = fresh(), camps = {}, findings = [], scannedSales = 0, sales = 0;
+    var acc = {}, tot = fresh(), camps = {}, findings = [], scannedSales = 0, sales = 0, reasons = {}, matrix = {};
     items.forEach(function (it) {
       if (!isSale(it)) return;
       sales++;
@@ -1249,6 +1268,15 @@
         if (sc.discN) { x.withDisc++; x.disc += sc.disc; }
         if (sc.discNR) { x.withNR++; x.nr += sc.discNRsum; }
         if (sc.coupons.length) { x.withCpn++; x.cpn += sc.coupons.length; x.cpnSum += couponSum(sc); }
+      });
+      sc.items.forEach(function (l) {
+        if (!l.d) return;
+        var rn = reasonName(l.dr);
+        var e = reasons[rn] || (reasons[rn] = { name: rn, lines: 0, bongs: {}, sum: 0, pctSum: 0, pctN: 0 });
+        e.lines++; e.bongs[it.transactionId] = true; e.sum = round2(e.sum + l.d);
+        if (l.dp) { e.pctSum += l.dp; e.pctN++; }
+        var m = matrix[it.cashierNumber] || (matrix[it.cashierNumber] = {});
+        m[rn] = (m[rn] || 0) + 1;
       });
       sc.coupons.forEach(function (c) {
         var e = camps[c.i] || (camps[c.i] = { id: c.i, name: c.n, n: 0, sum: 0 });
@@ -1277,9 +1305,19 @@
       }
       return row;
     });
+    var order = DISC_REASONS.concat([NO_REASON]);
+    var reasonRows = Object.keys(reasons).map(function (k) {
+      var e = reasons[k];
+      return { name: e.name, lines: e.lines, bongs: Object.keys(e.bongs).length, sum: e.sum, avgPct: e.pctN ? round2(e.pctSum / e.pctN) : null, known: DISC_REASONS.indexOf(e.name) !== -1 };
+    }).sort(function (a, b) {
+      var ia = order.indexOf(a.name), ib = order.indexOf(b.name);
+      return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib) || b.lines - a.lines;
+    });
+    var cols = reasonRows.map(function (r) { return r.name; });
+    var matrixRows = Object.keys(matrix).sort(numCmp).map(function (id) { return { id: id, counts: matrix[id] }; });
     var campRows = Object.keys(camps).map(function (k) { return camps[k]; }).sort(function (a, b) { return b.n - a.n || String(a.id).localeCompare(String(b.id)); });
     return { rows: rows, total: { n: tot.n, withDisc: tot.withDisc, disc: round2(tot.disc), withNR: tot.withNR, nr: round2(tot.nr), withCpn: tot.withCpn, cpn: tot.cpn, cpnSum: round2(tot.cpnSum), share: storeShare },
-      campaigns: campRows, findings: findings, coverage: sales ? scannedSales / sales : 1, sales: sales, scanned: scannedSales };
+      campaigns: campRows, reasons: reasonRows, matrix: { cols: cols, rows: matrixRows }, findings: findings, coverage: sales ? scannedSales / sales : 1, sales: sales, scanned: scannedSales };
   }
 
   // Periode mot periode.
@@ -1380,6 +1418,8 @@
     sumSelected: sumSelected,
     parseReceipt: parseReceipt,
     discounts: discounts,
+    DISC_REASONS: DISC_REASONS,
+    reasonName: reasonName,
     hasDisc: hasDisc,
     couponSum: couponSum,
     CONTROL_FIELDS: CONTROL_FIELDS,

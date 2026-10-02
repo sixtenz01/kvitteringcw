@@ -804,7 +804,7 @@
     if (f.onlyAnom) add('Kun avvik', function () { f.onlyAnom = false; });
     if (f.bong) add('Bong: ' + f.bong, function () { f.bong = ''; });
     if (f.item) add('Vare: ' + f.item, function () { f.item = ''; });
-    if (f.disc) add('Rabatt: ' + ({ any: 'har rabatt', noreason: 'uten årsak', reason: 'med årsak', coupon: 'har kupong' }[f.disc] || f.disc), function () { f.disc = ''; });
+    if (f.disc) add('Rabatt: ' + (({ any: 'har rabatt', noreason: 'uten årsak', reason: 'med årsak', coupon: 'har kupong' }[f.disc] || (f.disc.indexOf('r:') === 0 ? 'årsak ' + f.disc.slice(2) : f.disc))), function () { f.disc = ''; });
     if (f.pant) add('Pant: ' + ({ any: 'pant/retur', sale: 'salg', 'return': 'retur' }[f.pant] || f.pant), function () { f.pant = ''; });
     if (f.note) add('Notat: ' + ({ any: 'har notat', oppfolging: 'til oppfølging', sjekket: 'sjekket' }[f.note] || f.note), function () { f.note = ''; });
     if (f.groups.length) add('Gruppe: ' + f.groups.join(', '), function () { f.groups = []; });
@@ -1306,11 +1306,25 @@
     });
     rows.push(['Butikk', T.n, T.withDisc, fmt(T.disc), T.withNR, fmt(T.nr), pct(T.share), T.withCpn, T.cpn]);
     box.appendChild(tbl(['Kasserer', 'Bonger', 'Med rabatt', 'Rabatt kr', 'Uten årsak', 'Uten årsak kr', 'Andel', 'Med kupong', 'Kuponger'], rows));
+    if (D.reasons.length) {
+      var pick = function (name) { return name === 'Uten årsak' ? 'noreason' : L.DISC_REASONS.indexOf(name) !== -1 ? 'r:' + name : null; };
+      box.appendChild(el('b', { class: 'kvr-subh', text: 'Rabatt per årsak' }));
+      box.appendChild(tbl(['Årsak', 'Linjer', 'Bonger', 'Rabatt kr', 'Snitt %'], D.reasons.map(function (r) {
+        var v = pick(r.name);
+        var nm = v ? { node: btn(r.name, function () { filters.disc = v; writeForm(); apply(); say('Viser kvitteringer med årsak «' + r.name + '».'); }, 'kvr-ent') } : r.name + ' (ukjent)';
+        return [nm, r.lines, r.bongs, fmt(r.sum), r.avgPct === null ? '–' : String(r.avgPct).replace('.', ',')];
+      })));
+      box.appendChild(el('b', { class: 'kvr-subh', text: 'Kasserer × årsak (antall rabattlinjer)' }));
+      var mx = D.reasons.map(function (r) { return r.name; });
+      box.appendChild(tbl(['Kasserer'].concat(mx), D.matrix.rows.map(function (r) {
+        return [{ node: entLink('kasserer', r.id) }].concat(mx.map(function (n) { return r.counts[n] || '·'; }));
+      })));
+    }
     if (D.campaigns.length) {
       box.appendChild(el('b', { class: 'kvr-subh', text: 'Kuponger/kampanjer (flest først)' }));
       box.appendChild(tbl(['Kupong-id', 'Navn', 'Bonger', 'Sum kr'], D.campaigns.slice(0, 10).map(function (c) { return [c.id, c.name, c.n, fmt(c.sum)]; })));
     }
-    box.appendChild(hintEl('Rabatt = linjen «Rabatt: Kr x (y %)» på en vare, uten rabattårsak antas den å være gitt i butikken. Kupong = linjen «Kupong (id - navn)», antatt lagt inn sentralt (CN/VPI); beløpet er ofte 0,00, så den viser at kampanjen er knyttet til bongen, ikke at den er innløst. Rødt = andel bonger med rabatt uten årsak er minst ' + ctlCfg.profFactor + '× butikkens (minst ' + ctlCfg.profMin + ' bonger). Funn «Rabatt uten årsak» krever minst ' + (ctlCfg.discPct || '–') + ' % rabatt.'));
+    box.appendChild(hintEl('Rabatt = linjen «Rabatt: Kr x (y %)» på en vare med årsak 1 Datovare, 2 Feil pris, 3 Prisløfte, 4 Reserveløsning kupong, 5 Annen rabattårsak eller 6 Best før (tom = ingen årsak valgt). Klikk en årsak for å filtrere listen. Kupong = linjen «Kupong (id - navn)», antatt lagt inn sentralt (CN/VPI); beløpet er ofte 0,00, så den viser at kampanjen er knyttet til bongen, ikke at den er innløst. Rødt = andel bonger med rabatt uten årsak er minst ' + ctlCfg.profFactor + '× butikkens (minst ' + ctlCfg.profMin + ' bonger). Funn «Rabatt uten årsak» krever minst ' + (ctlCfg.discPct || '–') + ' % rabatt.'));
   }
 
   function renderAuditCards(R) {
@@ -2550,7 +2564,7 @@
       el('option', { value: 'noreason', text: 'Rabatt uten årsak' }),
       el('option', { value: 'reason', text: 'Rabatt med årsak' }),
       el('option', { value: 'coupon', text: 'Har kupong (kampanje)' })
-    ]);
+    ].concat(L.DISC_REASONS.map(function (r) { return el('option', { value: 'r:' + r, text: 'Årsak: ' + r }); })));
     ui.disc.addEventListener('change', onChange);
     ui.scanBtn = btn('Skann innhold (synlige)', scanVisible, 'kvr-primary');
     ui.stopBtn = btn('Stopp', function () { cancelScan = true; });
