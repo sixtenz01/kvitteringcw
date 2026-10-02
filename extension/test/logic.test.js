@@ -550,5 +550,27 @@ assert.strictEqual(qrd2.reasons.find(r => r.name === 'Datovare').avgPct, 19.9);
 assert.deepStrictEqual(qrd2.matrix.cols, qrd2.reasons.map(r => r.name));
 assert.deepStrictEqual(qrd2.matrix.rows.find(r => r.id === 'A').counts, { 'Datovare': 1, 'Best før': 1 });
 assert.deepStrictEqual(qrd2.matrix.rows.find(r => r.id === 'B').counts, { 'Datovare': 1, 'Medarbeider': 1, 'Uten årsak': 1 });
+// overvåkede rabattårsaker: bong-flagg, terskler og kasserer-flagg
+assert.deepStrictEqual(L.watchReasons({ discWatch: '2, 4;5,5,xyz, Best før' }), ['Feil pris', 'Reserveløsning kupong', 'Annen rabattårsak', 'Best før']);
+assert.deepStrictEqual(L.watchReasons({ discWatch: '' }), []);
+assert.deepStrictEqual(L.watchReasons(L.defaultControl()), ['Feil pris', 'Reserveløsning kupong', 'Annen rabattårsak']);
+const wl = (reason, d, dp) => [['7000 VARE', '', '50.00'], ['Rabatt: Kr ' + d + ' (' + dp + '%)'], ['Rabatt årsak: ' + reason]];
+const wsc = { 'w-1': rcpt(wl('2', '10.00', '16.7')), 'w-2': rcpt(wl('Annen Rabattårsak', '3.00', '5.7')), 'w-3': rcpt(wl('4', '8.00', '13.8')),
+  'w-4': rcpt(wl('1', '9.00', '15.3')), 'w-5': rcpt(wl('Feil pris', '1.00', '2.0')), 'w-6': rcpt(wl('2', '5.00', '9.1')) };
+const wit = [['w-1', 'A'], ['w-2', 'A'], ['w-3', 'A'], ['w-4', 'A'], ['w-5', 'B'], ['w-6', 'B']].map(x => dmeta(x[0], { cashierNumber: x[1] }));
+const wd = L.discounts(wit, wsc, C2);
+assert.deepStrictEqual(wd.findings.filter(f => f.code === 'discWatch').map(f => f.ids[0]), ['w-1', 'w-2', 'w-3', 'w-5', 'w-6']);
+assert.match(wd.findings.find(f => f.code === 'discWatch').detail, /Kasse 1 12:00 kasserer A: VARE −10 kr \(16.7 %\) – årsak Feil pris/);
+assert.strictEqual(wd.findings.find(f => f.code === 'discWatch').flag, true);
+assert.deepStrictEqual(wd.findings.filter(f => f.code === 'discWatchCash').map(f => [f.cashier, f.flag]), [['A', false]]);
+assert.match(wd.findings.find(f => f.code === 'discWatchCash').detail, /3 av 4 bonger.*Feil pris 1, Reserveløsning kupong 1, Annen rabattårsak 1; grense 3/);
+assert.deepStrictEqual([wd.total.withW, wd.rows.find(r => r.id === 'A').withW, wd.rows.find(r => r.id === 'A').flagW, wd.rows.find(r => r.id === 'B').flagW], [5, 3, true, false]);
+const wf = (o) => L.discounts(wit, wsc, Object.assign({}, C2, o)).findings.filter(f => /^discWatch/.test(f.code)).map(f => f.code === 'discWatch' ? f.ids[0] : f.cashier);
+assert.deepStrictEqual(wf({ discWatchPct: '5' }), ['w-1', 'w-2', 'w-3', 'w-6', 'A']);
+assert.deepStrictEqual(wf({ discWatchKr: '5' }), ['w-1', 'w-3', 'w-6']);
+assert.deepStrictEqual(wf({ discWatchN: '' }), ['w-1', 'w-2', 'w-3', 'w-5', 'w-6']);
+assert.deepStrictEqual(wf({ discWatch: '' }), []);
+assert.deepStrictEqual(wf({ discWatch: '1' }), ['w-4']);
+assert.ok(L.RISK_WEIGHTS['Rabatt med overvåket årsak'] > 0 && L.reasonWeight('Mange rabatter med overvåket årsak', W) > 0);
 assert.ok(L.reasonWeight('Rabatt uten årsak', W) > 0 && L.RISK_WEIGHTS['Mange rabatter uten årsak'] > 0);
 console.log('logic: ok');

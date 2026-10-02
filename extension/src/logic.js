@@ -254,6 +254,18 @@
     return t;
   }
 
+  // Overvåkede rabattårsaker fra terskelfeltet (tekstnr eller tekst, adskilt med komma).
+  function watchReasons(cfg) {
+    var out = [];
+    String((cfg && cfg.discWatch) || '').split(/[,;]+/).forEach(function (t) {
+      t = t.trim();
+      if (!t) return;
+      var n = reasonName(t);
+      if (DISC_REASONS.indexOf(n) !== -1 && out.indexOf(n) === -1) out.push(n);
+    });
+    return out;
+  }
+
   // Rabattdata finnes først fra v3; eldre skanninger må skannes på nytt.
   function hasDisc(sc) { return !!sc && sc.v >= 3; }
   function couponSum(sc) { return round2(((sc && sc.coupons) || []).reduce(function (a, c) { return a + (c.a || 0); }, 0)); }
@@ -628,7 +640,9 @@
     ['diffMin', 'Kassadifferanse teller fra kr', '1'], ['diffTotal', 'Kassadiff. minus totalt ≥ kr', '100'],
     ['benfordMin', 'Benford: minst antall bonger', '100'], ['benfordCashMin', 'Benford: minst per kasserer', '50'],
     ['benfordMad', 'Benford: avvik (MAD) over', '0.015'], ['roundShare', 'Runde beløp: andel % over', '5'], ['roundMinN', 'Runde beløp: minst antall', '20'],
-    ['discPct', 'Rabatt uten årsak ≥ % (tom = av)', '30'], ['discCash', 'Rabatt: sammenlign kasserere (tom = av)', '1']
+    ['discPct', 'Rabatt uten årsak ≥ % (tom = av)', '30'], ['discCash', 'Rabatt: sammenlign kasserere (tom = av)', '1'],
+    ['discWatch', 'Overvåkede rabattårsaker (tekstnr, tom = av)', '2,4,5'], ['discWatchPct', 'Overvåket: rabatt ≥ %', '0'],
+    ['discWatchKr', 'Overvåket: rabatt ≥ kr', '0'], ['discWatchN', 'Overvåket: kasserer ved ≥ antall bonger (tom = av)', '3']
   ];
 
   function defaultControl() {
@@ -902,7 +916,7 @@
     'Samme pantebeløp utbetalt flere ganger': 4, 'Bonger utenfor åpningstid': 2, 'Regel': 3,
     'Retur uten salg': 3, 'Kortkjøp refundert kontant': 5, 'Salg og retur av samme beløp': 4, 'Salg etter kassaoppgjør': 4,
     'Hull i bongnummer': 3, 'Bongnummer og tid stemmer ikke': 4, 'Dobbelt bongnummer': 3, 'Gjentatte kassadifferanser': 4,
-    'Avvikende sifferfordeling': 2, 'Mange runde beløp': 2, 'Rabatt uten årsak': 3, 'Mange rabatter uten årsak': 2
+    'Avvikende sifferfordeling': 2, 'Mange runde beløp': 2, 'Rabatt uten årsak': 3, 'Mange rabatter uten årsak': 2, 'Rabatt med overvåket årsak': 3, 'Mange rabatter med overvåket årsak': 3
   };
 
   function sanitizeWeights(raw) {
@@ -1254,7 +1268,8 @@
   // «Kupong (id - navn)» er kampanjer lagt inn sentralt. Bare v3-skanninger har rabattdata.
   function discounts(items, scanMap, cfg) {
     var pctMin = cnum(cfg.discPct, null), cashCmp = hasNum(cfg.discCash), f = cnum(cfg.profFactor, 1.5), minN = cnum(cfg.profMin, 5);
-    var fresh = function () { return { n: 0, withDisc: 0, disc: 0, withNR: 0, nr: 0, withCpn: 0, cpn: 0, cpnSum: 0 }; };
+    var watch = watchReasons(cfg), wPct = cnum(cfg.discWatchPct, 0), wKr = cnum(cfg.discWatchKr, 0), wN = cnum(cfg.discWatchN, null);
+    var fresh = function () { return { n: 0, withDisc: 0, disc: 0, withNR: 0, nr: 0, withCpn: 0, cpn: 0, cpnSum: 0, withW: 0 }; };
     var acc = {}, tot = fresh(), camps = {}, findings = [], scannedSales = 0, sales = 0, reasons = {}, matrix = {};
     items.forEach(function (it) {
       if (!isSale(it)) return;
@@ -1282,6 +1297,16 @@
         var e = camps[c.i] || (camps[c.i] = { id: c.i, name: c.n, n: 0, sum: 0 });
         e.n++; e.sum = round2(e.sum + (c.a || 0));
       });
+      if (watch.length) {
+        var wl = sc.items.filter(function (l) { return l.d && watch.indexOf(reasonName(l.dr)) !== -1 && (l.dp === undefined || l.dp >= wPct) && l.d >= wKr; });
+        if (wl.length) {
+          a.withW++; tot.withW++;
+          findings.push({ kind: 'Rabatt', code: 'discWatch', title: 'Rabatt med overvåket årsak', flag: true,
+            detail: 'Kasse ' + it.workstationNumber + ' ' + parseDT(it.endDateTime).time + ' kasserer ' + it.cashierNumber + ': ' +
+              wl.map(function (l) { return l.n + ' −' + l.d + ' kr (' + (l.dp || '?') + ' %) – årsak ' + reasonName(l.dr); }).join(', '),
+            ids: [it.transactionId] });
+        }
+      }
       if (pctMin !== null) {
         var hits = sc.items.filter(function (l) { return l.d && !l.dr && (l.dp || 0) >= pctMin; });
         if (hits.length) {
@@ -1296,8 +1321,14 @@
     var storeShare = shareOf(tot);
     var rows = Object.keys(acc).sort(numCmp).map(function (id) {
       var x = acc[id];
-      var row = { id: id, n: x.n, withDisc: x.withDisc, disc: round2(x.disc), withNR: x.withNR, nr: round2(x.nr), withCpn: x.withCpn, cpn: x.cpn, cpnSum: round2(x.cpnSum),
+      var row = { id: id, n: x.n, withW: x.withW, flagW: false, withDisc: x.withDisc, disc: round2(x.disc), withNR: x.withNR, nr: round2(x.nr), withCpn: x.withCpn, cpn: x.cpn, cpnSum: round2(x.cpnSum),
         share: shareOf(x), flag: false };
+      if (watch.length && wN !== null && x.withW >= wN) {
+        row.flagW = true;
+        var per = watch.map(function (n) { return n + ' ' + ((matrix[id] && matrix[id][n]) || 0); }).join(', ');
+        findings.push({ kind: 'Rabatt', code: 'discWatchCash', title: 'Mange rabatter med overvåket årsak', flag: false, cashier: id, ids: [],
+          detail: 'Kasserer ' + id + ': ' + x.withW + ' av ' + x.n + ' bonger med overvåket rabattårsak (' + per + '; grense ' + wN + ')' });
+      }
       if (cashCmp && x.n >= minN && x.withNR >= 2 && storeShare > 0 && row.share >= storeShare * f) {
         row.flag = true;
         findings.push({ kind: 'Rabatt', code: 'discCash', title: 'Mange rabatter uten årsak', flag: false, cashier: id, ids: [],
@@ -1316,8 +1347,8 @@
     var cols = reasonRows.map(function (r) { return r.name; });
     var matrixRows = Object.keys(matrix).sort(numCmp).map(function (id) { return { id: id, counts: matrix[id] }; });
     var campRows = Object.keys(camps).map(function (k) { return camps[k]; }).sort(function (a, b) { return b.n - a.n || String(a.id).localeCompare(String(b.id)); });
-    return { rows: rows, total: { n: tot.n, withDisc: tot.withDisc, disc: round2(tot.disc), withNR: tot.withNR, nr: round2(tot.nr), withCpn: tot.withCpn, cpn: tot.cpn, cpnSum: round2(tot.cpnSum), share: storeShare },
-      campaigns: campRows, reasons: reasonRows, matrix: { cols: cols, rows: matrixRows }, findings: findings, coverage: sales ? scannedSales / sales : 1, sales: sales, scanned: scannedSales };
+    return { rows: rows, total: { n: tot.n, withDisc: tot.withDisc, disc: round2(tot.disc), withW: tot.withW, withNR: tot.withNR, nr: round2(tot.nr), withCpn: tot.withCpn, cpn: tot.cpn, cpnSum: round2(tot.cpnSum), share: storeShare },
+      watch: watch, campaigns: campRows, reasons: reasonRows, matrix: { cols: cols, rows: matrixRows }, findings: findings, coverage: sales ? scannedSales / sales : 1, sales: sales, scanned: scannedSales };
   }
 
   // Periode mot periode.
@@ -1420,6 +1451,7 @@
     discounts: discounts,
     DISC_REASONS: DISC_REASONS,
     reasonName: reasonName,
+    watchReasons: watchReasons,
     hasDisc: hasDisc,
     couponSum: couponSum,
     CONTROL_FIELDS: CONTROL_FIELDS,

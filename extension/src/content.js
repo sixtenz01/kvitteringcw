@@ -1302,17 +1302,18 @@
     var T = D.total;
     box.appendChild(hintEl('Rabattdata for ' + D.scanned + ' av ' + D.sales + ' salg. ' + T.withDisc + ' bonger har rabattlinje (' + fmt(T.disc) + ' kr), ' + T.withNR + ' av dem uten årsak (' + fmt(T.nr) + ' kr). ' + T.withCpn + ' bonger har kupong/kampanje (' + T.cpn + ' kuponger).'));
     var rows = D.rows.map(function (r) {
-      return [{ node: entLink('kasserer', r.id) }, r.n, r.withDisc, fmt(r.disc), { t: r.withNR, bad: r.flag }, fmt(r.nr), { t: pct(r.share), bad: r.flag }, r.withCpn, r.cpn];
+      return [{ node: entLink('kasserer', r.id) }, r.n, r.withDisc, fmt(r.disc), { t: r.withNR, bad: r.flag }, fmt(r.nr), { t: pct(r.share), bad: r.flag }, { t: r.withW, bad: r.flagW }, r.withCpn, r.cpn];
     });
-    rows.push(['Butikk', T.n, T.withDisc, fmt(T.disc), T.withNR, fmt(T.nr), pct(T.share), T.withCpn, T.cpn]);
-    box.appendChild(tbl(['Kasserer', 'Bonger', 'Med rabatt', 'Rabatt kr', 'Uten årsak', 'Uten årsak kr', 'Andel', 'Med kupong', 'Kuponger'], rows));
+    rows.push(['Butikk', T.n, T.withDisc, fmt(T.disc), T.withNR, fmt(T.nr), pct(T.share), T.withW, T.withCpn, T.cpn]);
+    box.appendChild(tbl(['Kasserer', 'Bonger', 'Med rabatt', 'Rabatt kr', 'Uten årsak', 'Uten årsak kr', 'Andel', 'Overvåket', 'Med kupong', 'Kuponger'], rows));
+    box.appendChild(hintEl(D.watch.length ? 'Overvåkede årsaker: ' + D.watch.join(', ') + '. Bongen flagges ved rabatt på minst ' + ctlCfg.discWatchPct + ' % og ' + ctlCfg.discWatchKr + ' kr; kassereren markeres ved minst ' + (ctlCfg.discWatchN || '–') + ' bonger. Endres under Terskler.' : 'Overvåking av rabattårsaker er av (tom liste under Terskler).'));
     if (D.reasons.length) {
       var pick = function (name) { return name === 'Uten årsak' ? 'noreason' : L.DISC_REASONS.indexOf(name) !== -1 ? 'r:' + name : null; };
       box.appendChild(el('b', { class: 'kvr-subh', text: 'Rabatt per årsak' }));
-      box.appendChild(tbl(['Årsak', 'Linjer', 'Bonger', 'Rabatt kr', 'Snitt %'], D.reasons.map(function (r) {
+      box.appendChild(tbl(['Årsak', 'Linjer', 'Bonger', 'Rabatt kr', 'Snitt %', 'Overvåket'], D.reasons.map(function (r) {
         var v = pick(r.name);
         var nm = v ? { node: btn(r.name, function () { filters.disc = v; writeForm(); apply(); say('Viser kvitteringer med årsak «' + r.name + '».'); }, 'kvr-ent') } : r.name + ' (ukjent)';
-        return [nm, r.lines, r.bongs, fmt(r.sum), r.avgPct === null ? '–' : String(r.avgPct).replace('.', ',')];
+        return [nm, r.lines, r.bongs, fmt(r.sum), r.avgPct === null ? '–' : String(r.avgPct).replace('.', ','), D.watch.indexOf(r.name) !== -1 ? 'ja' : ''];
       })));
       box.appendChild(el('b', { class: 'kvr-subh', text: 'Kasserer × årsak (antall rabattlinjer)' }));
       var mx = D.reasons.map(function (r) { return r.name; });

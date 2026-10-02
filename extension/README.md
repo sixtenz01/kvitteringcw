@@ -56,6 +56,7 @@ Bruk:
 - **Rabattårsaker** (tekstnr i Lindbak): 1 Datovare, 2 Feil pris, 3 Prisløfte, 4 Reserveløsning kupong, 5 Annen rabattårsak, 6 Best før. Pluginen kjenner igjen både nummer og tekst på kvitteringen; ukjent tekst vises som den står.
 - **Filter:** «Rabatt (krever skanning)» under Skann: har rabatt, uten årsak, med årsak, har kupong, eller én bestemt årsak.
 - **Analyse → Detaljer → Rabatter og kuponger:** per kasserer antall bonger med rabatt, rabatt i kr, uten årsak, kuponger; butikksum; tabell «Rabatt per årsak» (klikk en årsak for å filtrere listen) og matrisen «Kasserer × årsak»; de vanligste kampanjene. Test «Rabatt uten årsak» flagger rabattlinjer på minst 30 % uten årsak (terskel kan endres, tom = av). «Mange rabatter uten årsak» flagger kasserere som ligger minst 1,5× butikkens andel.
+- **Overvåkede rabattårsaker:** test «Rabatt med overvåket årsak» flagger bonger med rabattlinje der årsaken står på en liste (standard 2 Feil pris, 4 Reserveløsning kupong, 5 Annen rabattårsak). Terskler under Detaljer: årsaker (tekstnr, komma; tom = av), rabatt minst x % og y kr (standard 0), og «Mange rabatter med overvåket årsak» når en kasserer har minst 3 bonger (tom = av). Egen vekt for begge (standard 3), justerbar under risikovekting. Kassererfunnet gir poeng på kassereren, ikke på bongene.
 - **Egne regler:** felt for rabatt (kr), høyeste rabatt (%), rabattårsak, rabattlinjer uten årsak, antall kuponger og kupong (id/navn).
 - **Fokus:** rabatt og kuponger per kasserer eller kasse.
 
