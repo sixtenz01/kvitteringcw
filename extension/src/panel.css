@@ -226,3 +226,4 @@ tr.kvr-follow>td.kvr-cb-cell::after{color:#e37400}
 #kvr-panel .kvr-scope[open]>summary b::before{transform:rotate(90deg)}
 #kvr-panel .kvr-scope-brief{font-size:12px;color:var(--kv-fg);padding-left:14px}
 #kvr-panel .kvr-scope[open]>.kvr-secbody{margin-top:10px}
+#kvr-panel .kvr-subh{display:block;margin:10px 0 2px;font-size:12px}

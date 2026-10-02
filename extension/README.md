@@ -44,6 +44,24 @@ Nye tester (vekter og terskler kan justeres under Detaljer):
 
 Analysene er indikatorer som må forklares, ikke bevis.
 
+## Rabatter og kuponger
+
+Skanningen leser nå to ting fra kvitteringen (skannepost v3):
+
+- **Rabatt:** linjen `Rabatt: Kr x (y %)` under en vare, med `Rabatt årsak:` (ofte tom). Varebeløpet på kvitteringen er etter rabatt.
+- **Kupong:** linjer `Kupong (id - navn)`, antatt kampanjer lagt inn sentralt (CN/VPI). Beløpet er ofte 0,00; linjen viser at kampanjen er knyttet til bongen, ikke at den er innløst. Kupongene regnes ikke lenger som betalingsmåter.
+
+Bruk:
+
+- **Filter:** «Rabatt (krever skanning)» under Skann: har rabatt, uten årsak, med årsak, har kupong.
+- **Analyse → Detaljer → Rabatter og kuponger:** per kasserer antall bonger med rabatt, rabatt i kr, uten årsak, kuponger; butikksum; de vanligste kampanjene. Test «Rabatt uten årsak» flagger rabattlinjer på minst 30 % uten årsak (terskel kan endres, tom = av). «Mange rabatter uten årsak» flagger kasserere som ligger minst 1,5× butikkens andel.
+- **Egne regler:** felt for rabatt (kr), høyeste rabatt (%), rabattlinjer uten årsak, antall kuponger og kupong (id/navn).
+- **Fokus:** rabatt og kuponger per kasserer eller kasse.
+
+Skanner fra tidligere versjoner (v2) har ikke rabattdata. «Skann synlige» skanner dem på nytt, og filteret skjuler dem til de er skannet (gul stripe viser antallet).
+
+Ikke verifisert: at rabatt uten årsak betyr «gitt i butikken», og hvordan lokale kampanjer ser ut. Dette trenger eksempler fra ekte kvitteringer.
+
 ## Kontroll-fanen
 
 - **Arbeidsoppgaver:** lagre filter + datovalg (i går, i dag, siste 7 dager, forrige uke) + skanning + kontroller + sammendrag som én knapp. «Morgenkontroll (i går)» er innebygd: henter gårsdagen fra CW, skanner, kjører alle kontroller og viser et sammendrag som kan kopieres som tekst. Lagrede filtre (Filter-fanen) setter bare filter.

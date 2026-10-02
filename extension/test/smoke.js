@@ -15,7 +15,7 @@ const tr = (a, b, c) => `<tr><td>${a}</td><td></td><td>${c}</td></tr>`;
 const RECEIPTS = {
   't-2': '<table>' + tr('Kontant:', '', '1 000.00') + tr('Sum', '', '1 000.00') + tr('Pose: 512324789405', '', '') + tr('Differanse', '', '') + tr('Kontant:', '', '+1 000.00') + tr('Sum', '', '+1 000.00') + '</table>',
   't-1': '<table>' + tr('RETUR VARE', '', '') .replace('<td></td><td></td>', '') + tr('399 PANTELAPP', '', '-150.00') + tr('399 PANTELAPP', '', '-106.00') + '<tr><td>Kontant tilbake:</td><td></td><td>256.00</td></tr></table>',
-  't-3': '<table>' + tr('7044610877488 PEPSI MAX 0.5L', '', '32.90') + tr('220 PANT', '', '2.00') + tr('7330196001042 SKRUF NO4 FRESH S4', '', '101.90') + '</table>',
+  't-3': '<table>' + tr('7044610877488 PEPSI MAX 0.5L', '', '32.90') + '<tr><td colspan="3">Rabatt: Kr 8.00 (19.6%)</td></tr><tr><td colspan="3">Rabatt årsak: </td></tr>' + tr('Kupong (1ESD2P6DRVPCCJY1 - Gruppe - Coop koppnudler, 65 g):', '', '0.00') + tr('220 PANT', '', '2.00') + tr('7330196001042 SKRUF NO4 FRESH S4', '', '101.90') + '</table>',
   't-4': '<table>' + tr('7038010002274 BIOLA JORDBÆR 1000G', '', '39.90') + tr('7044416015367 REGAL HVETEMEL 1KG', '', '20.50') + '</table>',
   't-5': '<table>' + tr('7000000000001 BANAN KG', '', '15.00') + '</table>'
 };
@@ -194,7 +194,14 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   assert.deepStrictEqual(await vis(), ['t-1']);
   await page.selectOption('.kvr-f:has-text("Pant (krever") select', 'sale');
   assert.deepStrictEqual(await vis(), ['t-3']);
+  const dsel = (v) => page.selectOption('.kvr-f:has-text("Rabatt (krever") select', v);
+  await dsel('noreason'); assert.deepStrictEqual(await vis(), ['t-3']);
+  assert.match(await page.innerText('.kvr-chipsrow'), /Rabatt: uten årsak/);
+  await dsel('coupon'); assert.deepStrictEqual(await vis(), ['t-3']);
+  await dsel('reason'); assert.deepStrictEqual(await vis(), []);
+  await dsel('any'); assert.deepStrictEqual(await vis(), ['t-3']);
   await wipe();
+  assert.strictEqual(await page.inputValue('.kvr-f:has-text("Rabatt (krever") select'), '');
 
   // varevarsøk og varegrupper
   await tab('Filter');

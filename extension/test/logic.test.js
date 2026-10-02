@@ -460,4 +460,72 @@ assert.ok(cA.flags.some(f => /returandel \+40 poeng/.test(f)));
 assert.ok(cA.flags.some(f => /risikoscore \+8/.test(f)));
 assert.strictEqual(cB.flagged, false);
 assert.deepStrictEqual([cmpP.total.A.count, cmpP.total.B.count, cmpP.total.B.anom], [20, 20, 2]);
+
+// ---- rabatt og kuponger (kvittering fra produksjon, anonymisert)
+const dsc = L.parseReceipt([
+  ['Beskrivelse', '', 'Beløp'],
+  ['7071862047727 LINEA GAVEBÅND 20M', '', '4.36'],
+  ['Rabatt: Kr 4.36 (50.0%)'],
+  ['Rabatt årsak: '],
+  ['7340191181243 COOP COLOR 1000ML', '', '20.00'],
+  ['7340191181243 COOP COLOR 1000ML', '', '20.00'],
+  ['5712 APPELSIN', '', '28.41'],
+  ['Antall: 0.712 kg à Kr 39.90'],
+  ['', 'Totalt', '72.77'],
+  ['Kupong (1ESD2LJ54XDMBB6F - COOP FROKOSTEGG FRITTG. 12PK L):', '', '0.00'],
+  ['Kupong (1ESD2P6DRVPCCJY1 - Gruppe - Coop koppnudler, 65 g):', '', '0.00'],
+  ['Coopay:', '', '72.77'],
+  ['TransId: DK7TVRW5F2PC5'],
+  ['35.49', '25 %', '8.87', '44.36', '']
+]);
+assert.strictEqual(dsc.v, 3);
+assert.strictEqual(dsc.items.length, 4);
+assert.deepStrictEqual([dsc.items[0].d, dsc.items[0].dp, dsc.items[0].dr], [4.36, 50, '']);
+assert.strictEqual(dsc.items[1].d, undefined);
+assert.strictEqual(dsc.items[3].q, 0.712);
+assert.deepStrictEqual(dsc.pay, { 'Coopay': 72.77 });
+assert.deepStrictEqual(dsc.coupons, [{ i: '1ESD2LJ54XDMBB6F', n: 'COOP FROKOSTEGG FRITTG. 12PK L', a: 0 }, { i: '1ESD2P6DRVPCCJY1', n: 'Gruppe - Coop koppnudler, 65 g', a: 0 }]);
+assert.deepStrictEqual([dsc.disc, dsc.discN, dsc.discNR, dsc.discNRsum], [4.36, 1, 1, 4.36]);
+assert.strictEqual(dsc.np, 4);
+const withReason = L.parseReceipt([['7000 VARE', '', '10.00'], ['Rabatt: Kr 5.00 (33.3%)'], ['Rabatt årsak:', 'Utgått dato']]);
+assert.deepStrictEqual([withReason.items[0].dr, withReason.discNR, withReason.discN], ['Utgått dato', 0, 1]);
+const oldRec = { v: 2, items: [], pay: {}, sale: 0, ret: 0, saleLines: 0, retLines: 0, np: 0 };
+const dmm = { 'd-1': dsc, 'd-2': withReason, 'd-3': rcpt([['7000 VARE', '', '10.00']]), 'd-4': oldRec };
+const dmeta = (id, o) => Object.assign({ transactionId: id, endDateTime: '2026-10-01 12:00', storeNumber: 1005, workstationNumber: 1, cashierNumber: 'A', totalAmount: 10, receiptType: 1, memberNumber: null }, o || {});
+const ditems = ['d-1', 'd-2', 'd-3', 'd-4'].map(id => dmeta(id));
+const didsf = (disc) => ditems.filter(r => L.matches(r, F({ disc }), { scan: dmm })).map(r => r.transactionId);
+assert.deepStrictEqual(didsf('any'), ['d-1', 'd-2']);
+assert.deepStrictEqual(didsf('noreason'), ['d-1']);
+assert.deepStrictEqual(didsf('reason'), ['d-2']);
+assert.deepStrictEqual(didsf('coupon'), ['d-1']);
+assert.deepStrictEqual(ditems.filter(r => L.matches(r, F({ disc: 'any' }), {})).length, 0);
+assert.strictEqual(L.activeCount(F({ disc: 'any' })), 1);
+assert.strictEqual(L.hasDisc(oldRec), false);
+assert.strictEqual(L.matches(dmeta('d-4'), F({ disc: 'any' }), { scan: dmm }), false);
+const drul = (f, op, v) => ({ name: 'r', enabled: true, conds: [{ f, op, v }] });
+assert.strictEqual(L.evalRule(drul('rabattuten', '>=', '1'), ditems[0], dsc), true);
+assert.strictEqual(L.evalRule(drul('rabattpst', '>=', '50'), ditems[0], dsc), true);
+assert.strictEqual(L.evalRule(drul('kupong', 'inneholder', 'koppnudler'), ditems[0], dsc), true);
+assert.strictEqual(L.evalRule(drul('kuponger', '>=', '1'), ditems[0], oldRec), false);
+const dsFo = L.focusStats(ditems, dmm);
+assert.deepStrictEqual([dsFo.disc, dsFo.discN, dsFo.discNR, dsFo.cpn, dsFo.discScanned], [9.36, 2, 1, 2, 3]);
+
+// discounts(): rabatt uten årsak og kasserer-sammenligning
+const dbase = Object.assign({}, C2, { discPct: '30', discCash: '1', profMin: '5', profFactor: '1.5' });
+const ddd = L.discounts(ditems, dmm, dbase);
+assert.strictEqual(ddd.scanned, 3);
+assert.strictEqual(ddd.sales, 4);
+assert.ok(ddd.coverage < 1);
+assert.deepStrictEqual([ddd.total.withDisc, ddd.total.withNR, ddd.total.disc, ddd.total.nr, ddd.total.cpn], [2, 1, 9.36, 4.36, 2]);
+assert.deepStrictEqual(ddd.findings.filter(f => f.code === 'discNoReason').map(f => f.ids[0]), ['d-1']);
+assert.strictEqual(ddd.campaigns.length, 2);
+assert.strictEqual(L.discounts(ditems, dmm, Object.assign({}, dbase, { discPct: '60' })).findings.length, 0);
+assert.strictEqual(L.discounts(ditems, dmm, Object.assign({}, dbase, { discPct: '' })).findings.length, 0);
+const dcs = {}, dci = [];
+for (let k = 0; k < 10; k++) { dcs['x-' + k] = rcpt([['7000 V', '', '50.00'], ...(k < 4 ? [['Rabatt: Kr 5.00 (10.0%)'], ['Rabatt årsak:']] : [])]); dci.push(dmeta('x-' + k, { cashierNumber: 'Z', endDateTime: '2026-10-01 10:0' + k })); }
+for (let k = 0; k < 10; k++) { dcs['y-' + k] = rcpt([['7000 V', '', '50.00'], ...(k < 1 ? [['Rabatt: Kr 5.00 (10.0%)'], ['Rabatt årsak:']] : [])]); dci.push(dmeta('y-' + k, { cashierNumber: 'Y', endDateTime: '2026-10-01 11:0' + k })); }
+const dcdsc = L.discounts(dci, dcs, dbase);
+assert.deepStrictEqual(dcdsc.findings.filter(f => f.code === 'discCash').map(f => [f.cashier, f.flag]), [['Z', false]]);
+assert.strictEqual(dcdsc.findings.filter(f => f.code === 'discNoReason').length, 0);
+assert.ok(L.reasonWeight('Rabatt uten årsak', W) > 0 && L.RISK_WEIGHTS['Mange rabatter uten årsak'] > 0);
 console.log('logic: ok');

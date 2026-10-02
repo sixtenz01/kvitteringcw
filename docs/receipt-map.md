@@ -85,7 +85,29 @@ Mønstre i varelinjer:
 - Fallgruve: `(SLETT…` i varenavn er produktstatus, ikke annullering.
 - Negativ `totalAmount` i gridet = panteretur/retur (-556, -0.7 observert).
 
-Ikke observert ennå: annullert kvittering, rabatt, manuell pris, parkert bong, medlem (`memberNumber != null` forekommer på 11 av 108 rader).
+Ikke observert ennå: annullert kvittering, manuell pris, parkert bong, spør pris, lokal kampanje, medlem (`memberNumber != null` forekommer på 11 av 108 rader).
+
+## Rabatt og kupong (observert 2026-10-02, salg type 1)
+
+Toppteksten (utenfor `<tr>`): butikknavn, org.nr, `Butikk: <nr>, Kassenr: <n>, Kasserer: <nr>`, `Kvittering: <seq> <dato> <tid>`, `Medlemsnr.: <nr>`.
+
+```
+7071862047727 LINEA GAVEBÅND 20M | | 4.36      (beløp er etter rabatt)
+    Rabatt: Kr 4.36 (50.0%)                   (egen rad, én celle)
+    Rabatt årsak:                             (tom her)
+5712 APPELSIN | | 28.41
+    Antall: 0.712 kg à Kr 39.90
+Totalt | 72.77
+Kupong (1ESD2LJ54XDMBB6F - COOP FROKOSTEGG FRITTG. 12PK L): | | 0.00
+Kupong (1ESD2P6DRVPCCJY1 - Gruppe - Coop koppnudler, 65 g): | | 0.00
+Coopay: | | 72.77
+TransId: DK7TVRW5F2PC5
+```
+
+- Rabatt: `Rabatt: Kr <beløp> (<prosent>%)` hører til varelinjen over; `Rabatt årsak:` følger.
+- Kupong: `Kupong (<id> - <navn>):` med beløp (0.00 her). Kupongvarene sto ikke på bongen, så linjene viser trolig kampanjer knyttet til bongen, ikke innløsning. Må bekreftes.
+- Tolkning i pluginen (ubekreftet): rabattlinje uten årsak = gitt i butikken; kupong = sentral kampanje (CN/VPI). Lokale kampanjer er ikke sett.
+- Betaling `Coopay:`; kvitteringsbunn har kortterminaltekst og `Kjøpeutbytte`-tabell (`Grunnlag | Kjøpeutbytte | MVA bonus`).
 
 ## Ikke i bruk: API-endepunkt
 
