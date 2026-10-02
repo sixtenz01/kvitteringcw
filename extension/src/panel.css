@@ -210,3 +210,11 @@ tr.kvr-follow>td.kvr-cb-cell::after{color:#e37400}
 #kvr-panel .kvr-hc{height:18px;border:0;border-radius:3px;cursor:pointer;padding:0}
 #kvr-panel .kvr-hc:hover,#kvr-panel .kvr-hc:focus{outline:2px solid var(--kv-fg);outline-offset:0}
 #kvr-panel .kvr-tip{position:absolute;z-index:6;max-width:260px;padding:5px 8px;border-radius:6px;background:#1b2a24;color:#fff;font-size:11px;line-height:1.35;pointer-events:none;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+
+#kvr-panel .kvr-storebox{display:flex;flex-direction:column;gap:6px}
+#kvr-panel .kvr-storebox .kvr-checklist{max-height:170px}
+#kvr-panel .kvr-boxacts{align-items:center;justify-content:space-between;gap:10px}
+#kvr-panel .kvr-boxacts .kvr-hint{flex:1}
+#kvr-panel .kvr-boxacts .kvr-link{flex:0 0 auto}
+#kvr-panel .kvr-chk span{flex:1;min-width:0}
+#kvr-panel .kvr-cnt{font-style:normal;font-size:11px;color:var(--kv-muted);background:var(--kv-soft);border-radius:999px;padding:0 7px}

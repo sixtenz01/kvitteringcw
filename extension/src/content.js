@@ -493,6 +493,47 @@
     if (!values.length) box.appendChild(el('span', { class: 'kvr-hint', text: 'Ingen verdier i listen.' }));
   }
 
+  function storeBox() {
+    var box = el('div', { class: 'kvr-storebox' });
+    box.isChecklist = true; box.sel = {}; box.values = []; box.counts = {}; box.query = '';
+    box.search = el('input', { type: 'text', placeholder: 'søk butikk (navn eller nr)' });
+    box.search.addEventListener('input', function () { box.query = box.search.value; renderStoreBox(box); });
+    box.list = el('div', { class: 'kvr-checklist', role: 'group', 'aria-label': 'Butikker' });
+    box.info = el('span', { class: 'kvr-hint' });
+    box.appendChild(box.search);
+    box.appendChild(box.list);
+    box.appendChild(el('div', { class: 'kvr-row kvr-boxacts' }, [
+      box.info,
+      el('button', { type: 'button', class: 'kvr-link', text: 'Velg viste', onclick: function () { shownStores(box).forEach(function (v) { box.sel[String(v)] = true; }); renderStoreBox(box); onChange(); } }),
+      el('button', { type: 'button', class: 'kvr-link', text: 'Fjern butikkvalg', onclick: function () { Object.keys(box.sel).forEach(function (k) { box.sel[k] = false; }); renderStoreBox(box); onChange(); } })
+    ]));
+    return box;
+  }
+
+  function shownStores(box) {
+    var q = box.query.toLowerCase();
+    return box.values.filter(function (v) { return !q || sLabel(v).toLowerCase().indexOf(q) !== -1; });
+  }
+
+  function renderStoreBox(box) {
+    box.list.innerHTML = '';
+    var shown = shownStores(box);
+    if (!box.values.length) box.list.appendChild(el('div', { class: 'kvr-hint', text: 'Ingen butikker i listen ennå.' }));
+    else if (!shown.length) box.list.appendChild(el('div', { class: 'kvr-hint', text: 'Ingen treff.' }));
+    shown.forEach(function (v) {
+      var key = String(v), cb = el('input', { type: 'checkbox', value: key });
+      cb.checked = !!box.sel[key];
+      cb.addEventListener('change', function () { box.sel[key] = cb.checked; renderStoreInfo(box); onChange(); });
+      box.list.appendChild(el('label', { class: 'kvr-chk' }, [cb, el('span', { text: sLabel(v) }), el('em', { class: 'kvr-cnt', text: String(box.counts[key] || 0) })]));
+    });
+    renderStoreInfo(box);
+  }
+
+  function renderStoreInfo(box) {
+    var n = Object.keys(box.sel).filter(function (k) { return box.sel[k]; }).length;
+    box.info.textContent = n + ' av ' + box.values.length + ' valgt';
+  }
+
   function readSelect(box) {
     return Object.keys(box.sel).filter(function (k) { return box.sel[k]; });
   }
@@ -502,10 +543,16 @@
   }
 
   function refreshOptions() {
-    var key = [distinct('storeNumber'), distinct('workstationNumber'), distinct('cashierNumber'), distinct('receiptType'), JSON.stringify(storeMap), groupNames()].join('|');
+    var key = [distinct('storeNumber'), distinct('workstationNumber'), distinct('cashierNumber'), distinct('receiptType'), JSON.stringify(storeMap), groupNames(), recs.length].join('|');
     if (key === optsKey) return;
     optsKey = key;
-    fillSelect(ui.stores, distinct('storeNumber'), sLabel, filters.stores);
+    var storeVals = distinct('storeNumber'), sc = {};
+    recs.forEach(function (r) { sc[r.item.storeNumber] = (sc[r.item.storeNumber] || 0) + 1; });
+    ui.stores.values = storeVals;
+    ui.stores.counts = sc;
+    ui.stores.sel = {};
+    storeVals.forEach(function (v) { ui.stores.sel[String(v)] = filters.stores.indexOf(String(v)) !== -1; });
+    renderStoreBox(ui.stores);
     fillSelect(ui.workstations, distinct('workstationNumber'), null, filters.workstations);
     fillSelect(ui.cashiers, distinct('cashierNumber'), null, filters.cashiers);
     fillSelect(ui.types, distinct('receiptType'), function (v) { return v + ' – ' + L.typeLabel(v); }, filters.types);
@@ -2188,12 +2235,13 @@
       el('div', { class: 'kvr-row' }, [field('Tid fra', ui.timeFrom), field('Tid til', ui.timeTo)])
     ], true);
 
-    ui.stores = pills(); ui.workstations = pills(); ui.cashiers = pills(); ui.types = pills();
+    ui.stores = storeBox(); ui.workstations = pills(); ui.cashiers = pills(); ui.types = pills();
     var storeNames = el('textarea', { rows: '3', placeholder: '1005=Coop Mega Kolbotn', title: 'Egne butikknavn (nr=navn per linje). Brukes hvis CW-listen ikke finnes.' });
     storeNames.value = manualStores;
     storeNames.addEventListener('change', function () { manualStores = storeNames.value; store(K.stores, manualStores); optsKey = ''; apply(); });
-    var secWho = section('who', 'Butikk, kasse og type', [
-      pfield('Butikk', ui.stores), pfield('Kasse', ui.workstations), pfield('Kasserer', ui.cashiers), pfield('Type', ui.types)
+    var secStore = section('store', 'Butikk', [ui.stores]);
+    var secWho = section('who', 'Kasse, kasserer og type', [
+      pfield('Kasse', ui.workstations), pfield('Kasserer', ui.cashiers), pfield('Type', ui.types)
     ], true);
 
     ui.sumMin = input('number', { step: '0.01', placeholder: 'min' });
@@ -2488,7 +2536,7 @@
 
     var tabDefs = [
       ['cw', 'Hent', [hintEl('Henter nye kvitteringer fra Lindbak (hele journalen). Resultatet kan så filtreres under «Filtrer».'), secCw]],
-      ['filter', 'Filtrer', [hintEl('Filtrerer kvitteringene som allerede er listet. Ingenting hentes på nytt.'), secSaved, secTime, secWho, secSum, secSort]],
+      ['filter', 'Filtrer', [hintEl('Filtrerer kvitteringene som allerede er listet. Ingenting hentes på nytt.'), secStore, secTime, secWho, secSum, secSort, secSaved]],
       ['content', 'Skann', [el('p', { class: 'kvr-intro', text: 'Skann kvitteringene for å finne pant, varegrupper og varer. Filtrer listen først, så skanner du bare det som er synlig.' }), secScan, secGroups]],
       ['analyse', 'Analyse', [subNav, subHost]],
       ['more', 'Mer', [secExport, secSettings]]

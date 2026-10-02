@@ -8,7 +8,7 @@ const rows = [
   { transactionId: 't-2', endDateTime: '2026-10-02 00:04', storeNumber: 1005, workstationNumber: 1, cashierNumber: '11', totalAmount: null, receiptType: 2, memberNumber: null, journalSourceName: 'main' },
   { transactionId: 't-3', endDateTime: '2026-10-02 00:01', storeNumber: 1005, workstationNumber: 4, cashierNumber: '12', totalAmount: 296.8, receiptType: 1, memberNumber: 'M1', journalSourceName: 'main' },
   { transactionId: 't-4', endDateTime: '2026-10-02 00:01', storeNumber: 1005, workstationNumber: 4, cashierNumber: '12', totalAmount: 296.8, receiptType: 1, memberNumber: null, journalSourceName: 'main' },
-  { transactionId: 't-5', endDateTime: '2026-10-01 14:00', storeNumber: 1005, workstationNumber: 2, cashierNumber: '10', totalAmount: 50, receiptType: 1, memberNumber: null, journalSourceName: 'main' }
+  { transactionId: 't-5', endDateTime: '2026-10-01 14:00', storeNumber: 1010, workstationNumber: 2, cashierNumber: '10', totalAmount: 50, receiptType: 1, memberNumber: null, journalSourceName: 'main' }
 ];
 
 const tr = (a, b, c) => `<tr><td>${a}</td><td></td><td>${c}</td></tr>`;
@@ -130,6 +130,26 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   assert.strictEqual(await page.inputValue('input[placeholder="EAN eller varenavn"]'), '');
   assert.ok((await page.evaluate(() => window.__reset)) >= 1, 'CW-filter nullstilt');
   await tab('Filter');
+
+  // butikkfilter under Filtrer: søkbar liste med navn og antall, som under Hent
+  await tab('Filter');
+  const sbox = '[data-sec=store] .kvr-storebox';
+  assert.match(await page.innerText(sbox), /1005 – Coop Mega Kolbotn\s+4/);
+  assert.match(await page.innerText(sbox), /1010 – Extra Testby\s+1/);
+  await page.fill(sbox + ' input[type=text]', 'extra');
+  assert.strictEqual(await page.$$eval(sbox + ' .kvr-chk', n => n.length), 1);
+  await page.fill(sbox + ' input[type=text]', '');
+  await page.click(sbox + ' .kvr-chk:has-text("1010") input');
+  assert.deepStrictEqual(await vis(), ['t-5']);
+  assert.match(await page.innerText('.kvr-chipsrow'), /Butikk: 1010 – Extra Testby/);
+  assert.match(await page.innerText(sbox), /1 av 2 valgt/);
+  await page.click(sbox + ' button:text-is("Fjern butikkvalg")');
+  assert.strictEqual((await vis()).length, 5);
+  await page.click(sbox + ' button:text-is("Velg viste")');
+  assert.strictEqual((await vis()).length, 5);
+  assert.match(await page.innerText(sbox), /2 av 2 valgt/);
+  await page.click('.kvr-fchip:has-text("Butikk")');
+  assert.match(await page.innerText(sbox), /0 av 2 valgt/);
 
   // piller i stedet for Ctrl-lister
   await page.click('[data-sec=who] .kvr-pill:text-is("6")');
@@ -496,18 +516,11 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
     await page.addStyleTag({ path: path.join(dir, 'src/panel.css') });
     await page.addScriptTag({ path: path.join(dir, 'src/content.js') });
     await page.waitForSelector('#kvr-panel');
-    await page.setViewportSize({ width: 1100, height: 1900 });
+    await page.setViewportSize({ width: 1100, height: 1100 });
     await page.evaluate(() => { const p = document.getElementById('kvr-panel'); p.style.top = '10px'; });
-    await tab('Sjekk');
-    await page.click('[data-sec=chk-top] button:text-is("Kjør analyse (synlige)")');
-    await page.waitForSelector('[data-sec=chk-list] .kvr-ck', { timeout: 30000 });
-    await (await page.$('#kvr-panel')).screenshot({ path: process.env.SHOT.replace('.png', '-sjekk.png') });
-    await tab('Diagram');
-    await page.waitForTimeout(200);
-    await (await page.$('#kvr-panel')).screenshot({ path: process.env.SHOT.replace('.png', '-diagram.png') });
-    await page.click('.kvr-icon[title^="Utvid"]');
-    await page.waitForTimeout(300);
-    await (await page.$('#kvr-panel')).screenshot({ path: process.env.SHOT.replace('.png', '-diagram-bred.png') });
+    await tab('Filter');
+    await page.click('[data-sec=store] .kvr-chk:has-text("1010") input');
+    await (await page.$('#kvr-panel')).screenshot({ path: process.env.SHOT.replace('.png', '-butikk.png') });
   }
 
   assert.deepStrictEqual(errors, []);
