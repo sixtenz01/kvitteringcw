@@ -346,14 +346,19 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
     await page.addStyleTag({ path: path.join(dir, 'src/panel.css') });
     await page.addScriptTag({ path: path.join(dir, 'src/content.js') });
     await page.waitForSelector('#kvr-panel');
+    await page.setViewportSize({ width: 1100, height: 1600 });
+    await page.evaluate(() => { const p = document.getElementById('kvr-panel'); p.style.top = '10px'; });
     await page.click('.kvr-tab:has-text("Kontroll")');
     await page.click('button:text-is("Kjør alle kontroller (synlige)")');
     await page.waitForFunction(() => /Kontroller ferdig/.test(document.getElementById('kvr-panel').innerText), null, { timeout: 30000 });
-    await page.evaluate(() => { document.querySelector('.kvr-scroll').scrollTop = 330; });
-    await page.screenshot({ path: process.env.SHOT });
-    await page.click('[data-sec=tasks] button:text-is("Kjør")');
-    await page.waitForSelector('.kvr-modal .kvr-sum', { timeout: 40000 });
-    await page.screenshot({ path: process.env.SHOT.replace('.png', '-b.png') });
+    await page.click('button:text-is("Velg alle")');
+    for (const t of ['Søk', 'Filter', 'Innhold', 'Rapport', 'Avvik', 'Kontroll', 'Eksport']) {
+      await page.click(`.kvr-tab:has-text("${t}")`);
+      await page.waitForTimeout(150);
+      await (await page.$('#kvr-panel')).screenshot({ path: process.env.SHOT.replace('.png', '-' + t + '.png') });
+    }
+    await page.click('.kvr-icon');
+    await page.screenshot({ path: process.env.SHOT.replace('.png', '-skjult.png'), clip: { x: 500, y: 0, width: 600, height: 120 } });
   }
 
   assert.deepStrictEqual(errors, []);
