@@ -2,7 +2,7 @@
   'use strict';
 
   var L = typeof module !== 'undefined' && module.exports ? require('./logic.js') : root.KvLogic;
-  var VERSION = '3.10.0';
+  var VERSION = '3.11.0';
 
   // ---- SHA-256 (ren JS, så rapporten ikke avhenger av crypto.subtle) -------------------
   var K256 = [
@@ -113,6 +113,7 @@
     return {
       sales: sales.length, salesScanned: sales.filter(has).length,
       salesDisc: sales.filter(function (it) { return L.hasDisc(m.scan[it.transactionId]); }).length,
+      salesV4: sales.filter(function (it) { return L.hasV4(m.scan[it.transactionId]); }).length,
       settle: settle.length, settleScanned: settle.filter(has).length,
       other: m.items.length - sales.length - settle.length
     };
@@ -125,6 +126,9 @@
     var fr = m.checks && m.checks.falseRet;
     if (fr && fr.coverage !== null && fr.coverage !== undefined && fr.lineCheck === false) out.push('«Retur uten salg» ble ikke vurdert: bare ' + pctText(fr.coverage) + ' av salgene i datagrunnlaget er skannet (minst 80 % kreves).');
     if (cov.sales && cov.salesDisc < cov.sales) out.push('Rabattanalysen dekker ' + cov.salesDisc + ' av ' + cov.sales + ' salg (eldre skanninger mangler rabattdata).');
+    if (cov.sales && cov.salesV4 < cov.sales) out.push('Pris per vare, kjøpeutbytte og hendelsesord dekker ' + cov.salesV4 + ' av ' + cov.sales + ' salg (eldre skanninger mangler enhetspris, kjøpeutbytte og hendelsesord).');
+    out.push('Medlemsnummertestene bruker alle innlastede bonger i valgte butikker. Mange bruk av ett nummer kan være en trofast kunde; resultatet avhenger av hvor lang periode som er lastet.');
+    out.push('Annullert, manuell pris, parkert bong og spør pris er ikke observert i ekte data. «Hendelsesord» leter etter slike ord på tekstlinjer, men det er ikke bekreftet at CW viser dem på bongen. Kjøpeutbytte-tabellen er heller ikke bekreftet; testene kalibrerer seg mot det som finnes.');
     if (m.checks && m.checks.skippedGaps) out.push(m.checks.skippedGaps + ' store hull i bongnummer er ikke tolket som slettede bonger (over grensen for maks hull).');
     out.push('«Hull i bongnummer» forutsetter at listen ikke er filtrert på type, kasse eller tid, og at kvitteringstypene deler nummerserie per kasse (ikke bekreftet i ekte data).');
     var nb = m.checks && m.checks.numbers;
@@ -204,6 +208,7 @@
     P(table(['Datagrunnlag', { t: 'Dekket', n: true }, { t: 'Totalt', n: true }, { t: 'Andel', n: true }], [
       { cells: ['Salg med skannet innhold', { t: cov.salesScanned, n: true }, { t: cov.sales, n: true }, { t: cov.sales ? pctText(cov.salesScanned / cov.sales) : '–', n: true }] },
       { cells: ['Salg med rabattdata', { t: cov.salesDisc, n: true }, { t: cov.sales, n: true }, { t: cov.sales ? pctText(cov.salesDisc / cov.sales) : '–', n: true }] },
+      { cells: ['Salg med enhetspris og kjøpeutbytte (ny skanning)', { t: cov.salesV4, n: true }, { t: cov.sales, n: true }, { t: cov.sales ? pctText(cov.salesV4 / cov.sales) : '–', n: true }] },
       { cells: ['Kassaoppgjør lest', { t: cov.settleScanned, n: true }, { t: cov.settle, n: true }, { t: cov.settle ? pctText(cov.settleScanned / cov.settle) : '–', n: true }] }
     ]));
     P('<ul>' + lim.map(function (t) { return '<li>' + esc(t) + '</li>'; }).join('') + '</ul>');

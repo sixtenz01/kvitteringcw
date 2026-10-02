@@ -412,7 +412,7 @@
   function todoFor(list) {
     return list.filter(function (r) {
       var sc = scanMap[r.item.transactionId];
-      return (r.item.receiptType === 1 || r.item.receiptType === 2) && (!sc || (r.item.receiptType === 1 && !L.hasDisc(sc)));
+      return (r.item.receiptType === 1 || r.item.receiptType === 2) && (!sc || (r.item.receiptType === 1 && !L.hasV4(sc)));
     });
   }
 
@@ -738,16 +738,17 @@
     if (!ui.scanRow) return;
     var base = recs.filter(function (r) { return r.base && (r.item.receiptType === 1 || r.item.receiptType === 2); });
     var none = base.filter(function (r) { return !scanMap[r.item.transactionId]; }).length;
-    var stale = todoFor(base).length - none;
-    var missing = none + stale;
+    var old = base.filter(function (r) { var sc = scanMap[r.item.transactionId]; return sc && r.item.receiptType === 1 && !L.hasV4(sc); }).length;
+    var noDisc = base.filter(function (r) { var sc = scanMap[r.item.transactionId]; return sc && r.item.receiptType === 1 && !L.hasDisc(sc); }).length;
+    var missing = none + old;
     ui.scanRow.style.display = base.length ? 'flex' : 'none';
-    ui.scanTxt.textContent = 'Skannet ' + (base.length - none) + ' av ' + base.length + (stale ? ' (' + stale + ' uten rabattdata)' : '');
+    ui.scanTxt.textContent = 'Skannet ' + (base.length - none) + ' av ' + base.length + (old ? ' (' + old + ' eldre skanninger tas på nytt)' : '');
     ui.scanNow.style.display = missing > 0 ? '' : 'none';
     ui.scanNow.disabled = scanning;
     var hide = filters.pant || filters.item || filters.groups.length ? none : 0;
-    if (filters.disc) hide = none + stale;
+    if (filters.disc) hide = none + noDisc;
     ui.scanWarn.style.display = hide > 0 ? '' : 'none';
-    ui.scanWarnTxt.textContent = hide + ' kvitteringer ' + (filters.disc && stale ? 'mangler skanning eller rabattdata' : 'er ikke skannet') + ' og skjules av dette filteret.';
+    ui.scanWarnTxt.textContent = hide + ' kvitteringer ' + (filters.disc && noDisc ? 'mangler skanning eller rabattdata' : 'er ikke skannet') + ' og skjules av dette filteret.';
     ui.scanWarnBtn.disabled = scanning;
   }
 
@@ -1274,12 +1275,17 @@
       deleted: L.deletedReceipts(pop, ctlCfg),
       diff: L.diffTrend(items, scanMap, ctlCfg),
       numbers: L.numbers(items, scanMap, ctlCfg),
-      disc: L.discounts(items, scanMap, ctlCfg)
+      disc: L.discounts(items, scanMap, ctlCfg),
+      member: L.memberChecks(items, pop, ctlCfg),
+      price: L.priceDeviation(items, pop, scanMap, ctlCfg),
+      ku: L.kuChecks(items, pop, scanMap, ctlCfg),
+      ev: L.eventWords(items, scanMap, ctlCfg)
     };
     res.seq.findings = res.seq.findings.filter(function (f) { return f.code === 'hours'; });
     res.seq.skippedGaps = res.deleted.skippedGaps;
     res.findings = res.patterns.concat(res.pant.findings, res.seq.findings, res.falseRet.findings, res.after,
-      res.deleted.findings.filter(keep), res.diff.findings.filter(keep), res.numbers.findings.filter(keep), res.disc.findings);
+      res.deleted.findings.filter(keep), res.diff.findings.filter(keep), res.numbers.findings.filter(keep), res.disc.findings,
+      res.member.findings, res.price.findings, res.ku.findings, res.ev.findings);
     res.cashierExtra = {};
     res.findings.forEach(function (f) {
       if (f.flag) f.ids.forEach(function (id) { if (scopeIds[id]) addFlag(id, f.title); });
@@ -1329,6 +1335,34 @@
     box.appendChild(hintEl('Rabatt = linjen «Rabatt: Kr x (y %)» på en vare med årsak 1 Datovare, 2 Feil pris, 3 Prisløfte, 4 Reserveløsning kupong, 5 Annen rabattårsak eller 6 Best før (tom = ingen årsak valgt). Klikk en årsak for å filtrere listen. Kupong = linjen «Kupong (id - navn)», antatt lagt inn sentralt (CN/VPI); beløpet er ofte 0,00, så den viser at kampanjen er knyttet til bongen, ikke at den er innløst. Rødt = andel bonger med rabatt uten årsak er minst ' + ctlCfg.profFactor + '× butikkens (minst ' + ctlCfg.profMin + ' bonger). Funn «Rabatt uten årsak» krever minst ' + (ctlCfg.discPct || '–') + ' % rabatt.'));
   }
 
+  function renderMemberCard(M) {
+    var box = ui.ctlMember;
+    if (!M || !M.members) { box.appendChild(hintEl('Ingen bonger med medlemsnr blant de innlastede bongene i valgte butikker.')); return; }
+    box.appendChild(hintEl(M.members + ' ulike medlemsnr på ' + M.sales + ' salg i valgte butikker. Viser de ' + Math.min(15, M.rows.length) + ' med flest funn og bruk (d = dager, b = butikker, kasserer med andel av bongene). Trenger ikke skanning.'));
+    var short = { 'flere butikker': 'butikker', 'samme dag': 'dag', 'mye brukt': 'mye', 'én kasserer': 'kasserer', 'eget nummer': 'eget', 'ansatt': 'ansatt' };
+    box.appendChild(tbl(['Medlemsnr', 'Bonger', 'Kasserer', 'Funn'], M.rows.slice(0, 15).map(function (r) {
+      var bad = r.flags.length > 0;
+      return [{ node: btn(r.id, function () { filters.member = r.id; writeForm(); apply(); say('Viser kvitteringer med medlemsnr ' + r.id + '.'); }, 'kvr-ent') }, { t: r.n + ' (' + r.days + ' d, ' + r.stores + ' b)', bad: bad },
+        { node: el('span', {}, [entLink('kasserer', r.cashier, r.cashier), document.createTextNode(' (' + pct(r.share) + ')')]), bad: r.flags.indexOf('én kasserer') !== -1 }, { t: r.flags.map(function (f) { return short[f] || f; }).join(', ') || '–', bad: bad }];
+    })));
+    box.appendChild(hintEl('Funn: to butikker innen ' + (ctlCfg.memberStoreMin || '–') + ' min, minst ' + (ctlCfg.memberDayN || '–') + ' bonger samme dag, totalt ' + (ctlCfg.memberN || '–') + ', og nesten bare hos én kasserer (minst ' + (ctlCfg.memberCashN || '–') + ' bonger, over ' + ctlCfg.memberCashShare + ' % og minst ' + ctlCfg.profFactor + '× kassererens vanlige andel). ' +
+      (ctlCfg.empMembers ? 'Ansattliste er på.' : 'Legg inn ansattes medlemsnr under Innstillinger for å fange eget nummer direkte.') + ' Mange bruk av ett nummer kan være en trofast kunde: vurder sammen med hvem som taster det.'));
+  }
+
+  function renderMiscCard(R) {
+    var box = ui.ctlMisc, P = R.price, K = R.ku, E = R.ev;
+    box.appendChild(el('b', { class: 'kvr-subh', text: 'Pris per vare' }));
+    box.appendChild(hintEl(P.scanned + ' av ' + P.sales + ' salg har enhetspris (ny skanning), ' + P.lines + ' varelinjer. ' + P.groups + ' vare/butikk/dag-grupper har klar vanlig pris. ' + P.deviating + ' varelinjer i omfanget avviker minst ' + (ctlCfg.priceDevPct || '–') + ' %.' + (P.coverage < 1 ? ' Eldre skanninger mangler enhetspris: skann på nytt for full dekning.' : '')));
+    if (P.rows.length) box.appendChild(tbl(['Kasserer', 'Avvikende linjer'], P.rows.map(function (r) { return [{ node: entLink('kasserer', r.id) }, r.n]; })));
+    box.appendChild(el('b', { class: 'kvr-subh', text: 'Kjøpeutbytte' }));
+    box.appendChild(hintEl(K.members + ' medlemssalg, ' + K.scanned + ' skannet med ny skanning, ' + K.withTable + ' med Kjøpeutbytte-tabell. ' +
+      (K.applicable ? 'Tabellen finnes på de fleste medlemsbonger, så fravær regnes som avvik.' : 'Tabellen finnes ikke på nok medlemsbonger (eller for få er skannet) til at fravær regnes som avvik.') +
+      (K.ratio !== null ? ' Vanlig forhold grunnlag/varesum: ' + Math.round(K.ratio * 100) + ' %.' : '')));
+    box.appendChild(el('b', { class: 'kvr-subh', text: 'Hendelsesord' }));
+    box.appendChild(hintEl(E.hits + ' av ' + E.scanned + ' skannede bonger har ord som annullert, parkert, manuell eller spør pris. Slike hendelser er ikke observert i ekte data ennå.'));
+    box.appendChild(el('div', { class: 'kvr-row' }, [btn('Diagnostikk: ukjente linjer…', openDiag)]));
+  }
+
   function renderAuditCards(R) {
     var D = R.diff;
     if (!D || !D.rows.length) ui.ctlDiff.appendChild(hintEl('Ingen skannede kassaoppgjør i omfanget. Skann og kjør analysen på nytt.'));
@@ -1347,6 +1381,8 @@
       })));
     }
     renderDiscCard(R.disc);
+    renderMemberCard(R.member);
+    renderMiscCard(R);
     ui.ctlNum.appendChild(hintEl('MAD under 0,006 er nær Benford, 0,006–0,012 akseptabel, 0,012–0,015 marginal, over 0,015 avvikende (Nigrini). Avvik er en indikasjon som må forklares, ikke et bevis. Kasserere med færre enn ' + ctlCfg.benfordCashMin + ' bonger vurderes ikke.'));
   }
 
@@ -1354,7 +1390,7 @@
     if (!ui.ctlProfile) return;
     var R = ctlRes;
     ui.ctlInfo.textContent = R ? 'Sist kjørt ' + R.at.toLocaleTimeString('nb-NO') + ' på ' + R.n + (R.mode === 'visible' ? ' synlige' : ' kvitteringer i omfanget') + '.' : 'Ikke kjørt ennå. Filtrer listen først, og trykk «Kjør alle kontroller».';
-    [ui.ctlProfile, ui.ctlFindings, ui.ctlPant, ui.ctlRecon, ui.ctlDiff, ui.ctlNum, ui.ctlDisc].forEach(function (n) { n.innerHTML = ''; });
+    [ui.ctlProfile, ui.ctlFindings, ui.ctlPant, ui.ctlRecon, ui.ctlDiff, ui.ctlNum, ui.ctlDisc, ui.ctlMember, ui.ctlMisc].forEach(function (n) { n.innerHTML = ''; });
     ui.ctlResults.style.display = R ? '' : 'none';
     ui.ctlSumCard.style.display = R ? '' : 'none';
     if (!R) return;
@@ -1438,6 +1474,31 @@
       ta.remove();
     };
     try { navigator.clipboard.writeText(t).then(function () { say('Kopiert.'); }, fallback); } catch (e) { fallback(); }
+  }
+
+  // Ukjente linjer og hendelsesord fra skanningene. Brukes til å lære hva CW faktisk viser (annullert, parkert, manuell pris, spør pris).
+  function diagText(D) {
+    var out = ['Kvitteringshenter diagnostikk', 'Skannede bonger: ' + D.total + ' (ny skanning: ' + D.v4 + ')', 'Kjøpeutbytte-tabell: ' + D.ku.with + ' med, ' + D.ku.without + ' uten', '', 'Hendelsesord (ord, antall, tekst, eksempelbong):'];
+    if (!D.ev.length) out.push('  ingen');
+    D.ev.forEach(function (e) { out.push('  ' + e.k + '\t' + e.n + '\t' + e.t + '\t' + e.id); });
+    out.push('', 'Ukjente linjer (tekst med tall som #, antall, eksempelbong):');
+    if (!D.unk.length) out.push('  ingen');
+    D.unk.forEach(function (u) { out.push('  ' + u.t + '\t' + u.n + '\t' + u.id); });
+    return out.join('\n');
+  }
+
+  function openDiag() {
+    var D = L.diagnostics(scanMap);
+    var body = el('div', { class: 'kvr-secbody' });
+    body.appendChild(hintEl(D.v4 ? D.v4 + ' av ' + D.total + ' skannede bonger har ny skanningsdata (eldre må skannes på nytt). Dette er linjer pluginen ikke kjenner igjen, og ord som tyder på annullert, parkert, manuell pris eller spør pris. Del listen for å få testene utvidet.' : 'Ingen skanninger med ny data ennå. Skann kvitteringer først (Skann → Skann innhold).'));
+    if (D.v4) {
+      body.appendChild(el('b', { class: 'kvr-subh', text: 'Hendelsesord' }));
+      body.appendChild(D.ev.length ? tbl(['Ord', 'Antall', 'Linje', 'Eksempelbong'], D.ev.slice(0, 30).map(function (e) { return [e.k, e.n, e.t, e.id]; })) : hintEl('Ingen funnet.'));
+      body.appendChild(el('b', { class: 'kvr-subh', text: 'Ukjente linjer' }));
+      body.appendChild(D.unk.length ? tbl(['Linje', 'Antall', 'Eksempelbong'], D.unk.slice(0, 40).map(function (u) { return [u.t, u.n, u.id]; })) : hintEl('Ingen funnet.'));
+      body.appendChild(hintEl('Tall er byttet med #. Listen inneholder ingen varenavn eller beløp, men bongnummer. Kjøpeutbytte-tabell: ' + D.ku.with + ' med, ' + D.ku.without + ' uten.'));
+    }
+    openModal('Diagnostikk', body, [btn('Kopier som tekst', function () { copyText(diagText(D)); }), btn('Lukk', closeModal, 'kvr-primary')]);
   }
 
   // ---- notater og oppfølging ----------------------------------------------------
@@ -3088,13 +3149,15 @@
     var secFindings = fold(section('findings', 'Mønstre og funn', [ui.ctlFindings]), 'findings', true);
     var secPantBal = fold(section('pantbal', 'Pantelapp-sjekk: balanse per dag', [ui.ctlPant]), 'pantbal', false);
     var secRecon = fold(section('recon', 'Dagsavstemming per kasse', [ui.ctlRecon]), 'recon', false);
-    ui.ctlDiff = el('div', {}); ui.ctlNum = el('div', {}); ui.ctlDisc = el('div', {});
+    ui.ctlDiff = el('div', {}); ui.ctlNum = el('div', {}); ui.ctlDisc = el('div', {}); ui.ctlMember = el('div', {}); ui.ctlMisc = el('div', {});
     var secDiff = fold(section('diff', 'Kassadifferanse over tid', [ui.ctlDiff]), 'diff', true);
     var secNum = fold(section('numbers', 'Tallanalyse: Benford og runde beløp', [ui.ctlNum]), 'numbers', false);
     var secDisc = fold(section('disc', 'Rabatter og kuponger', [ui.ctlDisc]), 'disc', true);
+    var secMember = fold(section('member', 'Medlemsnummer', [ui.ctlMember]), 'member', true);
+    var secMisc = fold(section('misc', 'Pris, kjøpeutbytte og hendelser', [ui.ctlMisc]), 'misc', false);
     ui.ctlSum = el('div', { class: 'kvr-ctlsum' });
     ui.ctlJump = el('div', { class: 'kvr-chips' });
-    [['profile', 'Profil'], ['findings', 'Funn'], ['pantbal', 'Pant'], ['recon', 'Avstemming'], ['diff', 'Differanse'], ['numbers', 'Tall'], ['disc', 'Rabatt']].forEach(function (j) {
+    [['profile', 'Profil'], ['findings', 'Funn'], ['pantbal', 'Pant'], ['recon', 'Avstemming'], ['diff', 'Differanse'], ['numbers', 'Tall'], ['disc', 'Rabatt'], ['member', 'Medlem'], ['misc', 'Pris m.m.']].forEach(function (j) {
       ui.ctlJump.appendChild(btn(j[1], function () {
         var n = openSec(j[0]);
         if (n) n.scrollIntoView({ block: 'start', behavior: 'smooth' });
@@ -3103,7 +3166,7 @@
     ui.ctlSumCard = section('ctlsum', 'Resultat', [ui.ctlSum, ui.ctlJump,
       el('div', { class: 'kvr-row' }, [btn('Fold sammen alle', function () { foldAll(false); }, 'kvr-sm'), btn('Åpne alle', function () { foldAll(true); }, 'kvr-sm'), btn('⤢ Bredere', function () { ui.wideBtn.click(); }, 'kvr-sm')]),
       hintEl('Tabellene har mange kolonner. «Bredere» gir plass til alle.')]);
-    ui.ctlResults = el('div', { class: 'kvr-pane' }, [secProfile, secFindings, secPantBal, secRecon, secDiff, secNum, secDisc]);
+    ui.ctlResults = el('div', { class: 'kvr-pane' }, [secProfile, secFindings, secPantBal, secRecon, secDiff, secNum, secDisc, secMember, secMisc]);
     ui.noteList = el('div', { class: 'kvr-list' });
     ui.noteCount = hintEl('');
     var kn = check('Tastaturflyt: ↑ ↓ bytter bong, N notat, M velg/fjern', function () { keyNav = kn.box.checked; store(K.keynav, keyNav); });
@@ -3186,7 +3249,7 @@
     ui.setGeneral = section('set-general', 'Generelt', [
       field('Egne butikknavn (valgfritt, nr=navn per linje)', storeNames),
       kn.node,
-      el('div', { class: 'kvr-row' }, [btn('Eksporter innstillinger', exportSettings), btn('Importer…', function () { setFile.click(); })]), setFile,
+      el('div', { class: 'kvr-row' }, [btn('Eksporter innstillinger', exportSettings), btn('Importer…', function () { setFile.click(); }), btn('Diagnostikk…', openDiag)]), setFile,
       el('div', { class: 'kvr-row' }, [
         btn('Tilbakestill plassering', function () {
           store(K.pos, null); store(K.size, null);
@@ -3438,7 +3501,7 @@
     if (db) {
       mem = await readAll(db, 'kv');
       var raw = await readAll(db, 'scan');
-      Object.keys(raw).forEach(function (k) { if (raw[k] && (raw[k].v === 2 || raw[k].v === 3)) scanMap[k] = raw[k]; });
+      Object.keys(raw).forEach(function (k) { if (raw[k] && (raw[k].v >= 2 && raw[k].v <= 4)) scanMap[k] = raw[k]; });
     }
     migrateLocal();
     rules = L.sanitizeRules(store(K.rules));

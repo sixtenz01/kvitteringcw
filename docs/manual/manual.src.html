@@ -169,9 +169,11 @@
     <tr><td>Kassadifferanse over tid</td><td>Antall oppgjør, minus og pluss per kasserer og kasse.</td></tr>
     <tr><td>Tallanalyse: Benford og runde beløp</td><td>Benford og andel hele kroner per kasserer.</td></tr>
     <tr><td>Rabatter og kuponger</td><td>Se kapittel 5.</td></tr>
+    <tr><td>Medlemsnummer</td><td>Medlemsnr med flest bonger og funn, med lenke som filtrerer listen. Se kapittel 6.</td></tr>
+    <tr><td>Pris, kjøpeutbytte og hendelser</td><td>Dekning og avvik for pris per vare, Kjøpeutbytte og hendelsesord, og knappen Diagnostikk. Se kapittel 6.</td></tr>
     <tr><td>Avvik per bong</td><td>Kjører bare avviksjekken (uten kontroller på tvers).</td></tr>
-    <tr><td>Egne avviksregler</td><td>Dine egne regler, se kapittel 8.</td></tr>
-    <tr><td>Arbeidsoppgaver, Oppfølging og tastatur</td><td>Se kapittel 8.</td></tr>
+    <tr><td>Egne avviksregler</td><td>Dine egne regler, se kapittel 9.</td></tr>
+    <tr><td>Arbeidsoppgaver, Oppfølging og tastatur</td><td>Se kapittel 9.</td></tr>
   </tbody></table></div>
 <div class="shots">{{fig:d-profile}}{{fig:d-findings}}</div>
 <div class="shots">{{fig:d-pantbal}}{{fig:d-recon}}</div>
@@ -187,8 +189,8 @@
     <tr><td>PNG: valgte (ZIP)</td><td>Bilde av hele kvitteringen. Flere bonger pakkes i én ZIP. Bildet er tegnet fra kvitteringsteksten, ikke et skjermbilde.</td></tr>
     <tr><td>PNG-format</td><td>«Bong» (smal, som papirkvittering) eller «A4-ark med bongen i midten».</td></tr>
     <tr><td>Topptekst, medlemsnr</td><td>Topptekst med butikk, kasse, kasserer, bongnr og tid kan slås av. Medlemsnummer er bare med hvis du krysser av.</td></tr>
-    <tr><td>Revisjonsrapport</td><td>Se kapittel 6.</td></tr>
-    <tr><td>Innstillinger</td><td>Se kapittel 7.</td></tr>
+    <tr><td>Revisjonsrapport</td><td>Se kapittel 7.</td></tr>
+    <tr><td>Innstillinger</td><td>Se kapittel 8.</td></tr>
   </tbody></table></div>
 <p>Nederst i panelet ligger snarveiene <strong>Velg alle</strong>, <strong>Fjern valg</strong>, <strong>Sammenlign</strong> (vises når nøyaktig to bonger er valgt), <strong>CSV</strong> og <strong>PNG</strong>. De virker på det du har valgt.</p>
 
@@ -198,7 +200,7 @@
 <h3>Poeng og risikonivå</h3>
 {{dia:scoring}}
 <ul>
-  <li>Hver test har et antall poeng som du kan endre (kapittel 7).</li>
+  <li>Hver test har et antall poeng som du kan endre (kapittel 8).</li>
   <li>Poengene summeres per bong til <strong>risikoscore</strong>. <span class="sw hi">Høy</span> er 8 poeng eller mer, <span class="sw mid">middels</span> er 4 til 7 og <span class="sw lo">lav</span> er under 4.</li>
   <li>Noen funn gjelder en <strong>kasserer</strong> og ikke en bestemt bong (Benford, runde beløp, mange rabatter, avvik i kassererprofilen). De gir poeng til kassereren, og kassererne med høyest sum vises i «Kasserere å se nærmere på».</li>
   <li><span class="sw new">Ny</span> merker bonger som ikke var flagget forrige gang du kjørte analysen.</li>
@@ -206,7 +208,7 @@
 <h3>Omfang, datagrunnlag og filter</h3>
 {{dia:scope}}
 <h3 id="testene">Testene</h3>
-<p>Her er alle testene. Hver test har en egen gruppe under Innstillinger der du kan justere grenser og poeng (kapittel 7). «Krever skanning» betyr at bongene må være skannet for at testen skal se innholdet.</p>
+<p>Her er alle testene. Hver test har en egen gruppe under Innstillinger der du kan justere grenser og poeng (kapittel 8). «Krever skanning» betyr at bongene må være skannet for at testen skal se innholdet.</p>
 {{tests}}
 <h3>Tegnforklaring</h3>
 <div class="chips">
@@ -254,7 +256,41 @@
   <p>Vi har ikke sett en ekte kvittering med utfylt rabattårsak, og vet derfor ikke sikkert om årsaken skrives som tall eller tekst (begge håndteres). Vi vet heller ikke hvordan lokale kampanjer ser ut, så pluginen kan ikke skille dem fra rabatter butikken har gitt selv. Eldre skanninger fra før versjon 3 mangler rabattdata og må skannes på nytt.</p>
 </div>
 
-<h2 id="revisjon"><span class="n">6</span>Revisjonsrapport</h2>
+<h2 id="medlem"><span class="n">6</span>Medlem, pris og hendelser</h2>
+<p>Disse testene sammenligner bonger med hverandre eller leter etter noe pluginen ikke har sett ennå. De ligger i Analyse → Detaljer og har egne grupper under Innstillinger.</p>
+<h3>Medlemsnummer</h3>
+<p>Testen bruker bare listen fra Lindbak og trenger ikke skanning. Den ser på alle innlastede bonger i valgte butikker og leter etter fire mønstre. Det typiske tilfellet er en ansatt som taster sitt eget medlemsnummer på kunders kjøp.</p>
+<div class="tw"><table>
+  <thead><tr><th>Mønster</th><th>Hva som flagges</th></tr></thead>
+  <tbody>
+    <tr><td>To butikker</td><td>Samme medlemsnr i to butikker med få minutter mellom bongene.</td></tr>
+    <tr><td>Samme dag</td><td>Samme medlemsnr på mange bonger samme dag.</td></tr>
+    <tr><td>Totalt</td><td>Samme medlemsnr på svært mange bonger i alt. Avhenger av hvor lang periode du har lastet.</td></tr>
+    <tr><td>Én kasserer</td><td>Et medlemsnr som nesten bare brukes hos én kasserer. Andelen må også være klart høyere enn kassererens vanlige andel av butikkens bonger, slik at kassereren som tar de fleste bongene ikke flagges uten grunn.</td></tr>
+  </tbody></table></div>
+<p><strong>Ansattliste:</strong> under Innstillinger → Medlemsnummer kan du legge inn ansattes medlemsnr, adskilt med komma. <code>1234567</code> flagger alle bonger med nummeret. <code>12=1234567</code> (kasserer=medlemsnr) flagger i tillegg når kasserer 12 selv har tastet nummeret, som gir høyest poeng. Listen lagres bare i din nettleser, men tas med i innstillingseksport og rapport.</p>
+<p>Kortet <strong>Medlemsnummer</strong> viser nummerne med flest funn og bruk. Klikk et nummer for å filtrere listen på det.</p>
+{{shotw:d-member}}
+<div class="callout"><b>Vurder alltid sammen</b>
+  <p>Et medlemsnr med mange bonger kan være en trofast kunde eller en familie som deler kort. Se hvem som taster det og når før du konkluderer.</p>
+</div>
+<h3>Pris per vare</h3>
+<p>Samme vare skal koste det samme samme dag i samme butikk. Testen finner den vanlige prisen (den prisen flest bonger har, minst 60 %) og flagger linjer som avviker mye. Det kan tyde på manuell pris, spør pris eller feil pris. Rabatt legges tilbake i prisen, så vanlig rabatt flagges ikke her. Kampanjer som starter midt på dagen og flerkjøp kan gi falske treff. Testen krever skanning, og eldre skanninger må tas på nytt fordi de mangler enhetspris.</p>
+<h3>Kjøpeutbytte</h3>
+<p>På medlemsbonger finnes en tabell med Grunnlag, Kjøpeutbytte og MVA bonus. Testen flagger medlemsbonger uten tabellen, og bonger der grunnlaget avviker fra det vanlige forholdet til varesummen. Tabellen er ikke bekreftet i ekte data. Derfor kalibrerer testene seg: finnes tabellen på færre enn 80 % av medlemsbongene (minst 10), regnes fraværet ikke som avvik.</p>
+<h3>Hendelsesord og diagnostikk</h3>
+{{shotw:d-misc}}
+<p>Annullert bong, manuell pris, parkert bong og spør pris er ikke observert i ekte data ennå, og vi vet ikke om Lindbak viser dem på bongen. Pluginen setter derfor ut to feller:</p>
+<ul>
+  <li><strong>Hendelsesord:</strong> tekstlinjer (ikke varenavn) med ord som annullert, makulert, parkert, på vent, manuell, spør pris, overstyr, prisendring eller kansell flagges.</li>
+  <li><strong>Ukjente linjer:</strong> linjer pluginen ikke kjenner igjen samles opp, med tall byttet mot #.</li>
+</ul>
+<p>Åpne <strong>Diagnostikk</strong> fra kortet «Pris, kjøpeutbytte og hendelser» eller fra Innstillinger → Generelt. Der ser du hendelsesord og ukjente linjer med antall og et eksempel på bongnummer. «Kopier som tekst» gir en liste du kan dele, slik at testene kan utvides med det Lindbak faktisk viser. Listen inneholder ingen varenavn eller beløp, men bongnummer.</p>
+<div class="callout"><b>Skann på nytt</b>
+  <p>Pris, Kjøpeutbytte, hendelsesord og diagnostikk bygger på data som bare nye skanninger har. Eldre skanninger tas automatisk på nytt neste gang du skanner, og dekningen står i kortet «Pris, kjøpeutbytte og hendelser» og i revisjonsrapporten.</p>
+</div>
+
+<h2 id="revisjon"><span class="n">7</span>Revisjonsrapport</h2>
 <p>Når du må dokumentere funn, lager du en revisjonsrapport. Den er én ZIP-fil med alt som trengs for å forstå, etterprøve og gjenta kontrollen.</p>
 <h3>Slik lager du den</h3>
 <ol class="steps">
@@ -306,7 +342,7 @@
   <p>De viser at innholdet i eksporten ikke er endret etter at den ble laget. De sier ikke at dataene i Lindbak er riktige. Rapporten viser det som gjaldt da analysen ble kjørt, også om innstillinger eller listen er endret etterpå, og sier fra om det.</p>
 </div>
 
-<h2 id="innstillinger"><span class="n">7</span>Innstillinger</h2>
+<h2 id="innstillinger"><span class="n">8</span>Innstillinger</h2>
 <p>Alle terskler, avviksgrenser og poeng ligger samlet under <strong>Mer → Innstillinger</strong>, eller tannhjulet <strong>⚙</strong> øverst i panelet. Hver test har sin egen gruppe.</p>
 <h3>Slik virker innstillingssiden</h3>
 {{shots:innstillinger-lukket}}
@@ -346,7 +382,7 @@
     <tr><td>Salg etter oppgjør rett etter midnatt</td><td>Sett riktig åpningstid. Oppgjør før åpningstid regnes som forrige dag.</td></tr>
   </tbody></table></div>
 
-<h2 id="verktoy"><span class="n">8</span>Andre verktøy</h2>
+<h2 id="verktoy"><span class="n">9</span>Andre verktøy</h2>
 <h3>Egne avviksregler</h3>
 <p>Under Analyse → Detaljer kan du bygge egne regler. Alle vilkår i en regel må stemme (OG). Trykk <strong>Ny regel</strong> eller <strong>Eksempel</strong>, velg felt, sammenligning og verdi. Felt merket * krever skannet bong, og reglene kjøres når du trykker «Kjør avviksjekk» eller «Kjør analyse». Treff gir poengene for «Egne regler» og vises som «Regel: navn». Klokkeslett skrives TT:MM, og tomt medlemsnummer skrives <code>Medlemsnr = (tomt)</code>.</p>
 {{rulefields}}
@@ -372,7 +408,7 @@
     <tr><td><kbd>Esc</kbd></td><td>Lukker dialoger.</td></tr>
   </tbody></table></div>
 
-<h2 id="lagring"><span class="n">9</span>Lagring og personvern</h2>
+<h2 id="lagring"><span class="n">10</span>Lagring og personvern</h2>
 {{dia:storage}}
 <ul>
   <li><strong>Egen database.</strong> Alt pluginen husker (innstillinger, lagrede filtre, regler, notater, skannet innhold, rapportlogg) ligger i en egen database i nettleseren. Pluginen skriver aldri til Lindbaks egen lagring.</li>
@@ -381,7 +417,7 @@
   <li><strong>Persondata.</strong> Bevisbilder har ikke medlemsnummer. Rapporten har kasserernumre og bilder av kvitteringer. Behandle ZIP-filen som annen intern dokumentasjon.</li>
 </ul>
 
-<h2 id="feilsoking"><span class="n">10</span>Feilsøking</h2>
+<h2 id="feilsoking"><span class="n">11</span>Feilsøking</h2>
 <details class="faq"><summary>Panelet vises ikke</summary><p>Sjekk at du står i Kvitteringsjournal (adressen slutter på <code>/Journal/Viewer</code>) og at tillegget er slått på under <code>chrome://extensions</code>. Trykk <kbd>F5</kbd>. Panelet kan være skjult: prøv <kbd>Alt</kbd>+<kbd>K</kbd> eller dobbeltklikk der toppen skulle vært. Krever Chrome 111 eller nyere.</p></details>
 <details class="faq"><summary>«Skannet 0 av N» og ingenting skjer</summary><p>Klikk <strong>Skann nå</strong> eller gå til Skann og velg Skann innhold. Vent til visningsfeltet i Lindbak får innhold for hver bong. Skanning tar ca. ett sekund per bong; avgrens listen først hvis den er lang.</p></details>
 <details class="faq"><summary>Filteret viser færre bonger enn forventet</summary><p>Filtre som krever skanning (pant, rabatt, vare, varegruppe) skjuler uskannede bonger. En gul stripe viser hvor mange. Skann for å se dem.</p></details>
@@ -394,11 +430,15 @@
 <details class="faq"><summary>Bevisbildene mangler for noen bonger</summary><p>Bonger som ikke lenger er i listen, eller der tegningen feilet, får ikke bilde. Det står i rapportens dekningsdel. Hent bongene på nytt og lag rapporten igjen.</p></details>
 <details class="faq"><summary>Noe virker galt i Lindbak etter at jeg installerte tillegget</summary><p>Slå tillegget av under <code>chrome://extensions</code> og last siden på nytt. Pluginen skriver ikke til Lindbaks lagring, men kan skjule eller flytte rader med filtre. Fjern filtrene med «Nullstill alt».</p></details>
 
-<h2 id="ordliste"><span class="n">11</span>Ordliste</h2>
+<h2 id="ordliste"><span class="n">12</span>Ordliste</h2>
 <dl class="gl">
   <dt>Bong</dt><dd>En kvittering. Bongnummer har formen butikk-kasse-løpenummer, for eksempel 1001-2-2371.</dd>
   <dt>Kassaoppgjør</dt><dd>Kvittering av type 2: telt kontant, differanse, pose og valører når kassen gjøres opp.</dd>
-  <dt>Skanning</dt><dd>At pluginen åpner en bong og leser innholdet (varelinjer, pant, betaling, rabatt, kupong).</dd>
+  <dt>Skanning</dt><dd>At pluginen åpner en bong og leser innholdet (varelinjer, enhetspris, pant, betaling, rabatt, kupong, Kjøpeutbytte).</dd>
+  <dt>Enhetspris</dt><dd>Prisen for én enhet av en vare før rabatt. Brukes til å sammenligne samme vare på tvers av bonger.</dd>
+  <dt>Kjøpeutbytte</dt><dd>Tabellen med Grunnlag, Kjøpeutbytte og MVA bonus på medlemsbonger.</dd>
+  <dt>Hendelsesord</dt><dd>Ord på tekstlinjer som tyder på annullert, parkert, manuell pris eller spør pris.</dd>
+  <dt>Diagnostikk</dt><dd>Oversikt over linjer pluginen ikke kjenner igjen og hendelsesord, til å dele slik at testene kan utvides.</dd>
   <dt>Omfang</dt><dd>Perioden, butikkene, kassererne og kassene du velger at analysen skal gjelde.</dd>
   <dt>Datagrunnlag</dt><dd>Alle innlastede bonger i valgte butikker. Tester som må se hele bildet bruker det.</dd>
   <dt>Terskel</dt><dd>Grensen en test bruker for å avgjøre om noe flagges.</dd>
@@ -412,12 +452,14 @@
   <dt>CW</dt><dd>Lindbak Chain Web, systemet pluginen legger seg oppå.</dd>
 </dl>
 
-<h2 id="begrensninger"><span class="n">12</span>Kjente begrensninger</h2>
+<h2 id="begrensninger"><span class="n">13</span>Kjente begrensninger</h2>
 <p>Veiledningen og pluginen er laget og testet mot oppdiktede data i en etterlikning av Lindbak. Disse punktene er ikke bekreftet i ekte data:</p>
 <ul>
   <li>At alle kvitteringstyper deler nummerserie per kasse (grunnlaget for «hull i bongnummer»).</li>
   <li>Hvordan rabattårsak skrives på kvitteringen, og hva en Kupong-linje betyr (innløst eller bare knyttet til bongen).</li>
-  <li>Hvordan annullerte bonger, manuell pris, bonger på vent og «spør pris» ser ut. Pluginen leter ikke etter dem ennå.</li>
+  <li>Hvordan annullerte bonger, manuell pris, bonger på vent og «spør pris» ser ut. Pluginen leter etter hendelsesord og samler ukjente linjer (Diagnostikk), men vet ikke hva Lindbak faktisk viser.</li>
+  <li>At Kjøpeutbytte-tabellen finnes på medlemsbonger og hva grunnlaget omfatter. Testene kalibrerer seg mot det som finnes.</li>
+  <li>At medlemsnummer alltid er satt på bongen i listen, og hvilket format det har.</li>
   <li>At listen i Lindbak alltid har de feltnavnene pluginen forventer (kasserer og kasse for Alt+klikk, og alle bonger ved mange sider).</li>
 </ul>
 <p>Kontroller derfor funn mot Lindbak før du handler på dem, og meld fra om noe ser feil ut.</p>

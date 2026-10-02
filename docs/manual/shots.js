@@ -178,8 +178,8 @@ async function main() {
   if (want('detaljer')) {
     await go('Analyse', 'Detaljer'); await view(1000);
     await save('detaljer-topp');
-    for (const id of ['profile', 'findings', 'pantbal', 'recon', 'diff', 'numbers', 'disc']) { await unfold(id); }
-    for (const id of ['profile', 'findings', 'pantbal', 'recon', 'diff', 'numbers', 'disc']) await cardShot('d-' + id, `[data-sec=${id}]`);
+    for (const id of ['profile', 'findings', 'pantbal', 'recon', 'diff', 'numbers', 'disc', 'member', 'misc']) { await unfold(id); }
+    for (const id of ['profile', 'findings', 'pantbal', 'recon', 'diff', 'numbers', 'disc', 'member', 'misc']) await cardShot('d-' + id, `[data-sec=${id}]`);
     await cardShot('d-anom', '[data-sec=anom]'); await cardShot('d-custom', '[data-sec=custom]'); await cardShot('d-tasks', '[data-sec=tasks]'); await cardShot('d-notes', '[data-sec=notes]');
   }
 

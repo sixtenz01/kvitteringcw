@@ -110,6 +110,16 @@ TransId: DK7TVRW5F2PC5
 - Tolkning i pluginen (ubekreftet): kupong = sentral kampanje (CN/VPI). Lokale kampanjer er ikke sett.
 - Betaling `Coopay:`; kvitteringsbunn har kortterminaltekst og `Kjøpeutbytte`-tabell (`Grunnlag | Kjøpeutbytte | MVA bonus`).
 
+## Det pluginen leser fra bongen (v4)
+
+Alt fra iframens `<tr>`-rader, uten API-kall:
+
+- Varelinje (`EAN NAVN | | beløp`), `Antall: 0.712 kg à Kr 39.90` (mengde og enhetspris), `Rabatt: Kr x (y%)`, `Rabatt årsak: …`, `Kupong (id - navn):`, betalingslinjer (`Bank:`, `Kontant:`, `Kontant tilbake:`, `Coopay:` …).
+- Kjøpeutbytte-tabell: header `Grunnlag | Kjøpeutbytte | MVA bonus` og tallradene under (kolonnene finnes via headeren). Ikke bekreftet i ekte data hvilke bonger som har den.
+- Hendelsesord på tekstlinjer (ikke varelinjer): annull, makul, storn, parker, på vent, manuell, spør pris, overstyr, prisendring, kansell, avbrutt. **Ikke observert** i ekte data: annullert bong, manuell pris, parkert bong og spør pris. Fellen fanger dem hvis CW viser dem som tekst på bongen.
+- Ukjente linjer: tekstlinjer som ikke tolkes (tall byttet med `#`, maks 8 per bong), samlet i Diagnostikk-dialogen så vi kan lære hva CW faktisk viser. Kjente topp- og bunnlinjer (`Beskrivelse`, `Totalt`, `Referanse`, MVA …) filtreres bort.
+- Medlemsnr leses fra gridfeltet `memberNumber` (ikke fra bongen), så medlemstestene trenger ikke skanning.
+
 ## Ikke i bruk: API-endepunkt
 
 Beslutning (absolutt): pluginen sender ingen egne kall mot Lindbaks API, heller ikke som valgfri «rask skanning». Kun gridets data og iframens DOM leses. Det håndheves av `extension/test/noapi.test.js` og av at alle ende-til-ende-tester feiler ved kall mot `/Api/`. Endepunktene er dokumentert for referanse (`JournalUrls.journalApiRoot` + …).

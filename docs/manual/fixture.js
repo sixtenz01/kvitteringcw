@@ -105,6 +105,24 @@ function build(scale) {
     .forEach((x) => { const s = saleLines({ items: [CATALOG[5], CATALOG[1]], discount: { pct: x[4], reason: x[3] }, noCoupons: true }); push(1001, 1, x[0], { m: x[1], type: 1, cashier: '4102', lines: s.lines, total: s.total, pay: s.pay }); });
   { const s = saleLines({ items: [CATALOG[9], CATALOG[10]], discount: { pct: 50, reason: '' }, noCoupons: true }); push(1001, 1, '2026-09-30', { m: 12 * 60 + 15, type: 1, cashier: '4101', lines: s.lines, total: s.total, pay: s.pay }); }
 
+  // H: medlemsnummer. Én "ansatt" taster samme nummer på mange bonger hos kasserer 4102, og ett nummer brukes i to butikker med 12 minutters mellomrom.
+  [['2026-09-29', [16 * 60 + 5, 17 * 60 + 20, 18 * 60 + 40]], ['2026-09-30', [19 * 60 + 30, 20 * 60 + 1, 20 * 60 + 25, 20 * 60 + 50, 21 * 60 + 10]], ['2026-10-01', [16 * 60 + 15, 18 * 60 + 25]]].forEach((d) =>
+    d[1].forEach((m) => { const s = saleLines({ noCoupons: true }); push(1001, 1, d[0], { m, type: 1, cashier: '4102', lines: s.lines, total: s.total, pay: s.pay, member: '751000111' }); }));
+  { const a = saleLines({ noCoupons: true }), b = saleLines({ noCoupons: true });
+    push(1001, 3, '2026-09-30', { m: 14 * 60, type: 1, cashier: '4101', lines: a.lines, total: a.total, pay: a.pay, member: '751000222' });
+    push(1002, 2, '2026-09-30', { m: 14 * 60 + 12, type: 1, cashier: '4202', lines: b.lines, total: b.total, pay: b.pay, member: '751000222' }); }
+  // I: manuell pris på Pepsi Max (24,90 mot 32,90) hos 4102 den 30., med vanlige salg som referanse
+  for (let i = 0; i < 6; i++) { const s = saleLines({ items: [CATALOG[1]], noCoupons: true, pay: 'Bank' }); push(1001, 2, '2026-09-30', { m: 10 * 60 + i * 41, type: 1, cashier: '4103', lines: s.lines, total: s.total, pay: s.pay }); }
+  for (let i = 0; i < 3; i++) { const s = saleLines({ items: [['7044610877488', 'PEPSI MAX 0.5L', 24.9, true]], noCoupons: true, pay: 'Bank' }); push(1001, 1, '2026-09-30', { m: 19 * 60 + 20 + i * 47, type: 1, cashier: '4102', lines: s.lines, total: s.total, pay: s.pay }); }
+  // J: tekstlinje som tyder på annullering
+  { const s = saleLines({ items: [CATALOG[7], CATALOG[8]], noCoupons: true, pay: 'Bank' }); s.lines.splice(1, 0, SPAN('Linje annullert av kasserer')); push(1001, 1, '2026-10-01', { m: 13 * 60 + 40, type: 1, cashier: '4101', lines: s.lines, total: s.total, pay: s.pay }); }
+  // Kjøpeutbytte-tabell på medlemsbonger (sist på bongen)
+  Object.keys(events).forEach((k) => events[k].forEach((e) => {
+    if (e.type !== 1 || !e.member || !(e.total > 0)) return;
+    const g = r2(e.total * 0.95), ku = r2(g * 0.02);
+    e.lines.push('<tr><td>Grunnlag</td><td>Kjøpeutbytte</td><td>MVA bonus</td></tr>', `<tr><td>${f2(g)}</td><td>${f2(ku)}</td><td>${f2(r2(ku * 0.25))}</td></tr>`);
+  }));
+
   // kassaoppgjør og bongnummer
   const DIFFS = { '1001|2|2026-09-29': -40, '1001|2|2026-09-30': -35, '1001|2|2026-10-01': -60, '1001|1|2026-10-01': 10 };
   const seq = {}; const out = []; const dropped = [];

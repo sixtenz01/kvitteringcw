@@ -88,5 +88,5 @@ const pdfHtml = B.pdfPage({ 'kom-i-gang': 3, innstillinger: 46 });
 assert.ok(pdfHtml.includes('class="cover"') && pdfHtml.includes('class="pdf-toc"') && !/\{\{/.test(pdfHtml));
 assert.ok(!pdfHtml.includes('loading="lazy"') && !/<details class="faq">/.test(pdfHtml), 'PDF: bilder lastes og spørsmål er åpne');
 assert.ok(/<span class="p">3<\/span>/.test(pdfHtml) && /<span class="p">46<\/span>/.test(pdfHtml), 'PDF: sidetall i innholdsfortegnelsen');
-assert.strictEqual((pdfHtml.match(/<h2 id=/g) || []).length, 12, 'PDF: alle kapitler');
+assert.strictEqual((pdfHtml.match(/<h2 id=/g) || []).length, 13, 'PDF: alle kapitler');
 console.log('docs: ok (' + imgs + ' bilder, ' + (html.length / 1048576).toFixed(1) + ' MB)');

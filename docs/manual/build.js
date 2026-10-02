@@ -35,6 +35,8 @@ const IMG = {
   'd-profile': ['Kassererprofil', 'Kassererprofil mot butikksnitt.'], 'd-findings': ['Mønstre og funn', 'Mønstre og funn.'], 'd-pantbal': ['Pantelapp-sjekk', 'Pantelapp-sjekk.'],
   'd-recon': ['Dagsavstemming', 'Dagsavstemming per kasse.'], 'd-diff': ['Kassadifferanse over tid', 'Kassadifferanse over tid.'], 'd-numbers': ['Tallanalyse', 'Tallanalyse: Benford og runde beløp.'],
   'd-disc': ['Rabatter og kuponger', 'Rabatter og kuponger: tabell per kasserer, per årsak og kasserer × årsak.'],
+  'd-member': ['Medlemsnummer', 'Medlemsnummer: nummer med flest bonger og funn, med kasserer og andel.'],
+  'd-misc': ['Pris, kjøpeutbytte og hendelser', 'Pris, kjøpeutbytte og hendelser: dekning, avvik og knappen Diagnostikk.'],
   'd-custom': ['Egne avviksregler', 'Egne avviksregler.'], 'd-tasks': ['Arbeidsoppgaver', 'Arbeidsoppgaver.'], 'd-notes': ['Oppfølging og tastatur', 'Oppfølging og tastatur.'],
   eksport: ['Eksport', 'Mer → Eksport: CSV og PNG.'], 'eksport-revisjon': ['Revisjonsrapport-kortet', 'Mer → Eksport: Revisjonsrapport og loggen.'],
   'innstillinger-lukket': ['Innstillinger med lukkede grupper', 'Innstillinger: Generelt og én gruppe per test. Alle gruppene er lukket.'],
@@ -94,7 +96,7 @@ ${wrows ? `<h4>Poeng i risikoscore</h4><div class="tw"><table class="ref"><thead
 }
 
 const DIA = { patterns: ['tSmall'], falseRet: ['tFalse', 'tFalse2'], afterSettle: ['tAfter'], deleted: ['tGap'], diff: ['tDiff'], numbers: ['tBenford'], pant: ['tPant'] };
-const SCOPE_OF = { bong: ['Delvis', 'Bong'], patterns: ['Delvis', 'Bong'], falseRet: ['Ja', 'Bong'], afterSettle: ['Nei', 'Bong'], deleted: ['Nei', 'Bong'], diff: ['Ja (oppgjør)', 'Bong (oppgjør)'], numbers: ['Nei', 'Kasserer'], disc: ['Ja', 'Bong og kasserer'], pant: ['Ja', 'Bong'], hours: ['Nei', 'Bong'], profile: ['Delvis', 'Kasserer'], rules: ['Delvis', 'Bong'] };
+const SCOPE_OF = { bong: ['Delvis', 'Bong'], patterns: ['Delvis', 'Bong'], falseRet: ['Ja', 'Bong'], afterSettle: ['Nei', 'Bong'], deleted: ['Nei', 'Bong'], diff: ['Ja (oppgjør)', 'Bong (oppgjør)'], numbers: ['Nei', 'Kasserer'], disc: ['Ja', 'Bong og kasserer'], pant: ['Ja', 'Bong'], hours: ['Nei', 'Bong'], profile: ['Delvis', 'Kasserer'], rules: ['Delvis', 'Bong'], member: ['Nei', 'Bong'], price: ['Ja', 'Bong og kasserer'], ku: ['Ja', 'Bong'], events: ['Ja', 'Bong'] };
 
 function testsHtml() {
   const overview = `<div class="tw"><table><thead><tr><th>Test</th><th>Finner</th><th>Krever skanning</th><th>Poeng til</th></tr></thead><tbody>${L.SETTING_GROUPS.map((g) => `<tr><td><a href="#test-${g.id}">${esc(g.title)}</a></td><td>${esc(H.groups[g.id].flags.join('; '))}</td><td>${SCOPE_OF[g.id][0]}</td><td>${SCOPE_OF[g.id][1]}</td></tr>`).join('')}</tbody></table></div>`;

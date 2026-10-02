@@ -60,6 +60,16 @@ Bruk:
 - **Egne regler:** felt for rabatt (kr), høyeste rabatt (%), rabattårsak, rabattlinjer uten årsak, antall kuponger og kupong (id/navn).
 - **Fokus:** rabatt og kuponger per kasserer eller kasse.
 
+## Medlemsnummer, pris, kjøpeutbytte og hendelsesord (v4)
+
+Skanningen (v4) leser i tillegg enhetspris (`Antall: … à Kr …`), Kjøpeutbytte-tabellen (`Grunnlag | Kjøpeutbytte | MVA bonus`), hendelsesord på tekstlinjer og ukjente linjer. Eldre skanninger tas på nytt ved neste skanning. Alt leses fra iframen; ingen kall mot CWs API (`test/noapi.test.js`).
+
+- **Medlemsnummer** (kun listen fra CW, ingen skanning, alle innlastede bonger i valgte butikker): samme medlemsnr i to butikker innen 30 min, minst 4 bonger samme dag, minst 15 totalt, og nesten bare hos én kasserer (minst 5 bonger, over 80 % og minst «Avviker fra snittet» × kassererens vanlige andel). Ansattliste (Innstillinger → Medlemsnummer): `1234567` flagger alle bonger med nummeret, `12=1234567` flagger i tillegg når kasserer 12 selv har tastet det (høyest poeng). Kort: Analyse → Detaljer → Medlemsnummer (klikk nummer for å filtrere).
+- **Pris per vare:** samme vare, samme butikk og dag, enhetspris (rabatt lagt tilbake) som avviker minst 10 % fra vanlig pris (den prisen flest bonger har, minst 60 %, minst 5 salg). Kasserer markeres ved minst 3 avvik.
+- **Kjøpeutbytte:** medlemsbong uten tabell, og grunnlag som avviker fra vanlig forhold til varesum (median over minst 10 bonger). Testene kalibrerer seg: finnes tabellen på under 80 % av medlemsbongene, regnes fravær ikke som avvik. Tabellen er ikke bekreftet i ekte data.
+- **Hendelsesord:** tekstlinjer (ikke varenavn) med annull, makul, storn, parker, på vent, manuell, spør pris, overstyr, prisendring, kansell eller avbrutt. Annullert, manuell pris, parkert og spør pris er ikke observert ennå.
+- **Diagnostikk** (Innstillinger → Generelt, eller kortet «Pris, kjøpeutbytte og hendelser»): hendelsesord og ukjente linjer med antall og eksempelbong; «Kopier som tekst» gir en liste til deling.
+
 Skanner fra tidligere versjoner (v2) har ikke rabattdata. «Skann synlige» skanner dem på nytt, og filteret skjuler dem til de er skannet (gul stripe viser antallet).
 
 Ikke verifisert: om kvitteringen skriver årsaken som nummer eller tekst (begge håndteres), og hvordan lokale kampanjer ser ut. Dette trenger eksempler fra ekte kvitteringer.
@@ -158,6 +168,8 @@ NODE_PATH=<global node_modules> node test/smoke.js   # Playwright, fiktivt grid
 NODE_PATH=<global node_modules> node test/audit.js   # revisjonstester og omfang, eget datasett
 NODE_PATH=<global node_modules> node test/settings.js # innstillinger, hjelp, bekreftelser, import/eksport, piltaster
 node test/report.test.js                              # SHA-256, kontrollsummer og rapportbygger (uten nettleser)
+node test/noapi.test.js                               # ingen fetch/XHR/API-kall i kildekoden
+NODE_PATH=<global node_modules> node test/medlem.js    # medlemsnr, pris, kjøpeutbytte, hendelsesord og diagnostikk
 NODE_PATH=<global node_modules> node test/rapport.js  # lager rapport i panelet, pakker ut ZIP og verifiserer alle kontrollsummer
 node test/docs.test.js                               # dekning av innstillinger, vekter, faner og kort i brukerveiledningen
 TOUR=<mappe> NODE_PATH=<global node_modules> node test/tour.js  # skjermbilder av alle faner (valgfritt)
