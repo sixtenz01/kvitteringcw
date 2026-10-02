@@ -779,6 +779,44 @@
     return out;
   }
 
+
+  // ---- fokus: alt om én kasserer eller kasse ------------------------------------
+  function focusStats(items, scanMap) {
+    var st = { all: items.length, sales: 0, sum: 0, avg: 0, rets: 0, retSum: 0, first: null, last: null,
+      kasse: {}, kasserer: {}, hours: [], pantSale: 0, pantRet: 0, lapper: 0, neg: 0, scanned: 0, scannable: 0,
+      pay: {}, settle: 0, settleDiff: 0, posN: 0, posSum: 0 };
+    for (var h = 0; h < 24; h++) st.hours.push(0);
+    items.forEach(function (it) {
+      var dt = parseDT(it.endDateTime);
+      if (dt.time) {
+        if (!st.first || it.endDateTime < st.first) st.first = it.endDateTime;
+        if (!st.last || it.endDateTime > st.last) st.last = it.endDateTime;
+        st.hours[Math.floor(mins(dt.time) / 60)]++;
+      }
+      st.kasse[it.workstationNumber] = (st.kasse[it.workstationNumber] || 0) + 1;
+      st.kasserer[it.cashierNumber] = (st.kasserer[it.cashierNumber] || 0) + 1;
+      var sc = scanMap && scanMap[it.transactionId];
+      if (it.receiptType === 1 || it.receiptType === 2) st.scannable++;
+      if (sc) st.scanned++;
+      if (it.receiptType === 2) {
+        st.settle++;
+        if (sc && sc.settle) st.settleDiff += sc.settle.diff.sum || 0;
+        return;
+      }
+      if (!isSale(it)) return;
+      st.sales++; st.sum += it.totalAmount;
+      if (it.totalAmount < 0) { st.rets++; st.retSum += it.totalAmount; }
+      if (it.totalAmount > 0) { st.posN++; st.posSum += it.totalAmount; }
+      if (sc) {
+        st.pantSale += sc.sale; st.pantRet += sc.ret; st.lapper += sc.retLines || 0; st.neg += sc.neg || 0;
+        Object.keys(sc.pay).forEach(function (l) { st.pay[l] = round2((st.pay[l] || 0) + sc.pay[l]); });
+      }
+    });
+    st.avg = st.posN ? round2(st.posSum / st.posN) : 0;
+    ['sum', 'retSum', 'pantSale', 'pantRet', 'settleDiff'].forEach(function (k) { st[k] = round2(st[k]); });
+    return st;
+  }
+
   function relativeRange(name, now) {
     var d = now || new Date(), day = 864e5, a = d, b = d;
     if (name === 'yesterday') { a = b = new Date(d.getTime() - day); }
@@ -848,6 +886,7 @@
     sequence: sequence,
     reconcile: reconcile,
     relativeRange: relativeRange,
+    focusStats: focusStats,
     mins: mins,
     parseSettlement: parseSettlement,
     report: report,

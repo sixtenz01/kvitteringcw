@@ -154,3 +154,14 @@ tr.kvr-follow>td.kvr-cb-cell::after{color:#e37400}
 #kvr-panel .kvr-fl-t{flex:1;min-width:0}
 #kvr-panel .kvr-fl-t span{display:block}
 #kvr-panel .kvr-tablewrap{background:linear-gradient(to right,#fff 30%,rgba(255,255,255,0)),linear-gradient(to left,#fff 30%,rgba(255,255,255,0)) 100% 0,radial-gradient(farthest-side at 0 50%,rgba(0,0,0,.2),rgba(0,0,0,0)),radial-gradient(farthest-side at 100% 50%,rgba(0,0,0,.2),rgba(0,0,0,0)) 100% 0;background-repeat:no-repeat;background-size:40px 100%,40px 100%,12px 100%,12px 100%;background-attachment:local,local,scroll,scroll}
+
+#kvr-panel .kvr-fchip.kvr-state{border-style:dashed;color:#425a50;border-color:#8da398}
+#kvr-panel .kvr-fchip.kvr-state:hover{background:#425a50;color:#fff}
+#kvr-panel .kvr-ent{border:0;background:none;color:var(--kv-accent);font:inherit;font-weight:600;font-size:inherit;text-decoration:underline dotted;cursor:pointer;padding:1px 3px;border-radius:4px}
+#kvr-panel .kvr-ent:hover{background:var(--kv-soft);text-decoration:underline}
+#kvr-panel .kvr-ents{display:flex;flex-wrap:wrap;gap:4px;margin-top:3px}
+#kvr-panel .kvr-ftiles{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+#kvr-panel .kvr-hours{display:flex;align-items:flex-end;gap:2px;height:80px;padding-bottom:14px}
+#kvr-panel .kvr-hcol{position:relative;flex:1;height:100%;display:flex;align-items:flex-end}
+#kvr-panel .kvr-hbar{width:100%;min-height:1px;background:var(--kv-accent);border-radius:2px 2px 0 0}
+#kvr-panel .kvr-hcol span{position:absolute;left:0;right:0;bottom:-14px;text-align:center;font-size:9px;color:var(--kv-muted)}

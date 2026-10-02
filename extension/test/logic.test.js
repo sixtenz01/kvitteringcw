@@ -279,4 +279,17 @@ assert.deepStrictEqual(ids(F({ note: 'oppfolging' }), nctx), ['a-1']);
 assert.deepStrictEqual(ids(F({ note: 'sjekket' }), nctx), ['a-2']);
 assert.strictEqual(L.sanitizeControl({ closeTime: '21:30', bogus: 1 }).closeTime, '21:30');
 assert.strictEqual(L.mins('07:05'), 425);
+
+// ---- fokus
+const fi = [mkI('f-1', '2026-10-02', '10:05', 1, 'K', 100), mkI('f-2', '2026-10-02', '10:40', 1, 'K', -30), mkI('f-3', '2026-10-02', '15:00', 2, 'K', 300),
+  mkI('f-4', '2026-10-02', '23:00', 2, 'K', null, 2)];
+const fs = { 'f-1': rcpt([['7000 V', '', '100.00'], ['Bank:', '', '100.00']]), 'f-2': rcpt([['399 PANTELAPP', '', '-30.00'], ['Kontant tilbake:', '', '30.00']]), 'f-4': L.parseSettlement([['Sum', '10.00'], ['Differanse'], ['Sum', '-5.00']]) };
+const fo = L.focusStats(fi, fs);
+assert.deepStrictEqual([fo.all, fo.sales, fo.sum, fo.avg, fo.rets, fo.retSum], [4, 3, 370, 200, 1, -30]);
+assert.deepStrictEqual([fo.first, fo.last], ['2026-10-02 10:05', '2026-10-02 23:00']);
+assert.deepStrictEqual([fo.kasse[1], fo.kasse[2], fo.kasserer.K], [2, 2, 4]);
+assert.deepStrictEqual([fo.hours[10], fo.hours[15], fo.hours[23], fo.hours[0]], [2, 1, 1, 0]);
+assert.deepStrictEqual([fo.pantRet, fo.lapper, fo.scanned, fo.scannable, fo.settle, fo.settleDiff], [-30, 1, 3, 4, 1, -5]);
+assert.deepStrictEqual(fo.pay, { 'Bank': 100, 'Kontant tilbake': 30 });
+assert.strictEqual(L.focusStats([], {}).avg, 0);
 console.log('logic: ok');

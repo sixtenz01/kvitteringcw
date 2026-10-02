@@ -49,7 +49,8 @@ Fem faner: **Hent** (søk i hele journalen via CW), **Filtrer** (lagrede filtre,
 
 - **Skannestatus** vises alltid under tallene («Skannet 4 av 5» med «Skann nå»). Filter som krever skanning (pant, vare, varegruppe) viser en gul stripe med hvor mange som mangler. Skanning dekker alle kvitteringer som passerer de andre filtrene, også de som pantfilteret ellers skjuler.
 - **Én statuslinje** øverst viser fremdrift og resultat, og forsvinner av seg selv.
-- **Aktive filtre** vises som chips som fjernes med ett klikk.
+- **Nullstilling uten refresh:** alt du har satt vises som chips under tallene: filtre, sortering, valgte kvitteringer, avviksmarkering og CW-søk. Hver chip fjernes med ett klikk, og «Nullstill alt» fjerner alt (også CW-filteret du satt i Hent-fanen).
+- **Fokus:** klikk på en kasserer eller kasse (lenker i rapporter, funn og avvikslister, pillene under Filtrer, eller Alt+klikk på KASSERER/KASSE i selve listen) for å filtrere listen og se alt om den: nøkkeltall, hvilke kasser/kasserere den er brukt sammen med, kassererprofil mot butikksnitt, pant og betaling, varegrupper, avvik og funn, kassaoppgjør, notater og aktivitet per time.
 - **⤢** gjør panelet bredt (for rapporter og tabeller). Tabeller har faste overskrifter med forklaring ved hover.
 - **Kontroll** viser et resultatkort først («2 funn · 4 flaggede bonger …») med hopplenker til profil, funn, pant og avstemming. Detaljene skjules til kontrollene er kjørt.
 - Faste knapper nederst: Velg alle, Fjern valg, Sammenlign (ved to valgte), CSV og PNG.

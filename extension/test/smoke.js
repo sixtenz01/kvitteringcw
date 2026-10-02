@@ -23,10 +23,10 @@ const RECEIPTS = {
 const html = `<!doctype html><html><body>
 <input id="fromDatePicker"><input id="toDatePicker"><input id="freetextSearchInput"><input id="receiptNumber">
 <input ng-model="vm.selectedFilters.memberNumber"><input ng-model="vm.selectedFilters.externalLoyaltyNumber">
-<button ng-click="vm.applyFilters()" onclick="window.__applied=(window.__applied||0)+1;(window.__bound||[]).forEach(function(f){f()})">Oppdater</button>
-<div class="k-grid-header"><table><colgroup><col><col><col></colgroup><thead><tr><th>DATO</th><th>TID</th><th>SUM</th></tr></thead></table></div>
+<button ng-click="vm.resetFilters()" onclick="window.__reset=(window.__reset||0)+1">Nullstill</button><button ng-click="vm.applyFilters()" onclick="window.__applied=(window.__applied||0)+1;(window.__bound||[]).forEach(function(f){f()})">Oppdater</button>
+<div class="k-grid-header"><table><colgroup><col><col><col></colgroup><thead><tr><th>DATO</th><th>TID</th><th>SUM</th><th>KASSERER</th><th>KASSE</th></tr></thead></table></div>
 <table id="g" data-role="grid"><colgroup><col><col><col></colgroup><tbody>
-${rows.map(r => `<tr data-id="${r.transactionId}"><td></td><td>${r.endDateTime}</td><td>${r.totalAmount}</td></tr>`).join('')}
+${rows.map(r => `<tr data-id="${r.transactionId}"><td></td><td>${r.endDateTime}</td><td>${r.totalAmount}</td><td data-field="cashierNumber">${r.cashierNumber}</td><td data-field="workstationNumber">${r.workstationNumber}</td></tr>`).join('')}
 </tbody></table>
 <div data-w="1"></div><div data-w="2"></div>
 <iframe id="rc"></iframe>
@@ -79,7 +79,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   const idbGet = (store, key) => page.evaluate(([st, k]) => new Promise(res => { const rq = indexedDB.open('kvr-store', 1); rq.onsuccess = () => { const g = rq.result.transaction(st).objectStore(st).get(k); g.onsuccess = () => res(g.result === undefined ? null : g.result); }; }), [store, key]);
   const vis = () => page.$$eval('tbody tr', trs => trs.filter(t => t.style.display !== 'none').map(t => t.getAttribute('data-id')));
   const tiles = () => page.innerText('.kvr-tiles');
-  const TABMAP = { 'Søk': ['Hent'], 'Filter': ['Filtrer'], 'Innhold': ['Skann'], 'Rapport': ['Analyse', 'Rapport'], 'Avvik': ['Analyse', 'Avvik'], 'Kontroll': ['Analyse', 'Kontroll'], 'Eksport': ['Mer'] };
+  const TABMAP = { 'Søk': ['Hent'], 'Filter': ['Filtrer'], 'Innhold': ['Skann'], 'Rapport': ['Analyse', 'Rapport'], 'Avvik': ['Analyse', 'Avvik'], 'Kontroll': ['Analyse', 'Kontroll'], 'Fokus': ['Analyse', 'Fokus'], 'Eksport': ['Mer'] };
   const tab = async (name) => {
     const m = TABMAP[name];
     await page.click(`.kvr-tab:has-text("${m[0]}")`);
@@ -110,6 +110,26 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   assert.deepStrictEqual(await vis(), ['t-1', 't-2', 't-3', 't-4', 't-5']);
   assert.strictEqual(await page.$$eval('.kvr-fchip', n => n.length), 0);
   assert.ok(await page.$eval('.kvr-foot button:has-text("PNG")', b => b.disabled));
+
+  // nullstill alt uten refresh
+  await page.click('text=Negativ sum');
+  await page.selectOption('.kvr-f:has-text("Sortering") select', 'sumDesc');
+  await page.click('button:text-is("Velg alle")');
+  await tab('Søk');
+  await page.fill('input[placeholder="EAN eller varenavn"]', 'xyz');
+  await page.fill('.kvr-f:has-text("Dato fra") input >> nth=0', '2026-10-01');
+  const chipTxt = await page.innerText('.kvr-chipsrow');
+  for (const re of [/Negativ sum/, /Sortert: sum høyest/, /\d+ valgt/, /CW: .*vare «xyz»/]) assert.match(chipTxt, re);
+  await page.click('.kvr-fchip:has-text("valgt")');
+  assert.match(await tiles(), /0\s+Valgt/);
+  await page.click('button:text-is("Velg alle")');
+  await page.click('.kvr-chipsrow .kvr-link:text-is("Nullstill alt")');
+  assert.strictEqual(await page.$$eval('.kvr-fchip', n => n.length), 0);
+  assert.match(await tiles(), /0\s+Valgt/);
+  assert.deepStrictEqual(await page.$$eval('tbody tr', t => t.map(x => x.getAttribute('data-id'))), ['t-1', 't-2', 't-3', 't-4', 't-5']);
+  assert.strictEqual(await page.inputValue('input[placeholder="EAN eller varenavn"]'), '');
+  assert.ok((await page.evaluate(() => window.__reset)) >= 1, 'CW-filter nullstilt');
+  await tab('Filter');
 
   // piller i stedet for Ctrl-lister
   await page.click('[data-sec=who] .kvr-pill:text-is("6")');
@@ -306,6 +326,37 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   assert.ok((await page.$$eval('[data-sec=tasks] select option', o => o.map(x => x.textContent))).includes('Mandagens kontroll'));
   await wipe();
 
+  // fokus: alt om én kasserer eller kasse
+  await tab('Filter');
+  await page.click('[data-sec=who] .kvr-pill:text-is("12")');
+  await tab('Fokus');
+  const fk = await page.innerText('.kvr-pane:has([data-sec=f-top])');
+  assert.match(fk, /kasserer 12/i); assert.match(fk, /593,60/); assert.match(fk, /Kasse 4 \(2\)/);
+  assert.match(fk, /mot butikksnitt/i); assert.match(fk, /aktivitet per time/i);
+  assert.strictEqual(await page.$$eval('.kvr-hcol', n => n.length), 24);
+  assert.deepStrictEqual(await vis(), ['t-3', 't-4']);
+  await page.click('[data-sec=f-with] .kvr-ent:has-text("Kasse 4")');
+  assert.match(await page.innerText('[data-sec=f-top] h4'), /kasse 4/i);
+  assert.match(await page.innerText('.kvr-chipsrow'), /Kasse: 4/);
+  assert.doesNotMatch(await page.innerText('.kvr-chipsrow'), /Kasserer:/);
+  assert.match(await page.innerText('[data-sec=f-with]'), /Kasserer 12 \(2\)/);
+  await wipe();
+  await tab('Rapport');
+  await page.selectOption('[data-sec=report] select', 'kasse');
+  await page.click('[data-sec=report] .kvr-ent:text-is("Kasse 6")');
+  assert.match(await page.innerText('[data-sec=f-top] h4'), /kasse 6/i);
+  assert.deepStrictEqual(await vis(), ['t-1']);
+  await wipe();
+  assert.match(await page.getAttribute('tr[data-id="t-5"] td[data-field="cashierNumber"]', 'title'), /Alt\+klikk: se alt om kasserer 10/);
+  await page.click('tr[data-id="t-5"] td[data-field="cashierNumber"]', { modifiers: ['Alt'] });
+  assert.match(await page.innerText('[data-sec=f-top] h4'), /kasserer 10/i);
+  assert.deepStrictEqual(await vis(), ['t-1', 't-5']);
+  assert.strictEqual(await sel() === null || (await sel()) !== 't-5', true, 'Alt+klikk velger ikke raden');
+  await page.click('button:text-is("Fjern fokus")');
+  assert.strictEqual(await page.$$eval('.kvr-fchip', n => n.length), 0);
+  assert.match(await page.innerText('.kvr-pane:has(.kvr-card h4:text-is("Fokus"))'), /Klikk på en kasserer eller kasse/);
+  await wipe();
+
   // CSV
   await page.click('button:text-is("Velg alle")');
   const [dl] = await Promise.all([page.waitForEvent('download'), page.click('.kvr-foot button:has-text("CSV")')]);
@@ -379,20 +430,21 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
     await page.addStyleTag({ path: path.join(dir, 'src/panel.css') });
     await page.addScriptTag({ path: path.join(dir, 'src/content.js') });
     await page.waitForSelector('#kvr-panel');
-    await page.setViewportSize({ width: 1100, height: 1600 });
+    await page.setViewportSize({ width: 1100, height: 1500 });
     await page.evaluate(() => { const p = document.getElementById('kvr-panel'); p.style.top = '10px'; });
-    await tab('Kontroll');
-    await page.click('button:text-is("Kjør alle kontroller (synlige)")');
-    await page.waitForFunction(() => /Kontroller ferdig/.test(document.getElementById('kvr-panel').innerText), null, { timeout: 30000 });
+    await tab('Filter');
+    await page.selectOption('.kvr-f:has-text("Sortering") select', 'sumDesc');
+    await page.click('text=Negativ sum');
     await page.click('button:text-is("Velg alle")');
-    for (const t of ['Søk', 'Filter', 'Innhold', 'Rapport', 'Avvik', 'Kontroll', 'Eksport']) {
-      await tab(t);
-      await page.waitForTimeout(150);
-      await (await page.$('#kvr-panel')).screenshot({ path: process.env.SHOT.replace('.png', '-' + t + '.png') });
-    }
-    await page.click('.kvr-icon[title^="Utvid"]');
-    await tab('Rapport');
-    await (await page.$('#kvr-panel')).screenshot({ path: process.env.SHOT.replace('.png', '-bred.png') });
+    await tab('Søk');
+    await page.fill('input[placeholder="EAN eller varenavn"]', 'banan');
+    await page.fill('.kvr-f:has-text("Dato fra") input >> nth=0', '2026-10-01');
+    await (await page.$('#kvr-panel')).screenshot({ path: process.env.SHOT.replace('.png', '-chips.png'), clip: { x: 0, y: 0, width: 420, height: 330 } });
+    await page.click('.kvr-chipsrow .kvr-link:text-is("Nullstill alt")');
+    await tab('Filter');
+    await page.click('[data-sec=who] .kvr-pill:text-is("12")');
+    await tab('Fokus');
+    await (await page.$('#kvr-panel')).screenshot({ path: process.env.SHOT.replace('.png', '-fokus.png') });
   }
 
   assert.deepStrictEqual(errors, []);
