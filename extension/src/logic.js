@@ -552,7 +552,12 @@
     ['pantMin', 'Pantebeløp ≥ kr', '20'], ['pantRatio', 'Panteretur > salg ×', '1'],
     ['openFrom', 'Åpner (HH:MM)', '06:00'], ['openTo', 'Stenger (HH:MM)', '23:00'],
     ['maxGap', 'Maks hull i bongnr', '50'], ['profFactor', 'Avvik fra snitt ×', '1.5'],
-    ['profMin', 'Minst antall for profil', '5'], ['reconTol', 'Avstemt toleranse kr', '1']
+    ['profMin', 'Minst antall for profil', '5'], ['reconTol', 'Avstemt toleranse kr', '1'],
+    ['falseRet', 'Falsk retur-test (tom = av)', '1'], ['saleReturnMin', 'Salg og retur av samme beløp innen min', '60'],
+    ['settleGraceMin', 'Salg etter oppgjør, frist min', '5'], ['diffRepeatN', 'Kassadiff. minus ≥ antall oppgjør', '3'],
+    ['diffMin', 'Kassadifferanse teller fra kr', '1'], ['diffTotal', 'Kassadiff. minus totalt ≥ kr', '100'],
+    ['benfordMin', 'Benford: minst antall bonger', '100'], ['benfordCashMin', 'Benford: minst per kasserer', '50'],
+    ['benfordMad', 'Benford: avvik (MAD) over', '0.015'], ['roundShare', 'Runde beløp: andel % over', '5'], ['roundMinN', 'Runde beløp: minst antall', '20']
   ];
 
   function defaultControl() {
@@ -822,7 +827,10 @@
   var RISK_WEIGHTS = {
     'Stor panteretur': 3, 'Mange pantelapper': 3, 'Kontant tilbake uten salg': 4, 'Rundt beløp': 1, 'Kassadifferanse': 5,
     'Små returer før stenging': 4, 'Kontant tilbake uten salg flere ganger': 5, 'Samme beløp gjentatt': 3,
-    'Samme pantebeløp utbetalt flere ganger': 4, 'Bonger utenfor åpningstid': 2, 'Regel': 3
+    'Samme pantebeløp utbetalt flere ganger': 4, 'Bonger utenfor åpningstid': 2, 'Regel': 3,
+    'Retur uten salg': 3, 'Kortkjøp refundert kontant': 5, 'Salg og retur av samme beløp': 4, 'Salg etter kassaoppgjør': 4,
+    'Hull i bongnummer': 3, 'Bongnummer og tid stemmer ikke': 4, 'Dobbelt bongnummer': 3, 'Gjentatte kassadifferanser': 4,
+    'Avvikende sifferfordeling': 2, 'Mange runde beløp': 2
   };
 
   function sanitizeWeights(raw) {
@@ -857,7 +865,7 @@
     return out.sort(function (a, b) { return b.score - a.score || (a.item.endDateTime < b.item.endDateTime ? 1 : -1); });
   }
 
-  function rankCashiers(items, anomMap, weights, profile) {
+  function rankCashiers(items, anomMap, weights, profile, extra) {
     var acc = {};
     items.forEach(function (it) {
       var r = anomMap && anomMap[it.transactionId];
@@ -872,6 +880,11 @@
       var a = acc[p.id] || (acc[p.id] = { id: String(p.id), score: 0, flagged: 0, profile: [] });
       a.score += 2 * flags.length;
       a.profile = flags.map(function (k) { return names[k]; });
+    });
+    Object.keys(extra || {}).forEach(function (id) {
+      var a = acc[id] || (acc[id] = { id: String(id), score: 0, flagged: 0, profile: [] });
+      a.score += extra[id].points;
+      a.profile = a.profile.concat(extra[id].notes);
     });
     return Object.keys(acc).map(function (k) { acc[k].score = round2(acc[k].score); return acc[k]; })
       .sort(function (a, b) { return b.score - a.score || numCmp(a.id, b.id); });
@@ -942,10 +955,270 @@
     return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * p;
   }
 
+
+  // ---- revisjonstester ---------------------------------------------------------------
+  function tsMin(it) {
+    var d = parseDT(it.endDateTime);
+    return d.date ? Date.parse(d.date + 'T' + d.time + ':00Z') / 60000 : null;
+  }
+
+  function realReturn(it, sc) {
+    if (!(typeof it.totalAmount === 'number' && it.totalAmount < 0)) return false;
+    if (sc && sc.np === 0 && sc.retLines > 0) return false;
+    return true;
+  }
+
+  function isPantText(l) { return PANT_LINE.test(l.c + ' ' + l.n); }
+
+  // Falsk retur: retur uten salg, kortkjøp refundert kontant, og salg og retur av samme beløp.
+  function falseReturns(items, population, scanMap, cfg) {
+    if (!hasNum(cfg.falseRet)) return { findings: [], coverage: null };
+    var findings = [], win = cnum(cfg.saleReturnMin, 60);
+    var idx = {}, sales = [], scannedSales = 0;
+    population.forEach(function (it) {
+      if (it.receiptType !== 1 || typeof it.totalAmount !== 'number' || it.totalAmount <= 0) return;
+      sales.push(it);
+      var sc = scanMap && scanMap[it.transactionId];
+      if (!sc) return;
+      scannedSales++;
+      sc.items.forEach(function (l) {
+        if (l.a > 0 && !isPantText(l)) groupInto(idx, it.storeNumber + '|' + l.c + '|' + l.a, it);
+      });
+    });
+    var coverage = sales.length ? scannedSales / sales.length : 1;
+    var lineCheck = coverage >= 0.8;
+    items.forEach(function (r) {
+      var sc = scanMap && scanMap[r.transactionId];
+      if (!realReturn(r, sc)) return;
+      var rt = tsMin(r);
+      // salg og retur av samme beløp, samme kasse, kort tid
+      var amt = Math.abs(r.totalAmount);
+      var twin = sales.filter(function (x) {
+        var t = tsMin(x);
+        return x.storeNumber === r.storeNumber && x.workstationNumber === r.workstationNumber && Math.abs(x.totalAmount - amt) < 0.005 && t !== null && rt !== null && t <= rt && rt - t <= win;
+      })[0];
+      if (twin) {
+        findings.push({ kind: 'Falsk retur', code: 'saleThenReturn', title: 'Salg og retur av samme beløp', flag: true,
+          detail: 'Kasse ' + r.workstationNumber + ': salg ' + parseDT(twin.endDateTime).time + ' og retur ' + parseDT(r.endDateTime).time + ', begge ' + amt + ' kr (kasserer ' + twin.cashierNumber + (twin.cashierNumber !== r.cashierNumber ? ' og ' + r.cashierNumber : '') + ')',
+          ids: [r.transactionId, twin.transactionId] });
+      }
+      if (!sc) return;
+      var neg = sc.items.filter(function (l) { return l.a < 0 && !isPantText(l); });
+      if (!neg.length) return;
+      var unmatched = [], matched = null;
+      neg.forEach(function (l) {
+        var cands = (idx[r.storeNumber + '|' + l.c + '|' + (-l.a)] || []).filter(function (x) { return x.endDateTime <= r.endDateTime; });
+        if (!cands.length) unmatched.push(l);
+        else cands.forEach(function (x) { if (!matched || x.endDateTime > matched.endDateTime) matched = x; });
+      });
+      if (unmatched.length && lineCheck) {
+        findings.push({ kind: 'Falsk retur', code: 'returnNoSale', title: 'Retur uten salg', flag: true,
+          detail: 'Kasse ' + r.workstationNumber + ' ' + parseDT(r.endDateTime).time + ': retur av ' + unmatched.map(function (l) { return l.n + ' (' + (-l.a) + ' kr)'; }).join(', ') + ' uten tilsvarende salg i datagrunnlaget',
+          ids: [r.transactionId] });
+      }
+      if (matched) {
+        var ssc = scanMap[matched.transactionId];
+        if (ssc && (ssc.pay['Bank'] || 0) > 0 && (sc.pay['Kontant tilbake'] || 0) > 0) {
+          findings.push({ kind: 'Falsk retur', code: 'cardRefundCash', title: 'Kortkjøp refundert kontant', flag: true,
+            detail: 'Kasse ' + r.workstationNumber + ' ' + parseDT(r.endDateTime).time + ': ' + sc.pay['Kontant tilbake'] + ' kr utbetalt kontant for vare betalt med kort (salg ' + parseDT(matched.endDateTime).time + ')',
+            ids: [r.transactionId, matched.transactionId] });
+        }
+      }
+    });
+    return { findings: findings, coverage: coverage, lineCheck: lineCheck };
+  }
+
+  // Salg etter kassaoppgjør: salg på en kasse etter dagens siste kassaoppgjør.
+  function afterSettlement(items, population, cfg) {
+    if (!hasNum(cfg.settleGraceMin)) return [];
+    var grace = cnum(cfg.settleGraceMin, 5), setl = {}, g = {};
+    var open = mins(cfg.openFrom);
+    population.forEach(function (it) {
+      if (it.receiptType !== 2) return;
+      // oppgjør før åpningstid (f.eks. 00:05) er forrige dags avslutning, ikke starten på denne dagen
+      if (open !== null && timeOf(it) !== null && timeOf(it) < open) return;
+      groupInto(setl, it.storeNumber + '|' + it.workstationNumber + '|' + dayOf(it), it);
+    });
+    items.forEach(function (it) {
+      if (!isSale(it)) return;
+      var k = it.storeNumber + '|' + it.workstationNumber + '|' + dayOf(it), arr = setl[k];
+      if (!arr) return;
+      var m = timeOf(it), prev = null, later = false;
+      arr.forEach(function (x) {
+        var xm = timeOf(x);
+        if (xm <= m) { if (!prev || xm > timeOf(prev)) prev = x; } else later = true;
+      });
+      if (!prev || later || m - timeOf(prev) <= grace) return;
+      groupInto(g, k, { it: it, prev: prev });
+    });
+    return Object.keys(g).map(function (k) {
+      var arr = g[k], p = k.split('|'), prev = arr[0].prev;
+      var sum = round2(arr.reduce(function (a, x) { return a + x.it.totalAmount; }, 0));
+      var who = {};
+      arr.forEach(function (x) { who[x.it.cashierNumber] = true; });
+      return { kind: 'Kassaoppgjør', code: 'afterSettle', title: 'Salg etter kassaoppgjør', flag: true,
+        detail: 'Kasse ' + p[1] + ' ' + p[2] + ': ' + arr.length + ' salg (' + sum + ' kr) etter kassaoppgjør kl ' + parseDT(prev.endDateTime).time + ' (oppgjør av kasserer ' + prev.cashierNumber + '; salg av ' + Object.keys(who).join(', ') + ')',
+        ids: arr.map(function (x) { return x.it.transactionId; }) };
+    });
+  }
+
+  // Slettede bonger: hull i bongnummer, bongnummer og tid som ikke stemmer, og dobbelt bongnummer.
+  function deletedReceipts(population, cfg) {
+    var findings = [], skipped = 0, byK = {};
+    var maxGap = cnum(cfg.maxGap, null);
+    population.forEach(function (it) {
+      var n = seqNum(it.transactionId);
+      if (n !== null) groupInto(byK, it.storeNumber + '|' + it.workstationNumber, { n: n, it: it });
+    });
+    Object.keys(byK).forEach(function (k) {
+      var kasse = k.split('|')[1];
+      var arr = byK[k].sort(function (a, b) { return a.n - b.n || (a.it.endDateTime < b.it.endDateTime ? -1 : 1); });
+      var seen = {}, uniq = [];
+      arr.forEach(function (x) {
+        if (seen[x.n]) {
+          if (seen[x.n].it.transactionId !== x.it.transactionId) {
+            findings.push({ kind: 'Slettede bonger', code: 'dupSeq', title: 'Dobbelt bongnummer', flag: true,
+              detail: 'Kasse ' + kasse + ': bongnummer ' + x.n + ' finnes to ganger (' + parseDT(seen[x.n].it.endDateTime).time + ' og ' + parseDT(x.it.endDateTime).time + ')',
+              ids: [seen[x.n].it.transactionId, x.it.transactionId] });
+          }
+          return;
+        }
+        seen[x.n] = x;
+        uniq.push(x);
+      });
+      for (var i = 1; i < uniq.length; i++) {
+        var a = uniq[i - 1], b = uniq[i], gap = b.n - a.n - 1;
+        if (b.it.endDateTime < a.it.endDateTime) {
+          findings.push({ kind: 'Slettede bonger', code: 'timeInversion', title: 'Bongnummer og tid stemmer ikke', flag: true,
+            detail: 'Kasse ' + kasse + ': nr ' + b.n + ' kl ' + parseDT(b.it.endDateTime).time + ' kommer etter nr ' + a.n + ' kl ' + parseDT(a.it.endDateTime).time,
+            ids: [a.it.transactionId, b.it.transactionId] });
+        }
+        if (maxGap === null || gap <= 0) continue;
+        if (gap > maxGap) { skipped++; continue; }
+        findings.push({ kind: 'Slettede bonger', code: 'gap', title: 'Hull i bongnummer', flag: true,
+          detail: 'Kasse ' + kasse + ': mangler ' + (a.n + 1) + (gap > 1 ? '–' + (b.n - 1) : '') + ' (' + gap + ') mellom kl ' + parseDT(a.it.endDateTime).time + ' og ' + parseDT(b.it.endDateTime).time + ' ' + parseDT(b.it.endDateTime).date,
+          ids: [a.it.transactionId, b.it.transactionId], missing: gap });
+      }
+    });
+    return { findings: findings, skippedGaps: skipped };
+  }
+
+  // Kassadifferanse over tid per kasserer og kasse.
+  function diffTrend(items, scanMap, cfg) {
+    var min = cnum(cfg.diffMin, 1), repN = cnum(cfg.diffRepeatN, null), total = cnum(cfg.diffTotal, null);
+    var acc = {}, findings = [];
+    items.forEach(function (it) {
+      var sc = scanMap && scanMap[it.transactionId];
+      if (it.receiptType !== 2 || !sc || !sc.settle) return;
+      var d = sc.settle.diff.sum || 0;
+      [['kasserer', it.cashierNumber], ['kasse', it.workstationNumber]].forEach(function (g) {
+        var key = g[0] + '|' + g[1];
+        var e = acc[key] || (acc[key] = { kind: g[0], id: String(g[1]), n: 0, minus: 0, plus: 0, sumMinus: 0, sumPlus: 0, net: 0, days: {}, list: [], ids: [] });
+        e.n++; e.net += d;
+        if (d <= -min) { e.minus++; e.sumMinus += d; e.days[dayOf(it)] = true; e.ids.push(it.transactionId); }
+        if (d >= min) { e.plus++; e.sumPlus += d; }
+        e.list.push({ day: dayOf(it), diff: d });
+      });
+    });
+    var rows = Object.keys(acc).map(function (k) { return acc[k]; }).map(function (e) {
+      e.sumMinus = round2(e.sumMinus); e.sumPlus = round2(e.sumPlus); e.net = round2(e.net);
+      e.list.sort(function (a, b) { return a.day < b.day ? -1 : 1; });
+      e.flag = (repN !== null && e.minus >= repN && Object.keys(e.days).length >= 2) || (total !== null && e.sumMinus <= -total);
+      if (e.flag) {
+        findings.push({ kind: 'Kassadifferanse', code: 'diffRepeat', title: 'Gjentatte kassadifferanser', flag: true,
+          detail: (e.kind === 'kasserer' ? 'Kasserer ' : 'Kasse ') + e.id + ': ' + e.minus + ' av ' + e.n + ' oppgjør med minus, totalt ' + e.sumMinus + ' kr',
+          ids: e.ids.slice(), cashier: e.kind === 'kasserer' ? e.id : null });
+      }
+      return e;
+    }).sort(function (a, b) { return a.kind < b.kind ? -1 : a.kind > b.kind ? 1 : a.sumMinus - b.sumMinus || numCmp(a.id, b.id); });
+    return { rows: rows, findings: findings };
+  }
+
+  // Benford (første siffer) og runde beløp.
+  function firstDigit(x) {
+    var t = Math.abs(x).toFixed(2).replace('.', '').replace(/^0+/, '');
+    return t ? Number(t.charAt(0)) : 0;
+  }
+
+  function benfordStats(amounts) {
+    var counts = [0, 0, 0, 0, 0, 0, 0, 0, 0], n = 0;
+    amounts.forEach(function (x) { var d = firstDigit(x); if (d >= 1) { counts[d - 1]++; n++; } });
+    var expected = counts.map(function (_, i) { return Math.log10(1 + 1 / (i + 1)); });
+    var actual = counts.map(function (c) { return n ? c / n : 0; });
+    var mad = n ? actual.reduce(function (a, v, i) { return a + Math.abs(v - expected[i]); }, 0) / 9 : 0;
+    var verdict = mad <= 0.006 ? 'nær Benford' : mad <= 0.012 ? 'akseptabel' : mad <= 0.015 ? 'marginal' : 'avviker';
+    return { n: n, counts: counts, actual: actual, expected: expected, mad: mad, verdict: verdict };
+  }
+
+  function numbers(items, scanMap, cfg) {
+    var minAll = cnum(cfg.benfordMin, 100), minCash = cnum(cfg.benfordCashMin, 50), madLimit = cnum(cfg.benfordMad, 0.015);
+    var rShare = cnum(cfg.roundShare, null), rMin = cnum(cfg.roundMinN, 20);
+    var sales = items.filter(function (it) { return isSale(it) && it.totalAmount > 0; });
+    var overall = benfordStats(sales.map(function (it) { return it.totalAmount; }));
+    overall.enough = overall.n >= minAll;
+    var by = {};
+    sales.forEach(function (it) { groupInto(by, String(it.cashierNumber), it); });
+    var round = function (arr) { return arr.length ? arr.filter(function (it) { return Math.round(it.totalAmount * 100) % 100 === 0; }).length / arr.length : 0; };
+    var storeRound = round(sales), findings = [];
+    var cashiers = Object.keys(by).sort(numCmp).map(function (id) {
+      var arr = by[id], b = benfordStats(arr.map(function (it) { return it.totalAmount; }));
+      var row = { id: id, n: arr.length, mad: b.mad, verdict: b.verdict, roundShare: round(arr), flagBenford: false, flagRound: false };
+      if (b.n >= minCash && b.mad > madLimit) {
+        row.flagBenford = true;
+        findings.push({ kind: 'Tallanalyse', code: 'benford', title: 'Avvikende sifferfordeling', flag: false, cashier: id, ids: [],
+          detail: 'Kasserer ' + id + ': første siffer i totalbeløp avviker fra Benford (MAD ' + b.mad.toFixed(3) + ', ' + b.n + ' bonger)' });
+      }
+      if (rShare !== null && arr.length >= rMin && row.roundShare * 100 >= rShare && row.roundShare >= 2 * storeRound) {
+        row.flagRound = true;
+        findings.push({ kind: 'Tallanalyse', code: 'round', title: 'Mange runde beløp', flag: false, cashier: id, ids: [],
+          detail: 'Kasserer ' + id + ': ' + Math.round(row.roundShare * 100) + ' % av totalene er hele kroner (butikk ' + Math.round(storeRound * 100) + ' %, ' + arr.length + ' bonger)' });
+      }
+      return row;
+    });
+    return { overall: overall, cashiers: cashiers, storeRound: storeRound, findings: findings };
+  }
+
+  // Periode mot periode.
+  function periodStats(items, scanMap, anomMap, weights) {
+    var s = { count: 0, sum: 0, ret: 0, pos: 0, posSum: 0, scanned: 0, lapper: 0, score: 0, anom: 0 };
+    items.forEach(function (it) {
+      var r = anomMap && anomMap[it.transactionId];
+      if (r && r.length) { s.anom++; s.score += riskScore(r, weights); }
+      if (!isSale(it)) return;
+      s.count++; s.sum += it.totalAmount;
+      if (it.totalAmount < 0) s.ret++;
+      if (it.totalAmount > 0) { s.pos++; s.posSum += it.totalAmount; }
+      var sc = scanMap && scanMap[it.transactionId];
+      if (sc) { s.scanned++; s.lapper += sc.retLines || 0; }
+    });
+    return { count: s.count, sum: round2(s.sum), retShare: s.count ? s.ret / s.count : 0, avg: s.pos ? round2(s.posSum / s.pos) : 0,
+      lapperPer: s.scanned ? s.lapper / s.scanned : 0, score: round2(s.score), anom: s.anom };
+  }
+
+  function comparePeriods(itemsA, itemsB, scanMap, anomMap, weights, cfg) {
+    var factor = cnum(cfg.profFactor, 1.5), minN = cnum(cfg.profMin, 5);
+    var ids = {};
+    itemsA.concat(itemsB).forEach(function (it) { ids[it.cashierNumber] = true; });
+    var rows = Object.keys(ids).sort(numCmp).map(function (id) {
+      var a = periodStats(itemsA.filter(function (it) { return String(it.cashierNumber) === id; }), scanMap, anomMap, weights);
+      var b = periodStats(itemsB.filter(function (it) { return String(it.cashierNumber) === id; }), scanMap, anomMap, weights);
+      var dRet = b.retShare - a.retShare, dScore = b.score - a.score;
+      var enough = a.count >= minN && b.count >= minN;
+      var flags = [];
+      if (enough && dRet >= 0.1) flags.push('returandel +' + Math.round(dRet * 100) + ' poeng');
+      if (enough && a.avg > 0 && (b.avg >= a.avg * factor || (b.avg > 0 && b.avg <= a.avg / factor))) flags.push('snittbeløp ' + (b.avg > a.avg ? 'opp' : 'ned'));
+      if (dScore >= 5) flags.push('risikoscore +' + round2(dScore));
+      return { id: id, A: a, B: b, dRet: dRet, dScore: round2(dScore), flags: flags, flagged: flags.length > 0 };
+    });
+    return { total: { A: periodStats(itemsA, scanMap, anomMap, weights), B: periodStats(itemsB, scanMap, anomMap, weights) }, rows: rows };
+  }
+
   function relativeRange(name, now) {
     var d = now || new Date(), day = 864e5, a = d, b = d;
     if (name === 'yesterday') { a = b = new Date(d.getTime() - day); }
     else if (name === 'last7') { a = new Date(d.getTime() - 7 * day); b = new Date(d.getTime() - day); }
+    else if (name === 'thismonth') { a = new Date(d.getFullYear(), d.getMonth(), 1); b = d; }
+    else if (name === 'lastmonth') { a = new Date(d.getFullYear(), d.getMonth() - 1, 1); b = new Date(d.getFullYear(), d.getMonth(), 0); }
     else if (name === 'lastweek') {
       var dow = (d.getDay() + 6) % 7;
       var monThis = new Date(d.getTime() - dow * day);
@@ -1011,6 +1284,15 @@
     sequence: sequence,
     reconcile: reconcile,
     relativeRange: relativeRange,
+    falseReturns: falseReturns,
+    afterSettlement: afterSettlement,
+    deletedReceipts: deletedReceipts,
+    diffTrend: diffTrend,
+    benfordStats: benfordStats,
+    firstDigit: firstDigit,
+    numbers: numbers,
+    comparePeriods: comparePeriods,
+    periodStats: periodStats,
     RISK_WEIGHTS: RISK_WEIGHTS,
     sanitizeWeights: sanitizeWeights,
     reasonBase: reasonBase,

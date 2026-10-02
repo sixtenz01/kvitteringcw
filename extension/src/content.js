@@ -7,7 +7,7 @@
   var K = {
     saved: 'kvr.saved.v1', collapsed: 'kvr.collapsed.v1', scan: 'kvr.scan.v2', pos: 'kvr.pos.v1',
     size: 'kvr.size.v1', sec: 'kvr.sec.v1', rules: 'kvr.rules.v1', anom: 'kvr.anom.v1',
-    stores: 'kvr.stores.v1', fast: 'kvr.fast.v1', tab: 'kvr.tab.v1', layout: 'kvr.layout.v1', arules: 'kvr.arules.v1', notes: 'kvr.notes.v1', tasks: 'kvr.tasks.v1', ctl: 'kvr.ctl.v1', keynav: 'kvr.keynav.v1', wide: 'kvr.wide.v1', sub: 'kvr.sub.v1', weights: 'kvr.weights.v1', lastrun: 'kvr.lastrun.v1'
+    stores: 'kvr.stores.v1', fast: 'kvr.fast.v1', tab: 'kvr.tab.v1', layout: 'kvr.layout.v1', arules: 'kvr.arules.v1', notes: 'kvr.notes.v1', tasks: 'kvr.tasks.v1', ctl: 'kvr.ctl.v1', keynav: 'kvr.keynav.v1', wide: 'kvr.wide.v1', sub: 'kvr.sub.v1', weights: 'kvr.weights.v1', lastrun: 'kvr.lastrun.v1', scope: 'kvr.scope.v1'
   };
   var sayTimer = null;
   var failedRecs = [];
@@ -37,6 +37,7 @@
   var dirty = {};
   var db = null;
   var rules, anomCfg, manualStores, fastScan, customRules = [];
+  var scope = null, lastMode = 'scope', fetched = null;
   var weights = null, checkState = { newIds: {}, at: null, shown: 15, showChecked: false }, expanded = {};
   var notes = {}, ctlRes = null, ctlCfg = null, tasksCustom = [], boundCount = 0, keyNav = true;
 
@@ -328,9 +329,7 @@
     return { done: done, failed: failed };
   }
 
-  function todoVisible() {
-    return recs.filter(function (r) { return r.base && (r.item.receiptType === 1 || r.item.receiptType === 2) && !scanMap[r.item.transactionId]; });
-  }
+  function todoVisible() { return todoFor(recs.filter(function (r) { return r.base; })); }
 
   function etaText(sec) {
     if (!(sec > 0)) return '';
@@ -381,13 +380,125 @@
     apply();
   }
 
-  async function runAnom() {
+  // ---- omfang for analysen: periode, butikk, kasserer, kasse og periode mot periode ------------
+  function defaultScope() {
+    return { dateFrom: '', dateTo: '', stores: [], cashiers: [], workstations: [], useFilters: false, compare: { on: false, from: '', to: '' } };
+  }
+
+  function sanitizeScope(raw) {
+    var d = defaultScope();
+    if (!raw || typeof raw !== 'object') return d;
+    ['dateFrom', 'dateTo'].forEach(function (k) { if (typeof raw[k] === 'string') d[k] = raw[k]; });
+    ['stores', 'cashiers', 'workstations'].forEach(function (k) { if (Array.isArray(raw[k])) d[k] = raw[k].map(String); });
+    d.useFilters = !!raw.useFilters;
+    if (raw.compare && typeof raw.compare === 'object') {
+      d.compare.on = !!raw.compare.on;
+      ['from', 'to'].forEach(function (k) { if (typeof raw.compare[k] === 'string') d.compare[k] = raw.compare[k]; });
+    }
+    return d;
+  }
+
+  function inRange(it, from, to) {
+    var d = L.parseDT(it.endDateTime).date;
+    return !!d && (!from || d >= from) && (!to || d <= to);
+  }
+
+  function storeOK(it) { return !scope.stores.length || scope.stores.indexOf(String(it.storeNumber)) !== -1; }
+
+  function periodOK(it) {
+    var a = inRange(it, scope.dateFrom, scope.dateTo);
+    return scope.compare.on ? a || inRange(it, scope.compare.from, scope.compare.to) : a;
+  }
+
+  function scopeMatches(it) {
+    return storeOK(it) && periodOK(it) &&
+      (!scope.cashiers.length || scope.cashiers.indexOf(String(it.cashierNumber)) !== -1) &&
+      (!scope.workstations.length || scope.workstations.indexOf(String(it.workstationNumber)) !== -1);
+  }
+
+  function analysisRecs(mode) {
+    if (mode === 'visible') return recs.filter(function (r) { return r.show; });
+    return recs.filter(function (r) { return scopeMatches(r.item) && (!scope.useFilters || r.show); });
+  }
+
+  function analysisItems(mode) { return analysisRecs(mode).map(function (r) { return r.item; }); }
+
+  function todoFor(list) {
+    return list.filter(function (r) { return (r.item.receiptType === 1 || r.item.receiptType === 2) && !scanMap[r.item.transactionId]; });
+  }
+
+  function loadedRange() {
+    var min = '', max = '';
+    recs.forEach(function (r) {
+      var d = L.parseDT(r.item.endDateTime).date;
+      if (!d) return;
+      if (!min || d < min) min = d;
+      if (!max || d > max) max = d;
+    });
+    return { min: min, max: max };
+  }
+
+  function todayStr() {
+    var d = new Date();
+    return d.getFullYear() + '-' + two(d.getMonth() + 1) + '-' + two(d.getDate());
+  }
+
+  function neededRange() {
+    var froms = [scope.dateFrom], tos = [scope.dateTo];
+    if (scope.compare.on) { froms.push(scope.compare.from); tos.push(scope.compare.to); }
+    var f = froms.filter(Boolean).sort()[0], t = tos.filter(Boolean).sort().slice(-1)[0];
+    if (!f && !t) return null;
+    return { from: f || t, to: t || todayStr() };
+  }
+
+  function scopeCoverage() {
+    var need = neededRange(), have = loadedRange(), miss = [];
+    if (fetched && fetched.count === boundCount) {
+      if (!have.min || fetched.from < have.min) have.min = fetched.from;
+      if (!have.max || fetched.to > have.max) have.max = fetched.to;
+    }
+    if (need) {
+      if (!have.min || need.from < have.min) miss.push('fra ' + need.from);
+      if (!have.max || need.to > have.max) miss.push('til ' + need.to);
+    }
+    var haveStores = {};
+    recs.forEach(function (r) { haveStores[String(r.item.storeNumber)] = true; });
+    var missStores = scope.stores.filter(function (st) { return !haveStores[st] && !(fetched && fetched.count === boundCount && fetched.stores.indexOf(st) !== -1); });
+    if (missStores.length) miss.push(missStores.length + (missStores.length > 1 ? ' butikker' : ' butikk'));
+    return { missing: miss.length > 0, text: miss.join(', '), need: need };
+  }
+
+  async function fetchScopeData() {
+    var need = neededRange();
+    if (!need && !scope.stores.length) return;
+    var r = need || { from: loadedRange().min || todayStr(), to: loadedRange().max || todayStr() };
+    cw.dateFrom = r.from; cw.dateTo = r.to;
+    ui.cwFrom.value = r.from; ui.cwTo.value = r.to;
+    cw.members = cw.loyal = cw.free = cw.bong = '';
+    [ui.cwMem, ui.cwLoy, ui.cwFree, ui.cwBong].forEach(function (n) { if (n) n.value = ''; });
+    if (scope.stores.length) {
+      cw.stores = {};
+      scope.stores.forEach(function (st) { cw.stores[st] = true; });
+      renderCwStores();
+      ui.cwCount.textContent = scope.stores.length + ' butikker valgt';
+    }
+    var before = boundCount;
+    say('Henter ' + r.from + ' – ' + r.to + ' fra CW…');
+    cwSearch();
+    await waitFor(function () { return boundCount > before; }, 30000);
+    await wait(400);
+    fetched = { from: r.from, to: r.to, stores: scope.stores.slice(), count: boundCount };
+    apply();
+  }
+
+  async function runAnom(mode) {
+    mode = mode === 'visible' ? 'visible' : 'scope';
     if (scanning) return;
-    await scanList(todoVisible());
+    var list = analysisRecs(mode);
+    await scanList(todoFor(list));
     anomMap = {};
     var n = 0;
-    recs.forEach(function (r) {
-      if (!r.show) return;
+    list.forEach(function (r) {
       var reasons = L.anomalies(r.item, scanMap[r.item.transactionId], anomCfg, customRules, groupsOf(r.item.transactionId));
       if (reasons.length) { anomMap[r.item.transactionId] = reasons; n++; }
     });
@@ -467,8 +578,9 @@
     return Object.keys(seen).sort(function (a, b) { return a - b || (a < b ? -1 : 1); });
   }
 
-  function pills() {
+  function pills(cb) {
     var b = el('div', { class: 'kvr-pills', role: 'group' });
+    b.cb = cb;
     b.isPills = true;
     b.sel = {};
     return b;
@@ -486,15 +598,16 @@
         box.sel[key] = !box.sel[key];
         b.classList.toggle('kvr-on', box.sel[key]);
         b.setAttribute('aria-pressed', String(box.sel[key]));
-        onChange();
+        (box.cb || onChange)();
       });
       box.appendChild(b);
     });
     if (!values.length) box.appendChild(el('span', { class: 'kvr-hint', text: 'Ingen verdier i listen.' }));
   }
 
-  function storeBox() {
+  function storeBox(cb) {
     var box = el('div', { class: 'kvr-storebox' });
+    box.cb = cb;
     box.isChecklist = true; box.sel = {}; box.values = []; box.counts = {}; box.query = '';
     box.search = el('input', { type: 'text', placeholder: 'søk butikk (navn eller nr)' });
     box.search.addEventListener('input', function () { box.query = box.search.value; renderStoreBox(box); });
@@ -504,10 +617,18 @@
     box.appendChild(box.list);
     box.appendChild(el('div', { class: 'kvr-row kvr-boxacts' }, [
       box.info,
-      el('button', { type: 'button', class: 'kvr-link', text: 'Velg viste', onclick: function () { shownStores(box).forEach(function (v) { box.sel[String(v)] = true; }); renderStoreBox(box); onChange(); } }),
-      el('button', { type: 'button', class: 'kvr-link', text: 'Fjern butikkvalg', onclick: function () { Object.keys(box.sel).forEach(function (k) { box.sel[k] = false; }); renderStoreBox(box); onChange(); } })
+      el('button', { type: 'button', class: 'kvr-link', text: 'Velg viste', onclick: function () { shownStores(box).forEach(function (v) { box.sel[String(v)] = true; }); renderStoreBox(box); (box.cb || onChange)(); } }),
+      el('button', { type: 'button', class: 'kvr-link', text: 'Fjern butikkvalg', onclick: function () { Object.keys(box.sel).forEach(function (k) { box.sel[k] = false; }); renderStoreBox(box); (box.cb || onChange)(); } })
     ]));
     return box;
+  }
+
+  function setStoreBox(box, values, counts, chosen) {
+    box.values = values;
+    box.counts = counts;
+    box.sel = {};
+    values.forEach(function (v) { box.sel[String(v)] = chosen.indexOf(String(v)) !== -1; });
+    renderStoreBox(box);
   }
 
   function shownStores(box) {
@@ -523,7 +644,7 @@
     shown.forEach(function (v) {
       var key = String(v), cb = el('input', { type: 'checkbox', value: key });
       cb.checked = !!box.sel[key];
-      cb.addEventListener('change', function () { box.sel[key] = cb.checked; renderStoreInfo(box); onChange(); });
+      cb.addEventListener('change', function () { box.sel[key] = cb.checked; renderStoreInfo(box); (box.cb || onChange)(); });
       box.list.appendChild(el('label', { class: 'kvr-chk' }, [cb, el('span', { text: sLabel(v) }), el('em', { class: 'kvr-cnt', text: String(box.counts[key] || 0) })]));
     });
     renderStoreInfo(box);
@@ -543,16 +664,20 @@
   }
 
   function refreshOptions() {
-    var key = [distinct('storeNumber'), distinct('workstationNumber'), distinct('cashierNumber'), distinct('receiptType'), JSON.stringify(storeMap), groupNames(), recs.length].join('|');
+    var key = [distinct('storeNumber'), distinct('workstationNumber'), distinct('cashierNumber'), distinct('receiptType'), JSON.stringify(storeMap), groupNames(), recs.length, cwStoreList.length].join('|');
     if (key === optsKey) return;
     optsKey = key;
     var storeVals = distinct('storeNumber'), sc = {};
     recs.forEach(function (r) { sc[r.item.storeNumber] = (sc[r.item.storeNumber] || 0) + 1; });
-    ui.stores.values = storeVals;
-    ui.stores.counts = sc;
-    ui.stores.sel = {};
-    storeVals.forEach(function (v) { ui.stores.sel[String(v)] = filters.stores.indexOf(String(v)) !== -1; });
-    renderStoreBox(ui.stores);
+    setStoreBox(ui.stores, storeVals, sc, filters.stores);
+    if (ui.scStores) {
+      var union = {};
+      storeVals.forEach(function (v) { union[String(v)] = true; });
+      cwStoreList.forEach(function (st) { union[String(st.number)] = true; });
+      setStoreBox(ui.scStores, Object.keys(union).sort(function (a, b) { return a - b; }), sc, scope.stores);
+      fillSelect(ui.scCashiers, distinct('cashierNumber'), null, scope.cashiers);
+      fillSelect(ui.scKasser, distinct('workstationNumber'), null, scope.workstations);
+    }
     fillSelect(ui.workstations, distinct('workstationNumber'), null, filters.workstations);
     fillSelect(ui.cashiers, distinct('cashierNumber'), null, filters.cashiers);
     fillSelect(ui.types, distinct('receiptType'), function (v) { return v + ' – ' + L.typeLabel(v); }, filters.types);
@@ -1121,31 +1246,74 @@
 
   function hintEl(t) { return el('div', { class: 'kvr-hint', text: t }); }
 
-  async function runChecks() {
+  async function runChecks(mode) {
+    mode = mode === 'visible' ? 'visible' : 'scope';
     if (scanning || !grid) return;
-    await runAnom();
-    var items = visibleItems();
+    lastMode = mode;
+    await runAnom(mode);
+    var items = analysisItems(mode);
+    var scopeIds = {}, scopeCash = {};
+    items.forEach(function (i) { scopeIds[i.transactionId] = true; scopeCash[String(i.cashierNumber)] = true; });
+    // grunnlag for tester som trenger hele bildet: alle innlastede bonger i valgte butikker
+    var pop = mode === 'visible' ? items : recs.filter(function (r) { return storeOK(r.item); }).map(function (r) { return r.item; });
+    var keep = function (f) { return f.ids.length ? f.ids.some(function (id) { return scopeIds[id]; }) : (f.cashier ? !!scopeCash[f.cashier] : true); };
     var res = {
-      at: new Date(), n: items.length,
+      at: new Date(), n: items.length, mode: mode,
       profile: L.profiles(items, scanMap, ctlCfg),
       patterns: L.patterns(items, scanMap, ctlCfg),
       pant: L.pantCheck(items, scanMap, ctlCfg),
       seq: L.sequence(items, ctlCfg),
-      recon: L.reconcile(items, scanMap, ctlCfg)
+      recon: L.reconcile(items, scanMap, ctlCfg),
+      falseRet: L.falseReturns(items, pop, scanMap, ctlCfg),
+      after: L.afterSettlement(items, pop, ctlCfg),
+      deleted: L.deletedReceipts(pop, ctlCfg),
+      diff: L.diffTrend(items, scanMap, ctlCfg),
+      numbers: L.numbers(items, scanMap, ctlCfg)
     };
-    res.findings = res.patterns.concat(res.pant.findings, res.seq.findings);
-    res.findings.forEach(function (f) { if (f.flag) f.ids.forEach(function (id) { addFlag(id, f.title); }); });
+    res.seq.findings = res.seq.findings.filter(function (f) { return f.code === 'hours'; });
+    res.seq.skippedGaps = res.deleted.skippedGaps;
+    res.findings = res.patterns.concat(res.pant.findings, res.seq.findings, res.falseRet.findings, res.after,
+      res.deleted.findings.filter(keep), res.diff.findings.filter(keep), res.numbers.findings.filter(keep));
+    res.cashierExtra = {};
+    res.findings.forEach(function (f) {
+      if (f.flag) f.ids.forEach(function (id) { if (scopeIds[id]) addFlag(id, f.title); });
+      else if (f.cashier) {
+        var e = res.cashierExtra[f.cashier] || (res.cashierExtra[f.cashier] = { points: 0, notes: [] });
+        e.points += L.reasonWeight(f.title, weights);
+        e.notes.push(f.title.toLowerCase());
+      }
+    });
     ctlRes = res;
     apply();
     renderControl();
     say('Kontroller ferdig: ' + res.findings.length + ' funn, ' + Object.keys(anomMap).length + ' flaggede kvitteringer.');
   }
 
+  function renderAuditCards(R) {
+    var D = R.diff;
+    if (!D || !D.rows.length) ui.ctlDiff.appendChild(hintEl('Ingen skannede kassaoppgjør i omfanget. Skann og kjør analysen på nytt.'));
+    else {
+      ui.ctlDiff.appendChild(tbl(['Enhet', 'Oppgjør', 'Minus', 'Pluss', 'Sum minus', 'Netto', 'Siste differanser'], D.rows.map(function (e) {
+        return [{ node: entLink(e.kind, e.id) }, e.n, { t: e.minus, bad: e.flag }, e.plus, { t: fmt(e.sumMinus), bad: e.flag }, fmt(e.net),
+          e.list.slice(-5).map(function (x) { return (x.diff > 0 ? '+' : '') + String(x.diff).replace('.', ','); }).join(' · ')];
+      })));
+      ui.ctlDiff.appendChild(hintEl('Rødt = minst ' + ctlCfg.diffRepeatN + ' oppgjør med minus fordelt på flere dager, eller minus totalt over ' + ctlCfg.diffTotal + ' kr. Differanser under ' + ctlCfg.diffMin + ' kr telles ikke.'));
+    }
+    var N = R.numbers, o = N.overall;
+    ui.ctlNum.appendChild(hintEl('Benford (første siffer i totalbeløp): ' + o.n + ' bonger · MAD ' + o.mad.toFixed(3) + ' · ' + o.verdict + (o.enough ? '' : ' (for få bonger til en sikker konklusjon; minst ' + ctlCfg.benfordMin + ')') + '. Hele kroner: ' + Math.round(N.storeRound * 100) + ' % av totalene.'));
+    if (N.cashiers.length) {
+      ui.ctlNum.appendChild(tbl(['Kasserer', 'Bonger', 'MAD', 'Vurdering', 'Hele kroner'], N.cashiers.map(function (c) {
+        return [{ node: entLink('kasserer', c.id) }, c.n, { t: c.mad.toFixed(3), bad: c.flagBenford }, c.verdict, { t: pct(c.roundShare), bad: c.flagRound }];
+      })));
+    }
+    ui.ctlNum.appendChild(hintEl('MAD under 0,006 er nær Benford, 0,006–0,012 akseptabel, 0,012–0,015 marginal, over 0,015 avvikende (Nigrini). Avvik er en indikasjon som må forklares, ikke et bevis. Kasserere med færre enn ' + ctlCfg.benfordCashMin + ' bonger vurderes ikke.'));
+  }
+
   function renderControl() {
     if (!ui.ctlProfile) return;
     var R = ctlRes;
-    ui.ctlInfo.textContent = R ? 'Sist kjørt ' + R.at.toLocaleTimeString('nb-NO') + ' på ' + R.n + ' synlige kvitteringer.' : 'Ikke kjørt ennå. Filtrer listen først, og trykk «Kjør alle kontroller».';
-    [ui.ctlProfile, ui.ctlFindings, ui.ctlPant, ui.ctlRecon].forEach(function (n) { n.innerHTML = ''; });
+    ui.ctlInfo.textContent = R ? 'Sist kjørt ' + R.at.toLocaleTimeString('nb-NO') + ' på ' + R.n + (R.mode === 'visible' ? ' synlige' : ' kvitteringer i omfanget') + '.' : 'Ikke kjørt ennå. Filtrer listen først, og trykk «Kjør alle kontroller».';
+    [ui.ctlProfile, ui.ctlFindings, ui.ctlPant, ui.ctlRecon, ui.ctlDiff, ui.ctlNum].forEach(function (n) { n.innerHTML = ''; });
     ui.ctlResults.style.display = R ? '' : 'none';
     ui.ctlSumCard.style.display = R ? '' : 'none';
     if (!R) return;
@@ -1170,6 +1338,7 @@
     R.findings.forEach(function (f) {
       var row = el('div', { class: 'kvr-li kvr-fl' + (f.flag ? '' : ' kvr-na') }, [el('div', { class: 'kvr-fl-t' }, [el('b', { text: f.kind + ': ' + f.title }), el('span', { text: f.detail })])]);
       var people = {}, desks = {};
+      if (f.cashier) people[f.cashier] = true;
       f.ids.forEach(function (id) { var rr = recById(id); if (rr) { people[rr.item.cashierNumber] = true; desks[rr.item.workstationNumber] = true; } });
       var ents = el('div', { class: 'kvr-ents' });
       Object.keys(people).slice(0, 3).forEach(function (k) { ents.appendChild(entLink('kasserer', k)); });
@@ -1202,6 +1371,7 @@
       })));
       ui.ctlRecon.appendChild(hintEl('Forventet = kontant − kontant tilbake fra skannede salg. Telt = telt kontant i kassaoppgjør samme dag og kasse. Diff = telt − forventet. * = ikke alle salg er skannet. Oppgjør etter midnatt eller samlet over flere dager gir falske avvik. Rapport-fanens «Diff» er oppgjørets egen differanse.'));
     }
+    renderAuditCards(R);
   }
 
   // ---- modal ------------------------------------------------------------------
@@ -1359,7 +1529,7 @@
 
   // ---- sammendrag (morgenkontroll) ---------------------------------------------------
   function summarySections() {
-    var items = visibleItems();
+    var items = analysisItems(lastMode);
     var sales = items.filter(function (i) { return i.receiptType === 1 && typeof i.totalAmount === 'number'; });
     var rets = sales.filter(function (i) { return i.totalAmount < 0; });
     var sum = function (a) { return a.reduce(function (x, i) { return x + i.totalAmount; }, 0); };
@@ -1430,6 +1600,11 @@
       await wait(300);
     }
     filters = t.filters ? L.sanitizeFilters(t.filters) : L.defaultFilters();
+    scope = defaultScope();
+    if (t.cwRel && t.cwRel !== 'none') { var rr = L.relativeRange(t.cwRel); scope.dateFrom = rr.dateFrom; scope.dateTo = rr.dateTo; }
+    scope.useFilters = !!t.filters;
+    store(K.scope, scope);
+    writeScope();
     writeForm(); apply();
     if (t.checks) await runAnalysis(); else if (t.scan) await scanVisible();
     ui.go(t.tab || 'check');
@@ -1657,8 +1832,9 @@
   async function runAnalysis() {
     if (scanning || !grid) return;
     var prev = store(K.lastrun);
-    await runChecks();
-    var ids = visibleItems().filter(function (i) { return anomMap[i.transactionId]; }).map(function (i) { return i.transactionId; });
+    if (scopeCoverage().missing) await fetchScopeData();
+    await runChecks('scope');
+    var ids = analysisItems('scope').filter(function (i) { return anomMap[i.transactionId]; }).map(function (i) { return i.transactionId; });
     var prevSet = {};
     if (prev && prev.ids) prev.ids.forEach(function (id) { prevSet[id] = true; });
     checkState.newIds = {};
@@ -1723,30 +1899,85 @@
     return card;
   }
 
+
+  function renderCompare(body, items) {
+    if (!scope.compare.on) return;
+    var okA = scope.dateFrom || scope.dateTo, okB = scope.compare.from || scope.compare.to;
+    if (!okA || !okB) { body.appendChild(section('chk-cmp', 'Periode A mot B', [hintEl('Sett datoer for både periode A og periode B under «Omfang for analysen».')])); return; }
+    var iA = items.filter(function (it) { return inRange(it, scope.dateFrom, scope.dateTo); });
+    var iB = items.filter(function (it) { return inRange(it, scope.compare.from, scope.compare.to); });
+    var c = L.comparePeriods(iA, iB, scanMap, anomMap, weights, ctlCfg);
+    var line = function (label, r, bold) {
+      return [label, r.A.count, r.B.count, pct(r.A.retShare) + ' → ' + pct(r.B.retShare), fmt(r.A.avg) + ' → ' + fmt(r.B.avg), r.A.score + ' → ' + r.B.score,
+        bold ? '' : { t: r.flags.join(', ') || '–', bad: r.flagged }];
+    };
+    var rows = [line('Alle', { A: c.total.A, B: c.total.B, flags: [], flagged: false }, true)];
+    c.rows.slice().sort(function (a, b) { return (b.flagged - a.flagged) || (b.dScore - a.dScore); }).forEach(function (r) {
+      rows.push(line({ node: entLink('kasserer', r.id) }, r, false));
+    });
+    var per = function (a, b) { return (a || '…') + ' → ' + (b || '…'); };
+    var kids = [hintEl('A: ' + per(scope.dateFrom, scope.dateTo) + ' · B: ' + per(scope.compare.from, scope.compare.to) + '. Rødt = endring som overstiger tersklene (returandel +10 poeng, snittbeløp ' + ctlCfg.profFactor + '× opp eller ned, eller risikoscore +5).'),
+      tbl(['Enhet', 'Salg A', 'Salg B', 'Returandel', 'Snitt kr', 'Risikoscore', 'Endring'], rows)];
+    if (iA.length && iB.some(function (it) { return inRange(it, scope.dateFrom, scope.dateTo); })) kids.push(hintEl('Periodene overlapper, så noen bonger teller i begge.'));
+    body.appendChild(section('chk-cmp', 'Periode A mot B', kids));
+  }
+
+  function scopeSummary() {
+    var p = [], per = function (a, b) { return (a || '…') + ' → ' + (b || '…'); };
+    if (scope.compare.on) p.push('A ' + per(scope.dateFrom, scope.dateTo) + ' mot B ' + per(scope.compare.from, scope.compare.to));
+    else if (scope.dateFrom || scope.dateTo) p.push(per(scope.dateFrom, scope.dateTo));
+    if (scope.stores.length) p.push(scope.stores.length === 1 ? sLabel(scope.stores[0]) : scope.stores.length + ' butikker');
+    if (scope.cashiers.length) p.push('kasserer ' + scope.cashiers.join(', '));
+    if (scope.workstations.length) p.push('kasse ' + scope.workstations.join(', '));
+    if (scope.useFilters) p.push('+ filtrene i listen');
+    return p.length ? p.join(' · ') : 'hele listen';
+  }
+
+  function renderScopeInfo() {
+    if (!ui.scopeInfo) return;
+    ui.scopeBrief.textContent = scopeSummary() + ' · ' + analysisRecs('scope').length + ' bonger';
+    ui.scopeInfo.textContent = 'Omfang: ' + scopeSummary() + ' → ' + analysisRecs('scope').length + ' av ' + recs.length + ' kvitteringer i listen.';
+    var cov = scopeCoverage();
+    ui.scopeWarn.style.display = cov.missing ? 'flex' : 'none';
+    ui.scopeWarnTxt.textContent = 'Omfanget går utenfor det som er hentet fra CW (' + cov.text + '). «Kjør analyse» henter det som mangler.';
+  }
+
+  function writeScope() {
+    ui.scFrom.value = scope.dateFrom; ui.scTo.value = scope.dateTo;
+    ui.scBFrom.value = scope.compare.from; ui.scBTo.value = scope.compare.to;
+    ui.scCompare.checked = scope.compare.on; ui.scUseFilters.checked = scope.useFilters;
+    ui.scB.style.display = scope.compare.on ? '' : 'none';
+    ui.scALabelFrom.textContent = scope.compare.on ? 'Periode A fra' : 'Periode fra';
+    ui.scALabelTo.textContent = scope.compare.on ? 'Periode A til' : 'Periode til';
+    optsKey = '';
+    refreshOptions();
+  }
+
   function renderCheck() {
     if (!ui.checkBody) return;
     var body = ui.checkBody;
     body.innerHTML = '';
-    var items = visibleItems();
+    renderScopeInfo();
+    var items = analysisItems(lastMode);
     var all = L.rankReceipts(items, anomMap, weights);
     var checked = all.filter(function (r) { return notes[r.id] && notes[r.id].status === 'sjekket'; }).length;
     var vis = all.filter(function (r) { return checkState.showChecked || !(notes[r.id] && notes[r.id].status === 'sjekket'); });
     var high = vis.filter(function (r) { return L.riskLevel(r.score) === 'høy'; }).length;
     var nNew = vis.filter(function (r) { return checkState.newIds[r.id]; }).length;
-    var base = recs.filter(function (r) { return r.base && (r.item.receiptType === 1 || r.item.receiptType === 2); });
+    var base = analysisRecs(lastMode).filter(function (r) { return r.item.receiptType === 1 || r.item.receiptType === 2; });
     var done = base.filter(function (r) { return scanMap[r.item.transactionId]; }).length;
 
     var top = [
-      hintEl('Analyserer ' + items.length + ' synlige kvitteringer · skannet ' + done + ' av ' + base.length + (checkState.at ? ' · sist kjørt ' + new Date(checkState.at).toLocaleTimeString('nb-NO') : '')),
-      btn('Kjør analyse (synlige)', runAnalysis, 'kvr-primary')
+      hintEl('Analyserer ' + items.length + ' kvitteringer i omfanget · skannet ' + done + ' av ' + base.length + (checkState.at ? ' · sist kjørt ' + new Date(checkState.at).toLocaleTimeString('nb-NO') : '')),
+      btn('Kjør analyse', runAnalysis, 'kvr-primary')
     ];
     if (vis.length) top.push(el('div', { class: 'kvr-ctlsum', text: vis.length + ' å sjekke · ' + high + ' høy risiko' + (nNew ? ' · ' + nNew + ' nye siden sist' : '') }));
     else if (checkState.at) top.push(el('div', { class: 'kvr-ctlsum', text: all.length ? 'Alt er sjekket.' : 'Ingen avvik funnet i dette utvalget.' }));
-    else top.push(hintEl('Analysen skanner det som mangler, kjører avvik og kontroller, og lager en prioritert liste. Filtrer listen først hvis du bare vil se på en dag, en kasse eller en kasserer.'));
+    else top.push(hintEl('Analysen skanner det som mangler, kjører avvik og kontroller, og lager en prioritert liste. Velg omfang (periode, butikk, kasserer, kasse eller periode mot periode) over.'));
     body.appendChild(section('chk-top', 'Analyse', top));
     if (!all.length) return;
 
-    var cash = L.rankCashiers(items, anomMap, weights, ctlRes ? ctlRes.profile : null).slice(0, 5);
+    var cash = L.rankCashiers(items, anomMap, weights, ctlRes ? ctlRes.profile : null, ctlRes ? ctlRes.cashierExtra : null).slice(0, 5);
     if (cash.length) {
       body.appendChild(section('chk-cash', 'Kasserere å se nærmere på', [el('div', { class: 'kvr-list' }, cash.map(function (c) {
         var row = el('div', { class: 'kvr-li kvr-fl' }, [el('div', { class: 'kvr-fl-t' }, [
@@ -1758,6 +1989,7 @@
       }))]));
     }
 
+    renderCompare(body, items);
     var listKids = [];
     vis.slice(0, checkState.shown).forEach(function (rk, i) { listKids.push(checkRow(rk, i === 0)); });
     if (vis.length > checkState.shown) listKids.push(btn('Vis flere (' + (vis.length - checkState.shown) + ')', function () { checkState.shown += 15; renderCheck(); }));
@@ -1970,6 +2202,19 @@
       body.appendChild(chartCard('ch-heat', 'Når skjer det? Kasse × time', 'Antall salg per kasse og klokketime. Mørkere = flere. Klikk en rute for å filtrere på kassen og timen.',
         el('div', {}, [grid2, el('div', { class: 'kvr-legend' }, [document.createTextNode('Færre '), el('span', { class: 'kvr-ramp' }, RAMP.map(function (c) { return el('i', { style: 'background:' + c }); })), document.createTextNode(' flere')])]),
         { heads: ['Kasse', 'Salg'], rows: heatT }));
+    }
+
+    // benford
+    var bn = L.numbers(scopedItems({}), scanMap, ctlCfg).overall;
+    if (bn.n > 0) {
+      var f1 = function (v) { return Math.round(v * 1000) / 10; };
+      var bdata = bn.expected.map(function (e, i) {
+        return { label: String(i + 1), a: f1(e), b: f1(bn.actual[i]),
+          tip: 'Første siffer ' + (i + 1) + ' · forventet ' + String(f1(e)).replace('.', ',') + ' % · faktisk ' + String(f1(bn.actual[i])).replace('.', ',') + ' % (' + bn.counts[i] + ' bonger)' };
+      });
+      body.appendChild(chartCard('ch-benford', 'Benford: første siffer i totalbeløp', 'Synlige salg (' + bn.n + ' bonger). MAD ' + bn.mad.toFixed(3) + ': ' + bn.verdict + (bn.n < (Number(ctlCfg.benfordMin) || 100) ? ' (for få bonger til en sikker konklusjon)' : '') + '. Avvik er en indikasjon som må forklares, ikke et bevis.',
+        el('div', {}, [legend([[CH.blue, 'Forventet (Benford)'], [CH.orange, 'Faktisk']]), pairChart({ W: W, data: bdata, aria: 'Søylediagram: forventet og faktisk fordeling av første siffer i prosent' })]),
+        { heads: ['Siffer', 'Forventet %', 'Faktisk %', 'Bonger'], rows: bdata.map(function (d, i) { return [d.label, String(d.a).replace('.', ','), String(d.b).replace('.', ','), bn.counts[i]]; }) }));
     }
 
     // pant per dag
@@ -2327,7 +2572,7 @@
     var cashNo = check('Kontant tilbake uten salg', function () { anomCfg.cashNoSale = cashNo.box.checked; store(K.anom, anomCfg); });
     cashNo.box.checked = anomCfg.cashNoSale;
     var oa = check('Kun avvik'); ui.onlyAnom = oa.box;
-    ui.anomBtn = btn('Kjør avviksjekk (synlige)', runAnom, 'kvr-primary');
+    ui.anomBtn = btn('Kjør avviksjekk (synlige)', function () { runAnom('visible'); }, 'kvr-primary');
     ui.anomList = el('div', { class: 'kvr-list' });
     var secAnom = section('anom', 'Avvik', [
       el('div', { class: 'kvr-hint', text: 'Kjøres kun når du trykker. Tom verdi = sjekken er av.' }),
@@ -2390,7 +2635,7 @@
     });
     var secChecks = section('checks', 'Kontroller', [
       hintEl('Kjører først avviksjekken per kvittering (Avvik-fanen), så kontroller på tvers av bonger. Funn legges i samme avviksliste. Tom verdi slår av en sjekk.'),
-      btn('Kjør alle kontroller (synlige)', runChecks, 'kvr-primary'),
+      btn('Kjør alle kontroller (synlige)', function () { runChecks('visible'); }, 'kvr-primary'),
       ui.ctlInfo,
       el('details', { class: 'kvr-sub' }, [el('summary', { text: 'Terskler og åpningstider' }), ctlGrid,
         btn('Tilbakestill terskler', function () { ctlCfg = L.defaultControl(); store(K.ctl, ctlCfg); window.alert('Terskler tilbakestilt. Åpne panelet på nytt for å se verdiene.'); })])
@@ -2400,16 +2645,19 @@
     var secFindings = section('findings', 'Mønstre og funn', [ui.ctlFindings]);
     var secPantBal = section('pantbal', 'Pantelapp-sjekk: balanse per dag', [ui.ctlPant]);
     var secRecon = section('recon', 'Dagsavstemming per kasse', [ui.ctlRecon]);
+    ui.ctlDiff = el('div', {}); ui.ctlNum = el('div', {});
+    var secDiff = section('diff', 'Kassadifferanse over tid', [ui.ctlDiff]);
+    var secNum = section('numbers', 'Tallanalyse: Benford og runde beløp', [ui.ctlNum]);
     ui.ctlSum = el('div', { class: 'kvr-ctlsum' });
     ui.ctlJump = el('div', { class: 'kvr-chips' });
-    [['profile', 'Profil'], ['findings', 'Funn'], ['pantbal', 'Pant'], ['recon', 'Avstemming']].forEach(function (j) {
+    [['profile', 'Profil'], ['findings', 'Funn'], ['pantbal', 'Pant'], ['recon', 'Avstemming'], ['diff', 'Differanse'], ['numbers', 'Tall']].forEach(function (j) {
       ui.ctlJump.appendChild(btn(j[1], function () {
         var n = document.querySelector('#kvr-panel [data-sec=' + j[0] + ']');
         if (n) n.scrollIntoView({ block: 'start', behavior: 'smooth' });
       }, 'kvr-chip'));
     });
     ui.ctlSumCard = section('ctlsum', 'Resultat', [ui.ctlSum, ui.ctlJump]);
-    ui.ctlResults = el('div', { class: 'kvr-pane' }, [secProfile, secFindings, secPantBal, secRecon]);
+    ui.ctlResults = el('div', { class: 'kvr-pane' }, [secProfile, secFindings, secPantBal, secRecon, secDiff, secNum]);
     ui.noteList = el('div', { class: 'kvr-list' });
     ui.noteCount = hintEl('');
     var kn = check('Tastaturflyt: ↑ ↓ bytter bong, N notat, M velg/fjern', function () { keyNav = kn.box.checked; store(K.keynav, keyNav); });
@@ -2488,6 +2736,46 @@
     ]);
 
     ui.focusBody = el('div', { class: 'kvr-pane' });
+
+    // --- Omfang for analysen
+    var scChange = function () { store(K.scope, scope); ui.scALabelFrom.textContent = scope.compare.on ? 'Periode A fra' : 'Periode fra'; ui.scALabelTo.textContent = scope.compare.on ? 'Periode A til' : 'Periode til'; renderCheck(); };
+    ui.scFrom = el('input', { type: 'date' }); ui.scTo = el('input', { type: 'date' });
+    ui.scBFrom = el('input', { type: 'date' }); ui.scBTo = el('input', { type: 'date' });
+    ui.scFrom.addEventListener('change', function () { scope.dateFrom = ui.scFrom.value; scChange(); });
+    ui.scTo.addEventListener('change', function () { scope.dateTo = ui.scTo.value; scChange(); });
+    ui.scBFrom.addEventListener('change', function () { scope.compare.from = ui.scBFrom.value; scChange(); });
+    ui.scBTo.addEventListener('change', function () { scope.compare.to = ui.scBTo.value; scChange(); });
+    ui.scStores = storeBox(function () { scope.stores = readSelect(ui.scStores); scChange(); });
+    ui.scCashiers = pills(function () { scope.cashiers = readSelect(ui.scCashiers); scChange(); });
+    ui.scKasser = pills(function () { scope.workstations = readSelect(ui.scKasser); scChange(); });
+    var scCmp = check('Sammenlign med en annen periode (A mot B)', function () { scope.compare.on = scCmp.box.checked; ui.scB.style.display = scope.compare.on ? '' : 'none'; scChange(); });
+    var scUf = check('Bruk også filtrene i listen', function () { scope.useFilters = scUf.box.checked; scChange(); });
+    ui.scCompare = scCmp.box; ui.scUseFilters = scUf.box;
+    ui.scALabelFrom = el('span', { text: 'Periode fra' }); ui.scALabelTo = el('span', { text: 'Periode til' });
+    ui.scB = el('div', { class: 'kvr-row', style: 'display:none' }, [
+      el('label', { class: 'kvr-f' }, [el('span', { text: 'Periode B fra' }), ui.scBFrom]), el('label', { class: 'kvr-f' }, [el('span', { text: 'Periode B til' }), ui.scBTo])]);
+    var scPresets = el('div', { class: 'kvr-chips' });
+    [['Hele listen', 'all'], ['I går', 'yesterday'], ['Siste 7 dager', 'last7'], ['Forrige uke', 'lastweek'], ['Denne måneden', 'thismonth'], ['Forrige måned', 'lastmonth']].forEach(function (q) {
+      scPresets.appendChild(btn(q[0], function () {
+        var r = q[1] === 'all' ? { dateFrom: '', dateTo: '' } : L.relativeRange(q[1]);
+        scope.dateFrom = r.dateFrom; scope.dateTo = r.dateTo;
+        ui.scFrom.value = r.dateFrom; ui.scTo.value = r.dateTo;
+        scChange();
+      }, 'kvr-chip'));
+    });
+    ui.scopeInfo = hintEl('');
+    ui.scopeWarnTxt = el('span', {});
+    ui.scopeWarn = el('div', { class: 'kvr-scanwarn', role: 'status', style: 'display:none' }, [ui.scopeWarnTxt, btn('Hent fra CW', fetchScopeData, 'kvr-sm')]);
+    ui.scopeBrief = el('span', { class: 'kvr-scope-brief' });
+    ui.scopeCard = el('details', { class: 'kvr-card kvr-scope', 'data-sec': 'scope', open: 'open' }, [el('summary', { class: 'kvr-scope-h' }, [el('b', { text: 'OMFANG FOR ANALYSEN' }), ui.scopeBrief]), el('div', { class: 'kvr-secbody' }, [
+      scPresets,
+      el('div', { class: 'kvr-row' }, [el('label', { class: 'kvr-f' }, [ui.scALabelFrom, ui.scFrom]), el('label', { class: 'kvr-f' }, [ui.scALabelTo, ui.scTo])]),
+      ui.scB,
+      scCmp.node,
+      pfield('Butikk (tom = alle)', ui.scStores), pfield('Kasserer (tom = alle)', ui.scCashiers), pfield('Kasse (tom = alle)', ui.scKasser),
+      scUf.node, ui.scopeInfo, ui.scopeWarn,
+      btn('Nullstill omfang', function () { scope = defaultScope(); store(K.scope, scope); writeScope(); renderCheck(); })
+    ])]);
     ui.checkBody = el('div', { class: 'kvr-pane' });
     ui.chartsBody = el('div', { class: 'kvr-pane' });
     var wBox = el('div', { class: 'kvr-grid2' });
@@ -2507,7 +2795,7 @@
       btn('Tilbakestill vekting', function () { weights = L.sanitizeWeights(null); store(K.weights, weights); renderCheck(); window.alert('Vektingen er tilbakestilt. Åpne panelet på nytt for å se verdiene.'); })
     ]);
     var subDefs = [
-      ['check', 'Sjekk først', [ui.checkBody]],
+      ['check', 'Sjekk først', [ui.scopeCard, ui.checkBody]],
       ['charts', 'Diagram', [ui.chartsBody]],
       ['report', 'Rapport', [secReport, secSettle]],
       ['focus', 'Fokus', [ui.focusBody]],
@@ -2597,6 +2885,7 @@
     panel.appendChild(ui.tip);
     showTab(ui.panes[store(K.tab)] ? store(K.tab) : 'filter');
     showSub(ui.subPanes[store(K.sub)] ? store(K.sub) : 'check');
+    writeScope();
 
     function setCollapsed(c) {
       panel.classList.toggle('kvr-collapsed', c);
@@ -2672,6 +2961,7 @@
     ctlCfg = L.sanitizeControl(store(K.ctl));
     keyNav = store(K.keynav) !== false;
     weights = L.sanitizeWeights(store(K.weights));
+    scope = sanitizeScope(store(K.scope));
     setInterval(attach, 1500);
     attach();
   });

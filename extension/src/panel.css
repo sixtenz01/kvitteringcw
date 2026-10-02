@@ -218,3 +218,11 @@ tr.kvr-follow>td.kvr-cb-cell::after{color:#e37400}
 #kvr-panel .kvr-boxacts .kvr-link{flex:0 0 auto}
 #kvr-panel .kvr-chk span{flex:1;min-width:0}
 #kvr-panel .kvr-cnt{font-style:normal;font-size:11px;color:var(--kv-muted);background:var(--kv-soft);border-radius:999px;padding:0 7px}
+
+#kvr-panel .kvr-scope>summary{cursor:pointer;list-style:none;display:flex;flex-direction:column;gap:2px;padding:0}
+#kvr-panel .kvr-scope>summary::-webkit-details-marker{display:none}
+#kvr-panel .kvr-scope>summary b{font-size:12px;font-weight:650;color:var(--kv-muted);letter-spacing:.03em}
+#kvr-panel .kvr-scope>summary b::before{content:"▸";display:inline-block;width:14px;transition:transform .12s}
+#kvr-panel .kvr-scope[open]>summary b::before{transform:rotate(90deg)}
+#kvr-panel .kvr-scope-brief{font-size:12px;color:var(--kv-fg);padding-left:14px}
+#kvr-panel .kvr-scope[open]>.kvr-secbody{margin-top:10px}

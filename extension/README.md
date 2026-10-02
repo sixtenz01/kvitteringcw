@@ -30,6 +30,20 @@ All lagring (innstillinger, lagrede filtre, regler, skannecache) ligger i en ege
 - **Kassaoppgjør (type 2):** skannes og leses ut: telt kontant/sjekk/kreditt/sum, differanse, pose-nr, sendt bank og valører. Rød markering ved differanse over terskelen (standard 1 kr), som også er en innebygd avviksregel.
 - **Egne avviksregler:** bygg regler med flere vilkår (OG) på sum, klokkeslett, kasse, kasserer, butikk, type, medlem, panteretur, pantsalg, antall pantelapper/varelinjer, kontant tilbake, kassadifferanse, vare, varegruppe og betalingsmåte. Regler som bruker innhold (*) krever skanning, og kjøres kun når du trykker «Kjør avviksjekk».
 
+## Revisjon: omfang og analyser
+
+**Omfang for analysen** (Analyse → Sjekk først) velger hva «Kjør analyse» ser på, uavhengig av filtrene i listen: periode (med hurtigvalg), butikk, kasserer, kasse, og alt dette kombinert. «Sammenlign med en annen periode» gir periode A mot B. Valget huskes. Går omfanget utenfor det som er hentet fra CW, vises en advarsel, og «Kjør analyse» henter det som mangler (setter datoer og butikker i CW, og tømmer medlems-, vare- og bongsøk). Tester som trenger hele bildet (hull i bongnummer, salg etter kassaoppgjør, falsk retur) bruker alle innlastede bonger i valgte butikker og viser bare funn som gjelder omfanget.
+
+Nye tester (vekter og terskler kan justeres under Detaljer):
+
+- **Falsk retur:** retur uten salg av varen i datagrunnlaget (krever at minst 80 % av salgene er skannet), kortkjøp refundert kontant, og salg og retur av samme beløp på samme kasse innen 60 minutter. Ren panteretur regnes ikke.
+- **Salg etter kassaoppgjør:** salg på en kasse etter dagens siste kassaoppgjør (frist 5 min). Oppgjør før åpningstid regnes som forrige dags avslutning.
+- **Slettede bonger:** hull i bongnummer per kasse, bongnummer og klokkeslett som ikke stemmer overens, og dobbelt bongnummer. Forutsetter at alle kvitteringstyper deler nummerserie per kasse.
+- **Kassadifferanse over tid:** per kasserer og kasse: minst 3 oppgjør med minus fordelt på flere dager, eller minus totalt over 100 kr.
+- **Benford og tallanalyse:** første siffer i totalbeløp mot Benford (MAD, Nigrinis grenser), og andel hele kroner per kasserer mot butikken. Diagram under Analyse → Diagram. Funn per kasserer (ikke per bong) teller i kassererrangeringen.
+
+Analysene er indikatorer som må forklares, ikke bevis.
+
 ## Kontroll-fanen
 
 - **Arbeidsoppgaver:** lagre filter + datovalg (i går, i dag, siste 7 dager, forrige uke) + skanning + kontroller + sammendrag som én knapp. «Morgenkontroll (i går)» er innebygd: henter gårsdagen fra CW, skanner, kjører alle kontroller og viser et sammendrag som kan kopieres som tekst. Lagrede filtre (Filter-fanen) setter bare filter.
@@ -83,6 +97,7 @@ Fem faner: **Hent** (søk i hele journalen via CW), **Filtrer** (butikk som søk
 ```
 node test/logic.test.js
 NODE_PATH=<global node_modules> node test/smoke.js   # Playwright, fiktivt grid
+NODE_PATH=<global node_modules> node test/audit.js   # revisjonstester og omfang, eget datasett
 ```
 
 ## Ikke verifisert mot ekte side

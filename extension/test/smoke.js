@@ -51,7 +51,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   const context = await browser.newContext({ acceptDownloads: true, locale: 'nb-NO' });
   const page = await context.newPage();
   const errors = [];
-  page.on('pageerror', e => errors.push(e.message));
+  page.on('pageerror', e => { errors.push(e.message); console.error('PAGEERROR', e.message); });
   page.on('dialog', d => d.accept('Bakeri'));
   const failIds = new Set();
   await page.route('https://chainweb.coop.no/**', async r => {
@@ -348,7 +348,10 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
 
   // Sjekk først: prioritert liste, forklaring og handlinger i raden
   await tab('Sjekk');
-  await page.click('[data-sec=chk-top] button:text-is("Kjør analyse (synlige)")');
+  assert.match(await page.innerText('[data-sec=scope]'), /Omfang: (?!hele listen).*→ \d+ av 5 kvitteringer/s, 'morgenkontrollen satte omfanget til i går');
+  await page.click('[data-sec=scope] button:text-is("Nullstill omfang")');
+  assert.match(await page.innerText('[data-sec=scope]'), /Omfang: hele listen → 5 av 5 kvitteringer/);
+  await page.click('[data-sec=chk-top] button:text-is("Kjør analyse")');
   await page.waitForSelector('[data-sec=chk-list] .kvr-ck', { timeout: 30000 });
   const scores = await page.$$eval('[data-sec=chk-list] .kvr-ck .kvr-risk', n => n.map(x => parseFloat(x.textContent.split(' ').pop())));
   assert.ok(scores.length >= 3, 'flere flaggede bonger');
@@ -372,7 +375,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   await lastRule.locator('.kvr-cond input[type=text]').fill('50');
   await lastRule.locator('.kvr-cond input[type=text]').press('Tab');
   await tab('Sjekk');
-  await page.click('[data-sec=chk-top] button:text-is("Kjør analyse (synlige)")');
+  await page.click('[data-sec=chk-top] button:text-is("Kjør analyse")');
   await page.waitForFunction(() => document.querySelector('[data-sec=chk-list] .kvr-new'), null, { timeout: 30000 });
   const newRow = await page.innerText('[data-sec=chk-list] .kvr-ck:has(.kvr-new)');
   assert.match(newRow, /10-01 14:00/); assert.match(newRow, /Regel: Ny regel 2/);

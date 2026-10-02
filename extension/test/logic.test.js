@@ -272,6 +272,9 @@ assert.strictEqual(L.reconcile(ri, rs, Object.assign({}, C, { reconTol: '20' }))
 // relative datoer og filter/notat
 assert.deepStrictEqual(L.relativeRange('yesterday', new Date(2026, 9, 2, 12)), { dateFrom: '2026-10-01', dateTo: '2026-10-01' });
 assert.deepStrictEqual(L.relativeRange('lastweek', new Date(2026, 9, 2, 12)), { dateFrom: '2026-09-21', dateTo: '2026-09-27' });
+assert.deepStrictEqual(L.relativeRange('thismonth', new Date(2026, 9, 8, 12)), { dateFrom: '2026-10-01', dateTo: '2026-10-08' });
+assert.deepStrictEqual(L.relativeRange('lastmonth', new Date(2026, 9, 8, 12)), { dateFrom: '2026-09-01', dateTo: '2026-09-30' });
+assert.deepStrictEqual(L.relativeRange('lastmonth', new Date(2026, 2, 5, 12)), { dateFrom: '2026-02-01', dateTo: '2026-02-28' });
 assert.deepStrictEqual(L.relativeRange('last7', new Date(2026, 9, 8, 12)), { dateFrom: '2026-10-01', dateTo: '2026-10-07' });
 const nctx = { notes: { 'a-1': { status: 'oppfolging', note: 'sjekk' }, 'a-2': { status: 'sjekket' }, 'a-3': { status: '', note: 'hei' } } };
 assert.deepStrictEqual(ids(F({ note: 'any' }), nctx), ['a-1', 'a-2', 'a-3']);
@@ -330,4 +333,131 @@ assert.deepStrictEqual(cd.heat.rows.map(r => [r.id, r.counts[10]]), [['1', 2], [
 assert.strictEqual(cd.heat.max, 2);
 assert.deepStrictEqual(cd.pant, [{ day: '2026-10-02', sale: 2, ret: 30 }]);
 assert.deepStrictEqual([L.niceMax(0), L.niceMax(3), L.niceMax(7), L.niceMax(12), L.niceMax(130), L.niceMax(0.4)], [1, 5, 10, 20, 200, 0.5]);
+
+// ======== revisjonstester ========
+const sale = (id, time, kasse, kasserer, total, day) => mkI(id, day || '2026-10-02', time, kasse, kasserer, total);
+const C2 = L.defaultControl();
+
+// ---- falsk retur
+const frS1 = sale('s-100', '10:00', 1, 'A', 100);
+const frR1 = sale('s-101', '10:20', 1, 'B', -100);
+const frR2 = sale('s-102', '11:00', 1, 'B', -50);
+const frR3 = sale('s-103', '12:00', 1, 'B', -30);
+const frR4 = sale('s-104', '14:30', 2, 'B', -100);
+const frScan = {
+  's-100': rcpt([['7000111 VARE X', '', '100.00'], ['Bank:', '', '100.00']]),
+  's-101': rcpt([['7000111 VARE X', '', '-100.00'], ['Kontant tilbake:', '', '100.00']]),
+  's-102': rcpt([['9999999 UKJENT VARE', '', '-50.00'], ['Kontant tilbake:', '', '50.00']]),
+  's-103': rcpt([['399 PANTELAPP', '', '-30.00'], ['Kontant tilbake:', '', '30.00']]),
+  's-104': rcpt([['7000111 VARE X', '', '-100.00'], ['Kontant tilbake:', '', '100.00']])
+};
+const frPop = [frS1, frR1, frR2, frR3, frR4];
+const fr = L.falseReturns(frPop, frPop, frScan, C2);
+const frBy = c => fr.findings.filter(f => f.code === c);
+assert.strictEqual(frBy('saleThenReturn').length, 1);
+assert.deepStrictEqual(frBy('saleThenReturn')[0].ids, ['s-101', 's-100']);
+assert.match(frBy('saleThenReturn')[0].detail, /Kasse 1: salg 10:00 og retur 10:20, begge 100 kr \(kasserer A og B\)/);
+assert.deepStrictEqual(frBy('cardRefundCash').map(f => f.ids[0]).sort(), ['s-101', 's-104']);
+assert.deepStrictEqual(frBy('returnNoSale').map(f => f.ids[0]), ['s-102']);
+assert.match(frBy('returnNoSale')[0].detail, /UKJENT VARE \(50 kr\) uten tilsvarende salg/);
+assert.ok(!fr.findings.some(f => f.ids.includes('s-103')), 'ren panteretur er ikke falsk retur');
+assert.strictEqual(fr.coverage, 1);
+const frHalf = L.falseReturns(frPop, frPop, { 's-102': frScan['s-102'] }, C2);
+assert.strictEqual(frHalf.findings.filter(f => f.code === 'returnNoSale').length, 0, 'for lav skannedekning gir ikke retur uten salg');
+assert.strictEqual(L.falseReturns(frPop, frPop, frScan, Object.assign({}, C2, { falseRet: '' })).findings.length, 0);
+assert.strictEqual(L.falseReturns([frR4], frPop, frScan, C2).findings.filter(f => f.code === 'saleThenReturn').length, 0, 'ulike kasser/utenfor tidsvindu');
+
+// ---- salg etter kassaoppgjør
+const st = (id, time, kasse, kasserer, day) => mkI(id, day || '2026-10-02', time, kasse, kasserer, null, 2);
+const asPop = [sale('a-1', '09:00', 1, 'A', 50), sale('a-2', '21:50', 1, 'A', 70), st('a-3', '22:00', 1, 'B'), sale('a-4', '22:03', 1, 'A', 10), sale('a-5', '22:10', 1, 'C', 120), sale('a-6', '23:30', 1, 'C', 30),
+  sale('b-1', '21:00', 2, 'A', 40), st('b-2', '21:30', 2, 'A'), sale('b-3', '21:45', 2, 'A', 20), st('b-4', '22:30', 2, 'A'),
+  sale('c-1', '23:50', 3, 'A', 99), st('c-2', '00:05', 3, 'A', '2026-10-03'), sale('c-3', '08:00', 3, 'A', 99, '2026-10-03')];
+const af = L.afterSettlement(asPop, asPop, C2);
+assert.strictEqual(af.length, 1);
+assert.deepStrictEqual(af[0].ids, ['a-5', 'a-6']);
+assert.match(af[0].detail, /Kasse 1 2026-10-02: 2 salg \(150 kr\) etter kassaoppgjør kl 22:00 \(oppgjør av kasserer B; salg av C\)/);
+assert.deepStrictEqual(L.afterSettlement(asPop, asPop, Object.assign({}, C2, { settleGraceMin: '15' }))[0].ids, ['a-6'], 'a-5 ligger innenfor fristen');
+assert.ok(!af.some(f => f.ids.includes('c-3')), 'oppgjør etter midnatt er forrige dags avslutning');
+assert.strictEqual(L.afterSettlement(asPop, asPop, Object.assign({}, C2, { settleGraceMin: '' })).length, 0);
+assert.strictEqual(L.afterSettlement(asPop.filter(x => x.cashierNumber === 'C'), asPop, C2)[0].ids.length, 2, 'omfang på kasserer, oppgjør fra hele grunnlaget');
+
+// ---- slettede bonger
+const dl = (id, time, kasse, cashier) => mkI(id, '2026-10-02', time, kasse, cashier || 'A', 10);
+const dPop = [dl('x-100', '10:00', 1), dl('x-101', '10:05', 1), dl('x-104', '10:20', 1), dl('x-105', '10:10', 1), dl('x-106', '10:30', 1),
+  dl('y-7', '09:00', 2), dl('y-8', '09:10', 2), dl('y-8b', '09:11', 2), dl('z-1', '08:00', 3), dl('z-900', '08:30', 3)];
+dPop[8].transactionId = 'y-8'; dPop[7].transactionId = 'y-8x';
+const dr = L.deletedReceipts(dPop, C2);
+const dBy = c => dr.findings.filter(f => f.code === c);
+assert.strictEqual(dBy('gap').length, 1);
+assert.match(dBy('gap')[0].detail, /Kasse 1: mangler 102–103 \(2\) mellom kl 10:05 og 10:20 2026-10-02/);
+assert.strictEqual(dBy('gap')[0].missing, 2);
+assert.strictEqual(dBy('timeInversion').length, 1);
+assert.match(dBy('timeInversion')[0].detail, /nr 105 kl 10:10 kommer etter nr 104 kl 10:20/);
+assert.strictEqual(dBy('dupSeq').length, 1);
+assert.match(dBy('dupSeq')[0].detail, /Kasse 2: bongnummer 8 finnes to ganger/);
+assert.strictEqual(dr.skippedGaps, 1, 'z: hull på 898 hoppes over');
+assert.strictEqual(L.deletedReceipts(dPop, Object.assign({}, C2, { maxGap: '' })).findings.filter(f => f.code === 'gap').length, 0);
+assert.ok(dr.findings.every(f => f.flag === true));
+
+// ---- kassadifferanse over tid
+const dtI = [], dtS = {};
+[['d-1', '2026-09-28', 'A', 1, -30], ['d-2', '2026-09-29', 'A', 1, -45], ['d-3', '2026-09-30', 'A', 1, -50], ['d-4', '2026-10-01', 'A', 1, 20],
+ ['e-1', '2026-09-28', 'B', 2, 0], ['e-2', '2026-09-29', 'B', 2, 100], ['e-3', '2026-09-30', 'B', 2, -150], ['f-1', '2026-10-01', 'C', 3, -2], ['f-2', '2026-10-02', 'C', 3, -3]].forEach(r => {
+  dtI.push(mkI(r[0], r[1], '22:00', r[3], r[2], null, 2));
+  dtS[r[0]] = L.parseSettlement([['Sum', '100.00'], ['Differanse'], ['Sum', String(r[4])]]);
+});
+const dtr = L.diffTrend(dtI, dtS, C2);
+const rowOf = (kind, id) => dtr.rows.find(r => r.kind === kind && r.id === id);
+assert.deepStrictEqual([rowOf('kasserer', 'A').n, rowOf('kasserer', 'A').minus, rowOf('kasserer', 'A').sumMinus, rowOf('kasserer', 'A').plus], [4, 3, -125, 1]);
+assert.strictEqual(rowOf('kasserer', 'A').flag, true, '3 minusdifferanser på 3 dager');
+assert.strictEqual(rowOf('kasserer', 'B').flag, true, 'totalt minus ≥ 100 kr');
+assert.strictEqual(rowOf('kasserer', 'C').flag, false);
+assert.strictEqual(rowOf('kasse', '1').flag, true);
+const dtf = dtr.findings.filter(f => f.cashier);
+assert.deepStrictEqual(dtf.map(f => f.cashier).sort(), ['A', 'B']);
+assert.match(dtf.find(f => f.cashier === 'A').detail, /Kasserer A: 3 av 4 oppgjør med minus, totalt -125 kr/);
+assert.deepStrictEqual(rowOf('kasserer', 'A').list.map(x => x.diff), [-30, -45, -50, 20]);
+assert.strictEqual(L.diffTrend(dtI, {}, C2).rows.length, 0);
+
+// ---- Benford og runde beløp
+const bf = [];
+let bi = 0;
+for (let d = 1; d <= 9; d++) {
+  const cnt = Math.round(600 * Math.log10(1 + 1 / d));
+  for (let k = 0; k < cnt; k++) bf.push(mkI('bf-' + (bi++), '2026-10-02', '10:00', 1, 'A', d * 10 + 3.5 + (k % 7) * 0.1));
+}
+const bfAll = L.numbers(bf, {}, C2);
+assert.ok(bfAll.overall.n >= 590 && bfAll.overall.enough);
+assert.strictEqual(bfAll.overall.verdict, 'nær Benford');
+assert.ok(bfAll.overall.mad < 0.006);
+assert.strictEqual(bfAll.findings.length, 0);
+assert.strictEqual(L.firstDigit(0.45), 4);
+assert.strictEqual(L.firstDigit(1234.5), 1);
+const unif = [];
+for (let d = 1; d <= 9; d++) for (let k = 0; k < 40; k++) unif.push(mkI('u-' + d + '-' + k, '2026-10-02', '11:00', 2, 'Z', d * 10 + 0.5 + k * 0.01));
+const bu = L.numbers(unif, {}, C2);
+assert.strictEqual(bu.overall.verdict, 'avviker');
+assert.ok(bu.findings.some(f => f.code === 'benford' && f.cashier === 'Z'));
+assert.strictEqual(bu.findings.find(f => f.code === 'benford').flag, false);
+const rd = [];
+for (let k = 0; k < 40; k++) rd.push(mkI('r-' + k, '2026-10-02', '10:00', 1, 'Q', k % 2 ? 100 : 100 + 0.5 + k * 0.1));
+for (let k = 0; k < 60; k++) rd.push(mkI('p-' + k, '2026-10-02', '10:00', 1, 'P', 100.37 + k * 0.01));
+const rn = L.numbers(rd, {}, C2);
+assert.ok(rn.findings.some(f => f.code === 'round' && f.cashier === 'Q'));
+assert.ok(!rn.findings.some(f => f.code === 'round' && f.cashier === 'P'));
+assert.strictEqual(L.numbers(rd, {}, Object.assign({}, C2, { roundShare: '' })).findings.filter(f => f.code === 'round').length, 0);
+assert.strictEqual(L.numbers(rd.slice(0, 5), {}, C2).overall.enough, false);
+
+// ---- periode mot periode
+const pA = [], pB = [];
+for (let k = 0; k < 10; k++) { pA.push(mkI('pa-' + k, '2026-09-20', '10:0' + k, 1, 'A', 100)); pB.push(mkI('pb-' + k, '2026-10-01', '10:0' + k, 1, 'A', k < 4 ? -50 : 100)); }
+for (let k = 0; k < 10; k++) { pA.push(mkI('qa-' + k, '2026-09-20', '11:0' + k, 1, 'B', 80)); pB.push(mkI('qb-' + k, '2026-10-01', '11:0' + k, 1, 'B', 80)); }
+const cmpP = L.comparePeriods(pA, pB, {}, { 'pb-0': ['Stor panteretur (300 kr)'], 'pb-1': ['Kassadifferanse (-5 kr)'] }, W, C2);
+const cA = cmpP.rows.find(r => r.id === 'A'), cB = cmpP.rows.find(r => r.id === 'B');
+assert.deepStrictEqual([cA.A.retShare, cA.B.retShare, Math.round(cA.dRet * 100)], [0, 0.4, 40]);
+assert.strictEqual(cA.flagged, true);
+assert.ok(cA.flags.some(f => /returandel \+40 poeng/.test(f)));
+assert.ok(cA.flags.some(f => /risikoscore \+8/.test(f)));
+assert.strictEqual(cB.flagged, false);
+assert.deepStrictEqual([cmpP.total.A.count, cmpP.total.B.count, cmpP.total.B.anom], [20, 20, 2]);
 console.log('logic: ok');
