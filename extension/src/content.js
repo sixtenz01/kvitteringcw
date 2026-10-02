@@ -7,7 +7,7 @@
   var K = {
     saved: 'kvr.saved.v1', collapsed: 'kvr.collapsed.v1', scan: 'kvr.scan.v2', pos: 'kvr.pos.v1',
     size: 'kvr.size.v1', sec: 'kvr.sec.v1', rules: 'kvr.rules.v1', anom: 'kvr.anom.v1',
-    stores: 'kvr.stores.v1', fast: 'kvr.fast.v1', tab: 'kvr.tab.v1', layout: 'kvr.layout.v1'
+    stores: 'kvr.stores.v1', fast: 'kvr.fast.v1', tab: 'kvr.tab.v1', layout: 'kvr.layout.v1', arules: 'kvr.arules.v1'
   };
   var sayTimer = null;
   var failedRecs = [];
@@ -36,7 +36,7 @@
   var scanMap = {};
   var dirty = {};
   var db = null;
-  var rules, anomCfg, manualStores, fastScan;
+  var rules, anomCfg, manualStores, fastScan, customRules = [];
 
   function openDb() {
     return new Promise(function (res) {
@@ -305,7 +305,7 @@
       try { rows = fastScan ? await loadViaApi(todo[i]) : await loadViaDom(todo[i]); } catch (e) { rows = null; }
       if (rows) {
         var id = todo[i].item.transactionId;
-        scanMap[id] = L.parseReceipt(rows);
+        scanMap[id] = todo[i].item.receiptType === 2 ? L.parseSettlement(rows) : L.parseReceipt(rows);
         scanMap[id].t = Date.now();
         dirty[id] = true;
         done++;
@@ -327,7 +327,7 @@
   }
 
   function todoVisible() {
-    return recs.filter(function (r) { return r.show && r.item.receiptType === 1 && !scanMap[r.item.transactionId]; });
+    return recs.filter(function (r) { return r.show && (r.item.receiptType === 1 || r.item.receiptType === 2) && !scanMap[r.item.transactionId]; });
   }
 
   function etaText(sec) {
@@ -388,7 +388,7 @@
     var n = 0;
     recs.forEach(function (r) {
       if (!r.show) return;
-      var reasons = L.anomalies(r.item, scanMap[r.item.transactionId], anomCfg);
+      var reasons = L.anomalies(r.item, scanMap[r.item.transactionId], anomCfg, customRules, groupsOf(r.item.transactionId));
       if (reasons.length) { anomMap[r.item.transactionId] = reasons; n++; }
     });
     ui.anomStatus.textContent = 'Avviksjekk ferdig: ' + n + ' kvitteringer flagget.';
@@ -619,6 +619,8 @@
   }
 
   function renderDerived() {
+    renderReport();
+    renderSettle();
     // avviksliste
     ui.anomList.innerHTML = '';
     var flagged = recs.filter(function (r) { return anomMap[r.item.transactionId]; }).slice(0, 40);
@@ -823,6 +825,104 @@
 
   function selectedRecs() {
     return Object.keys(selected).map(function (id) { return recById(id) || { item: selected[id], tr: null }; });
+  }
+
+
+  // ---- dagsrapport og kassaoppgjør ----------------------------------------------
+  function cell(tag, v) { return el(tag, { text: String(v) }); }
+
+  function currentReport() {
+    var items = recs.filter(function (r) { return r.show; }).map(function (r) { return r.item; });
+    return L.report(items, scanMap, anomMap, { by: ui.repBy.value, byDay: ui.repDay.checked });
+  }
+
+  function renderReport() {
+    if (!ui.repTable) return;
+    var res = currentReport();
+    ui.repTable.innerHTML = '';
+    if (!res.rows.length) { ui.repTable.appendChild(el('div', { class: 'kvr-hint', text: 'Ingen synlige kvitteringer.' })); ui.repNote.textContent = ''; return; }
+    var t = el('table', { class: 'kvr-table kvr-small' }, [el('tr', {}, ['Gruppe', 'Ant', 'Sum', 'Retur', 'Pant +', 'Pant −', 'Avvik', 'Diff'].map(function (h) { return cell('th', h); }))]);
+    var line = function (r, cls) {
+      t.appendChild(el('tr', cls ? { class: cls } : {}, [
+        cell('td', (r.day ? r.day + ' · ' : '') + r.label), cell('td', r.count), cell('td', fmt(r.sum)),
+        cell('td', r.retCount ? r.retCount + ' / ' + fmt(r.retSum) : '–'),
+        cell('td', r.scanned ? fmt(r.pantSale) : '–'), cell('td', r.scanned ? fmt(r.pantRet) : '–'),
+        cell('td', r.anom || '–'), cell('td', r.settleCount ? fmt(r.settleDiff) : '–')
+      ]));
+    };
+    line(res.total, 'kvr-tot');
+    res.rows.forEach(function (r) { line(r); });
+    ui.repTable.appendChild(t);
+    ui.repNote.textContent = 'Pant og avvik teller bare skannede kvitteringer (' + res.total.scanned + ' av ' + res.total.count + ' salg). Diff = kassadifferanse fra skannede kassaoppgjør.';
+  }
+
+  function exportReportCsv() {
+    var res = currentReport();
+    var n = function (v) { return String(v).replace('.', ','); };
+    var rows = [['Dag', 'Gruppe', 'Antall salg', 'Sum', 'Antall retur', 'Sum retur', 'Pant salg', 'Pant retur', 'Skannet', 'Avvik', 'Kassaoppgjør', 'Kassadifferanse']];
+    [res.total].concat(res.rows).forEach(function (r) {
+      rows.push([r.day, r.label, r.count, n(r.sum), r.retCount, n(r.retSum), n(r.pantSale), n(r.pantRet), r.scanned, r.anom, r.settleCount, n(r.settleDiff)]);
+    });
+    download(new Blob([L.toCsv(rows)], { type: 'text/csv;charset=utf-8' }), 'dagsrapport.csv');
+    say('Rapport eksportert (' + (rows.length - 1) + ' rader).');
+  }
+
+  function renderSettle() {
+    if (!ui.settleList) return;
+    ui.settleList.innerHTML = '';
+    var list = recs.filter(function (r) { return r.show && r.item.receiptType === 2; });
+    if (!list.length) {
+      ui.settleNote.textContent = '';
+      ui.settleList.appendChild(el('div', { class: 'kvr-hint', text: 'Ingen kassaoppgjør blant synlige kvitteringer. Velg «2 – Kassaoppgjør» under Filter → Type.' }));
+      return;
+    }
+    var thr = hasNumber(anomCfg.settleDiff) ? Number(anomCfg.settleDiff) : 1;
+    var unscanned = list.filter(function (r) { return !scanMap[r.item.transactionId]; }).length;
+    ui.settleNote.textContent = list.length + ' kassaoppgjør' + (unscanned ? ' · ' + unscanned + ' ikke skannet (bruk Skann innhold)' : '') + '.';
+    list.forEach(function (r) {
+      var it = r.item, st = scanMap[it.transactionId] && scanMap[it.transactionId].settle;
+      var diff = st ? st.diff.sum || 0 : 0;
+      var cls = !st ? ' kvr-na' : (diff !== 0 && Math.abs(diff) >= thr ? '' : ' kvr-ok');
+      var row = el('div', { class: 'kvr-li' + cls, title: st ? 'Kontant ' + fmt(st.telt.kontant || 0) + ' · Sjekk ' + fmt(st.telt.sjekk || 0) + ' · Kreditt ' + fmt(st.telt.kreditt || 0) : '' }, [
+        el('b', { text: it.endDateTime + ' · kasse ' + it.workstationNumber + ' · kasserer ' + it.cashierNumber }),
+        el('span', { text: st ? 'Telt ' + fmt(st.telt.sum || 0) + ' · Differanse ' + (diff > 0 ? '+' : '') + fmt(diff) + ' · Pose ' + (st.pose || '–') + ' · Sendt bank ' + fmt(st.bank || 0) : 'Ikke skannet' })
+      ]);
+      row.addEventListener('click', function () { jumpTo(r); });
+      ui.settleList.appendChild(row);
+    });
+  }
+
+  function hasNumber(v) { return v !== '' && v !== null && v !== undefined && !isNaN(Number(v)); }
+
+  // ---- egne avviksregler ---------------------------------------------------------
+  function saveCustom() { store(K.arules, customRules); }
+
+  function renderCustom() {
+    ui.crules.innerHTML = '';
+    if (!customRules.length) ui.crules.appendChild(el('div', { class: 'kvr-hint', text: 'Ingen egne regler ennå. Trykk «Ny regel» eller «Eksempel».' }));
+    customRules.forEach(function (r, ri) {
+      var en = el('input', { type: 'checkbox', title: 'Aktiv', style: 'flex:0 0 auto' });
+      en.checked = r.enabled !== false;
+      en.addEventListener('change', function () { r.enabled = en.checked; saveCustom(); });
+      var nm = el('input', { type: 'text', value: r.name, placeholder: 'Navn på regel' });
+      nm.addEventListener('change', function () { r.name = nm.value.trim() || r.name; saveCustom(); });
+      var del = btn('✕', function () {
+        if (!window.confirm('Slette regelen «' + r.name + '»?')) return;
+        customRules.splice(ri, 1); saveCustom(); renderCustom();
+      }, 'kvr-sm');
+      var box = el('div', { class: 'kvr-rule' }, [el('div', { class: 'kvr-row' }, [en, nm, del])]);
+      r.conds.forEach(function (c, ci) {
+        var fs = el('select', {}, Object.keys(L.RULE_FIELDS).map(function (k) { return el('option', { value: k, text: L.RULE_FIELDS[k].label + (L.RULE_FIELDS[k].scan ? ' *' : '') }); }));
+        fs.value = c.f;
+        var os = el('select', {}, L.RULE_OPS.map(function (o) { return el('option', { value: o, text: o }); }));
+        os.value = c.op;
+        var vi = el('input', { type: 'text', value: c.v, placeholder: 'verdi' });
+        [fs, os, vi].forEach(function (n) { n.addEventListener('change', function () { c.f = fs.value; c.op = os.value; c.v = vi.value; saveCustom(); }); });
+        box.appendChild(el('div', { class: 'kvr-cond' }, [fs, os, vi, btn('✕', function () { r.conds.splice(ci, 1); saveCustom(); renderCustom(); }, 'kvr-sm')]));
+      });
+      box.appendChild(btn('+ Vilkår', function () { r.conds.push({ f: 'sum', op: '>=', v: '' }); saveCustom(); renderCustom(); }, 'kvr-sm'));
+      ui.crules.appendChild(box);
+    });
   }
 
   // ---- CSV ------------------------------------------------------------------
@@ -1165,9 +1265,37 @@
     var secAnom = section('anom', 'Avvik', [
       el('div', { class: 'kvr-hint', text: 'Kjøres kun når du trykker. Tom verdi = sjekken er av.' }),
       el('div', { class: 'kvr-row' }, [cfgInput('bigReturn', 'Stor panteretur ≥ kr', '300'), cfgInput('manyLapper', 'Pantelapper ≥ antall', '8')]),
-      el('div', { class: 'kvr-row' }, [cfgInput('roundMin', 'Rundt beløp ≥ kr', '500')]),
+      el('div', { class: 'kvr-row' }, [cfgInput('roundMin', 'Rundt beløp ≥ kr', '500'), cfgInput('settleDiff', 'Kassadifferanse ≥ kr', '1')]),
       cashNo.node, oa.node, ui.anomBtn, ui.anomStatus, ui.anomList
     ], false);
+
+
+    // --- Rapport
+    ui.repBy = el('select', {}, [el('option', { value: 'kasse', text: 'Per kasse' }), el('option', { value: 'kasserer', text: 'Per kasserer' })]);
+    ui.repBy.addEventListener('change', renderReport);
+    var repDay = check('Del opp per dag', renderReport); ui.repDay = repDay.box;
+    ui.repTable = el('div', { class: 'kvr-tablewrap' });
+    ui.repNote = el('div', { class: 'kvr-hint' });
+    var secReport = section('report', 'Dagsrapport (synlige kvitteringer)', [
+      el('div', { class: 'kvr-row' }, [ui.repBy, repDay.node]),
+      ui.repTable, ui.repNote,
+      el('div', { class: 'kvr-row' }, [btn('Eksporter rapport (CSV)', exportReportCsv), btn('Skann innhold nå', scanVisible, 'kvr-primary')])
+    ]);
+    ui.settleNote = el('div', { class: 'kvr-hint' });
+    ui.settleList = el('div', { class: 'kvr-list' });
+    var secSettle = section('settle', 'Kassaoppgjør', [ui.settleNote, ui.settleList]);
+
+    // --- Egne avviksregler
+    ui.crules = el('div', {});
+    var secCustom = section('custom', 'Egne avviksregler', [
+      el('div', { class: 'kvr-hint', text: 'Alle vilkår i en regel må stemme (OG). Felt merket * krever skanning. Klokkeslett skrives HH:MM. Tomt medlemsnr: «Medlemsnr = (tomt)».' }),
+      ui.crules,
+      el('div', { class: 'kvr-row' }, [btn('Ny regel', function () {
+        customRules.push({ id: 'r' + Date.now(), name: 'Ny regel', enabled: true, conds: [{ f: 'sum', op: '<=', v: '' }] }); saveCustom(); renderCustom();
+      }), btn('Eksempel', function () {
+        customRules.push({ id: 'r' + Date.now(), name: 'Stor retur om kvelden', enabled: true, conds: [{ f: 'sum', op: '<=', v: '-200' }, { f: 'tid', op: '>=', v: '20:00' }] }); saveCustom(); renderCustom();
+      })])
+    ]);
 
     // --- Sortering
     ui.sort = el('select', {}, [
@@ -1226,7 +1354,8 @@
       ['cw', 'Søk', [secCw]],
       ['filter', 'Filter', [secSaved, secTime, secWho, secSum, secSort]],
       ['content', 'Innhold', [el('p', { class: 'kvr-intro', text: 'Skann kvitteringene for å finne pant, varegrupper og varer. Filtrer listen først, så skanner du bare det som er synlig.' }), secScan, secGroups]],
-      ['anom', 'Avvik', [secAnom]],
+      ['report', 'Rapport', [secReport, secSettle]],
+      ['anom', 'Avvik', [secAnom, secCustom]],
       ['export', 'Eksport', [secExport]]
     ];
     ui.tabBtns = {}; ui.panes = {};
@@ -1294,6 +1423,7 @@
     renderSaved();
     renderRules();
     renderCwStores();
+    renderCustom();
   }
 
   function attach() {
@@ -1325,6 +1455,7 @@
     anomCfg = L.sanitizeAnom(store(K.anom));
     manualStores = store(K.stores) || '';
     fastScan = !!store(K.fast);
+    customRules = L.sanitizeCustom(store(K.arules));
     setInterval(attach, 1500);
     attach();
   });

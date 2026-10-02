@@ -147,7 +147,7 @@
   }
 
   function parseAmount(text) {
-    var t = String(text || '').replace(/[\s\u00a0]/g, '').replace(',', '.');
+    var t = String(text || '').replace(/[\s\u00a0]/g, '').replace(',', '.').replace(/^\+/, '');
     return /^-?\d+(\.\d+)?$/.test(t) ? Number(t) : null;
   }
 
@@ -202,6 +202,166 @@
       scanned++; sale += p.sale; ret += p.ret;
     });
     return { sale: round2(sale), ret: round2(ret), net: round2(sale + ret), scanned: scanned, total: items.length };
+  }
+
+
+  // ---- kassaoppgjør (receiptType 2) -------------------------------------------
+  function parseSettlement(rows) {
+    var st = { telt: {}, diff: {}, tilg: {}, pose: '', bank: null, valor: {} };
+    var mode = 'telt';
+    (rows || []).forEach(function (cells) {
+      if (!cells || !cells.length) return;
+      var c0 = String(cells[0] || '').trim();
+      var a = lastAmount(cells);
+      var pose = /^Pose:\s*(.+)$/i.exec(c0);
+      if (pose) { st.pose = pose[1].trim(); return; }
+      if (/^Differanse/i.test(c0)) { mode = 'diff'; return; }
+      if (/^Sendt bank/i.test(c0)) { mode = 'bank'; return; }
+      if (/^Tilgodelapp$/i.test(c0)) { mode = 'tilg'; return; }
+      if (/^Val[øo]r$/i.test(c0)) { mode = 'valor'; return; }
+      if (mode === 'bank') { if (a !== null) st.bank = a; return; }
+      if (mode === 'valor') { if (parseAmount(c0) !== null && a !== null) st.valor[c0] = a; return; }
+      if (mode === 'tilg') {
+        var t = /^(egne|fremmede|utlevert|sum):?$/i.exec(c0);
+        if (t && a !== null) st.tilg[t[1].toLowerCase()] = a;
+        return;
+      }
+      var m = /^(Kontant|Sjekk|Kreditt|Tilgodelapp|Sum):?$/i.exec(c0);
+      if (m && a !== null) (mode === 'diff' ? st.diff : st.telt)[m[1].toLowerCase()] = a;
+    });
+    return { v: 2, kind: 'settle', items: [], pay: {}, np: 0, sale: 0, ret: 0, saleLines: 0, retLines: 0, settle: st };
+  }
+
+  // ---- dagsrapport ----------------------------------------------------------------
+  function report(items, scanMap, anomMap, opts) {
+    opts = opts || {};
+    var by = opts.by === 'kasserer' ? 'kasserer' : 'kasse';
+    var acc = {};
+    items.forEach(function (it) {
+      var day = opts.byDay ? parseDT(it.endDateTime).date : '';
+      var id = by === 'kasse' ? it.workstationNumber : it.cashierNumber;
+      var key = day + '|' + id;
+      var e = acc[key] || (acc[key] = { day: day, id: id, label: (by === 'kasse' ? 'Kasse ' : 'Kasserer ') + id, count: 0, sum: 0, retCount: 0, retSum: 0, pantSale: 0, pantRet: 0, scanned: 0, anom: 0, settleCount: 0, settleDiff: 0 });
+      var sc = scanMap && scanMap[it.transactionId];
+      if (anomMap && anomMap[it.transactionId] && anomMap[it.transactionId].length) e.anom++;
+      if (it.receiptType === 2) {
+        e.settleCount++;
+        if (sc && sc.settle) e.settleDiff += sc.settle.diff.sum || 0;
+        return;
+      }
+      if (it.receiptType !== 1 || typeof it.totalAmount !== 'number') return;
+      e.count++; e.sum += it.totalAmount;
+      if (it.totalAmount < 0) { e.retCount++; e.retSum += it.totalAmount; }
+      if (sc) { e.scanned++; e.pantSale += sc.sale; e.pantRet += sc.ret; }
+    });
+    var rows = Object.keys(acc).map(function (k) { return acc[k]; }).sort(function (a, b) {
+      return a.day < b.day ? -1 : a.day > b.day ? 1 : String(a.id).localeCompare(String(b.id), 'nb', { numeric: true });
+    });
+    var total = { day: '', id: '', label: 'Totalt', count: 0, sum: 0, retCount: 0, retSum: 0, pantSale: 0, pantRet: 0, scanned: 0, anom: 0, settleCount: 0, settleDiff: 0 };
+    rows.forEach(function (r) {
+      Object.keys(total).forEach(function (k) { if (typeof total[k] === 'number') total[k] += r[k]; });
+    });
+    [total].concat(rows).forEach(function (r) {
+      ['sum', 'retSum', 'pantSale', 'pantRet', 'settleDiff'].forEach(function (k) { r[k] = round2(r[k]); });
+    });
+    return { rows: rows, total: total };
+  }
+
+  // ---- egne avviksregler ------------------------------------------------------------
+  var RULE_FIELDS = {
+    sum: { label: 'Sum (kr)', scan: false },
+    abssum: { label: 'Sum uten fortegn (kr)', scan: false },
+    tid: { label: 'Klokkeslett (HH:MM)', scan: false },
+    kasse: { label: 'Kasse', scan: false },
+    kasserer: { label: 'Kasserer', scan: false },
+    butikk: { label: 'Butikk', scan: false },
+    type: { label: 'Kvitteringstype', scan: false },
+    medlem: { label: 'Medlemsnr (tomt = ingen)', scan: false },
+    panteretur: { label: 'Panteretur (kr, uten fortegn)', scan: true },
+    pantsalg: { label: 'Pantsalg (kr)', scan: true },
+    pantelapper: { label: 'Antall pantelapper', scan: true },
+    linjer: { label: 'Antall varelinjer', scan: true },
+    kontanttilbake: { label: 'Kontant tilbake (kr)', scan: true },
+    kassadiff: { label: 'Kassadifferanse (kr, uten fortegn)', scan: true },
+    vare: { label: 'Vare (EAN/navn)', scan: true, multi: true },
+    gruppe: { label: 'Varegruppe', scan: true, multi: true },
+    betaling: { label: 'Betalingsmåte', scan: true, multi: true }
+  };
+  var RULE_OPS = ['>=', '<=', '>', '<', '=', '≠', 'inneholder'];
+
+  function fieldValue(f, item, scan, groups) {
+    switch (f) {
+      case 'sum': return typeof item.totalAmount === 'number' ? item.totalAmount : null;
+      case 'abssum': return typeof item.totalAmount === 'number' ? Math.abs(item.totalAmount) : null;
+      case 'tid': return parseDT(item.endDateTime).time;
+      case 'kasse': return item.workstationNumber;
+      case 'kasserer': return item.cashierNumber;
+      case 'butikk': return item.storeNumber;
+      case 'type': return item.receiptType;
+      case 'medlem': return hasMember(item) ? String(item.memberNumber) : '';
+      default: break;
+    }
+    if (!scan) return undefined;
+    switch (f) {
+      case 'panteretur': return Math.abs(scan.ret);
+      case 'pantsalg': return scan.sale;
+      case 'pantelapper': return scan.retLines;
+      case 'linjer': return scan.items.length;
+      case 'kontanttilbake': return scan.pay['Kontant tilbake'] || 0;
+      case 'kassadiff': return scan.settle ? Math.abs(scan.settle.diff.sum || 0) : undefined;
+      case 'vare': return scan.items.reduce(function (a, i) { a.push(i.c, i.n); return a; }, []);
+      case 'gruppe': return groups || [];
+      case 'betaling': return Object.keys(scan.pay);
+      default: return undefined;
+    }
+  }
+
+  function cmp(a, op, b) {
+    var na = Number(a), nb = Number(b);
+    var num = a !== '' && a !== null && b !== '' && b !== null && !isNaN(na) && !isNaN(nb);
+    var x = num ? na : String(a).toLowerCase(), y = num ? nb : String(b).toLowerCase();
+    switch (op) {
+      case '>=': return x >= y;
+      case '<=': return x <= y;
+      case '>': return x > y;
+      case '<': return x < y;
+      case '=': return x === y;
+      case '≠': return x !== y;
+      case 'inneholder': return String(a).toLowerCase().indexOf(String(b).toLowerCase()) !== -1;
+      default: return false;
+    }
+  }
+
+  function condTrue(c, item, scan, groups) {
+    var def = RULE_FIELDS[c.f];
+    if (!def) return false;
+    var v = fieldValue(c.f, item, scan, groups);
+    if (v === undefined || v === null) return false;
+    if (def.multi) {
+      var want = String(c.v).toLowerCase();
+      var list = v.map(function (x) { return String(x).toLowerCase(); });
+      if (c.op === '=') return list.some(function (x) { return x === want; });
+      if (c.op === 'inneholder') return list.some(function (x) { return x.indexOf(want) !== -1; });
+      if (c.op === '≠') return !list.some(function (x) { return x.indexOf(want) !== -1; });
+      return false;
+    }
+    return cmp(v, c.op, c.v);
+  }
+
+  function evalRule(rule, item, scan, groups) {
+    if (!rule || rule.enabled === false || !rule.conds || !rule.conds.length) return false;
+    return rule.conds.every(function (c) { return condTrue(c, item, scan, groups); });
+  }
+
+  function sanitizeCustom(raw) {
+    if (!Array.isArray(raw)) return [];
+    return raw.filter(function (r) { return r && typeof r.name === 'string'; }).map(function (r, i) {
+      return {
+        id: String(r.id || 'r' + i), name: r.name.trim() || 'Regel ' + (i + 1), enabled: r.enabled !== false,
+        conds: (Array.isArray(r.conds) ? r.conds : []).filter(function (c) { return c && RULE_FIELDS[c.f] && RULE_OPS.indexOf(c.op) !== -1; })
+          .map(function (c) { return { f: c.f, op: c.op, v: String(c.v === undefined ? '' : c.v) }; })
+      };
+    });
   }
 
   // ---- varegrupper -------------------------------------------------------
@@ -308,18 +468,18 @@
 
   // ---- avvik -------------------------------------------------------------
   function defaultAnom() {
-    return { bigReturn: '300', manyLapper: '8', roundMin: '500', cashNoSale: true };
+    return { bigReturn: '300', manyLapper: '8', roundMin: '500', settleDiff: '1', cashNoSale: true };
   }
 
   function sanitizeAnom(raw) {
     var d = defaultAnom();
     if (!raw || typeof raw !== 'object') return d;
-    ['bigReturn', 'manyLapper', 'roundMin'].forEach(function (k) { if (k in raw) d[k] = String(raw[k]); });
+    ['bigReturn', 'manyLapper', 'roundMin', 'settleDiff'].forEach(function (k) { if (k in raw) d[k] = String(raw[k]); });
     if ('cashNoSale' in raw) d.cashNoSale = !!raw.cashNoSale;
     return d;
   }
 
-  function anomalies(item, scan, cfg) {
+  function anomalies(item, scan, cfg, custom, groups) {
     var out = [];
     if (hasNum(cfg.roundMin) && typeof item.totalAmount === 'number') {
       var cents = Math.round(Math.abs(item.totalAmount) * 100);
@@ -329,7 +489,12 @@
       if (hasNum(cfg.bigReturn) && Math.abs(scan.ret) >= Number(cfg.bigReturn)) out.push('Stor panteretur (' + Math.abs(scan.ret) + ' kr)');
       if (hasNum(cfg.manyLapper) && scan.retLines >= Number(cfg.manyLapper)) out.push('Mange pantelapper (' + scan.retLines + ')');
       if (cfg.cashNoSale && scan.np === 0 && scan.retLines > 0 && (scan.pay['Kontant tilbake'] || 0) > 0) out.push('Kontant tilbake uten salg');
+      if (scan.settle && hasNum(cfg.settleDiff) && Math.abs(scan.settle.diff.sum || 0) >= Number(cfg.settleDiff) && Math.abs(scan.settle.diff.sum || 0) > 0) {
+        var d = scan.settle.diff.sum;
+        out.push('Kassadifferanse (' + (d > 0 ? '+' : '') + d + ' kr)');
+      }
     }
+    (custom || []).forEach(function (r) { if (evalRule(r, item, scan, groups)) out.push('Regel: ' + r.name); });
     return out;
   }
 
@@ -406,6 +571,12 @@
     findDuplicates: findDuplicates,
     sumSelected: sumSelected,
     parseReceipt: parseReceipt,
+    parseSettlement: parseSettlement,
+    report: report,
+    RULE_FIELDS: RULE_FIELDS,
+    RULE_OPS: RULE_OPS,
+    evalRule: evalRule,
+    sanitizeCustom: sanitizeCustom,
     classify: classify,
     groupsOfScan: groupsOfScan,
     groupSums: groupSums,

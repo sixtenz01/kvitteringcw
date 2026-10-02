@@ -119,4 +119,63 @@ assert.deepStrictEqual(L.parseStoreText('1005=Coop Mega Kolbotn\nrusk\n1010 - Ex
 assert.strictEqual(L.toCsv([['a;b', 'c"d'], [1, null]]), '\ufeff"a;b";"c""d"\r\n1;');
 assert.deepStrictEqual(ids(F({ bong: '1005-6' })), []);
 assert.deepStrictEqual(L.matches({ bongnr: '1005-6-12', transactionId: 'x' }, F({ bong: '6-12' })), true);
+
+// ---- kassaoppgjør
+const settle = L.parseSettlement([
+  ['Kontant:', '1 000.00'], ['Sjekk:', '0.00'], ['Kreditt:', '0.00'], ['Tilgodelapp:', '0.00'], ['Sum', '1 000.00'],
+  ['Pose: 512324789405'], ['Sendt bank:'], ['NOK', '1 000.00'], ['Differanse'],
+  ['Kontant:', '+1 000.00'], ['Sjekk:', '0.00'], ['Kreditt:', '0.00'], ['Tilgodelapp:', '0.00'], ['Sum', '+1 000.00'],
+  ['Tilgodelapp'], ['egne:', '0.00'], ['fremmede:', '0.00'], ['utlevert:', '0.00'], ['Sum:', '0.00'],
+  ['Valør', 'Beløp'], ['1', '0.00'], ['500', '0.00'], ['1000', '1 000.00']
+]).settle;
+assert.deepStrictEqual(settle.telt, { kontant: 1000, sjekk: 0, kreditt: 0, tilgodelapp: 0, sum: 1000 });
+assert.deepStrictEqual(settle.diff, { kontant: 1000, sjekk: 0, kreditt: 0, tilgodelapp: 0, sum: 1000 });
+assert.strictEqual(settle.pose, '512324789405');
+assert.strictEqual(settle.bank, 1000);
+assert.strictEqual(settle.valor['1000'], 1000);
+assert.strictEqual(settle.tilg.sum, 0);
+assert.strictEqual(L.parseAmount('+1 000.00'), 1000);
+const stRec = L.parseSettlement([['Kontant:', '500.00'], ['Sum', '500.00'], ['Differanse'], ['Sum', '-50.00']]);
+assert.deepStrictEqual(L.anomalies({ totalAmount: null }, stRec, cfg), ['Kassadifferanse (-50 kr)']);
+assert.deepStrictEqual(L.anomalies({ totalAmount: null }, stRec, Object.assign({}, cfg, { settleDiff: '100' })), []);
+
+// ---- dagsrapport
+const repItems = [
+  { transactionId: 'r1', endDateTime: '2026-10-02 10:00', workstationNumber: 1, cashierNumber: 'A', totalAmount: 100, receiptType: 1 },
+  { transactionId: 'r2', endDateTime: '2026-10-02 11:00', workstationNumber: 1, cashierNumber: 'B', totalAmount: -50, receiptType: 1 },
+  { transactionId: 'r3', endDateTime: '2026-10-03 11:00', workstationNumber: 2, cashierNumber: 'A', totalAmount: 25.5, receiptType: 1 },
+  { transactionId: 'r4', endDateTime: '2026-10-03 23:00', workstationNumber: 2, cashierNumber: 'A', totalAmount: null, receiptType: 2 },
+  { transactionId: 'r5', endDateTime: '2026-10-03 12:00', workstationNumber: 2, cashierNumber: 'A', totalAmount: 5, receiptType: 11 }
+];
+const repScan = { r2: { sale: 0, ret: -50, items: [] }, r4: { sale: 0, ret: 0, items: [], settle: { diff: { sum: -20 } } } };
+const rep = L.report(repItems, repScan, { r2: ['x'] }, { by: 'kasse' });
+assert.deepStrictEqual(rep.rows.map(r => [r.label, r.count, r.sum, r.retCount, r.retSum, r.pantRet, r.anom, r.settleCount, r.settleDiff]),
+  [['Kasse 1', 2, 50, 1, -50, -50, 1, 0, 0], ['Kasse 2', 1, 25.5, 0, 0, 0, 0, 1, -20]]);
+assert.strictEqual(rep.total.sum, 75.5);
+assert.strictEqual(rep.total.count, 3);
+const repK = L.report(repItems, repScan, {}, { by: 'kasserer', byDay: true });
+assert.deepStrictEqual(repK.rows.map(r => r.day + ' ' + r.label), ['2026-10-02 Kasserer A', '2026-10-02 Kasserer B', '2026-10-03 Kasserer A']);
+
+// ---- egne regler
+const mk = (f, op, v) => ({ f, op, v });
+const itm = { totalAmount: -250, endDateTime: '2026-10-02 22:30', workstationNumber: 6, cashierNumber: '10', receiptType: 1, memberNumber: null, storeNumber: 1005 };
+const scn = L.parseReceipt([['399 PANTELAPP', '', '-150.00'], ['399 PANTELAPP', '', '-100.00'], ['7044610877488 PEPSI MAX', '', '30.00'], ['Kontant tilbake:', '', '220.00']]);
+const rl = (...c) => ({ name: 'T', enabled: true, conds: c });
+assert.strictEqual(L.evalRule(rl(mk('sum', '<=', '-200'), mk('tid', '>=', '22:00')), itm, null, null), true);
+assert.strictEqual(L.evalRule(rl(mk('sum', '<=', '-200'), mk('tid', '>=', '23:00')), itm, null, null), false);
+assert.strictEqual(L.evalRule(rl(mk('medlem', '=', '')), itm, null, null), true);
+assert.strictEqual(L.evalRule(rl(mk('medlem', '≠', '')), itm, null, null), false);
+assert.strictEqual(L.evalRule(rl(mk('kasse', '=', '6')), itm, null, null), true);
+assert.strictEqual(L.evalRule(rl(mk('panteretur', '>=', '200')), itm, null, null), false, 'krever skanning');
+assert.strictEqual(L.evalRule(rl(mk('panteretur', '>=', '200')), itm, scn, null), true);
+assert.strictEqual(L.evalRule(rl(mk('pantelapper', '>=', '2'), mk('kontanttilbake', '>', '200')), itm, scn, null), true);
+assert.strictEqual(L.evalRule(rl(mk('vare', 'inneholder', 'pepsi')), itm, scn, null), true);
+assert.strictEqual(L.evalRule(rl(mk('vare', '=', '7044610877488')), itm, scn, null), true);
+assert.strictEqual(L.evalRule(rl(mk('vare', '≠', 'banan')), itm, scn, null), true);
+assert.strictEqual(L.evalRule(rl(mk('gruppe', '=', 'Brus')), itm, scn, ['Brus', 'Pant']), true);
+assert.strictEqual(L.evalRule(rl(mk('betaling', 'inneholder', 'kontant')), itm, scn, null), true);
+assert.strictEqual(L.evalRule({ name: 'x', enabled: false, conds: [mk('sum', '<', '0')] }, itm, null, null), false);
+assert.strictEqual(L.evalRule({ name: 'x', conds: [] }, itm, null, null), false);
+assert.deepStrictEqual(L.anomalies(itm, scn, Object.assign({}, cfg, { bigReturn: '', manyLapper: '', cashNoSale: false, roundMin: '' }), [rl(mk('sum', '<', '0'))], null), ['Regel: T']);
+assert.deepStrictEqual(L.sanitizeCustom([{ name: 'a', conds: [{ f: 'sum', op: '>=', v: 5 }, { f: 'bogus', op: '=', v: 1 }, { f: 'sum', op: '??', v: 1 }] }])[0].conds, [{ f: 'sum', op: '>=', v: '5' }]);
 console.log('logic: ok');

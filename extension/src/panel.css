@@ -1,5 +1,5 @@
 #kvr-panel{--kv-bg:#fff;--kv-fg:#1b2a24;--kv-muted:#5f6f68;--kv-line:#dde5e1;--kv-accent:#00704a;--kv-accent-hover:#005a3b;--kv-accent-fg:#fff;--kv-soft:#f0faf5;--kv-warn:#d93025;
-  position:fixed;z-index:99999;width:380px;display:flex;flex-direction:column;background:var(--kv-bg);color:var(--kv-fg);
+  position:fixed;z-index:99999;width:420px;display:flex;flex-direction:column;background:var(--kv-bg);color:var(--kv-fg);
   border:1px solid var(--kv-line);border-radius:14px;box-shadow:0 10px 32px rgba(10,35,25,.3);
   font:13px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden}
 #kvr-panel *{box-sizing:border-box}
@@ -40,7 +40,7 @@
 
 /* faner */
 #kvr-panel .kvr-tabs{display:flex;border-bottom:1px solid var(--kv-line);background:#fff}
-#kvr-panel .kvr-tab{position:relative;flex:1;padding:9px 4px;border:0;border-bottom:3px solid transparent;background:none;color:var(--kv-muted);font:inherit;font-weight:600;cursor:pointer}
+#kvr-panel .kvr-tab{position:relative;flex:1;padding:9px 2px;font-size:12px;border:0;border-bottom:3px solid transparent;background:none;color:var(--kv-muted);font:inherit;font-weight:600;cursor:pointer}
 #kvr-panel .kvr-tab:hover{color:var(--kv-fg);background:var(--kv-soft)}
 #kvr-panel .kvr-tab.kvr-active{color:var(--kv-accent);border-bottom-color:var(--kv-accent)}
 #kvr-panel .kvr-dot{display:inline-block;margin-left:5px;min-width:16px;padding:0 4px;border-radius:999px;background:var(--kv-accent);color:#fff;font-style:normal;font-size:10px;line-height:16px;text-align:center}
@@ -97,3 +97,10 @@
 tr.kvr-dup>td{background:#fff3cd !important}
 tr.kvr-flag>td:first-child,tr.kvr-flag>td.kvr-cb-cell{box-shadow:inset 4px 0 0 #d93025}
 input.kvr-cb,#kvr-select-all{width:16px;height:16px;cursor:pointer;accent-color:#00704a;vertical-align:middle}
+
+#kvr-panel .kvr-tablewrap{overflow:auto;max-height:260px}
+#kvr-panel .kvr-small th,#kvr-panel .kvr-small td{font-size:10.5px;padding:3px 2px;white-space:nowrap}
+#kvr-panel .kvr-tot td{font-weight:700;background:var(--kv-soft)}
+#kvr-panel .kvr-li.kvr-ok{border-left-color:#00704a}
+#kvr-panel .kvr-li.kvr-na{border-left-color:#9aa8a1}
+#kvr-panel .kvr-cond{display:grid;grid-template-columns:1.7fr .8fr 1fr auto;gap:4px;align-items:center}

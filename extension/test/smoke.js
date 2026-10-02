@@ -13,6 +13,7 @@ const rows = [
 
 const tr = (a, b, c) => `<tr><td>${a}</td><td></td><td>${c}</td></tr>`;
 const RECEIPTS = {
+  't-2': '<table>' + tr('Kontant:', '', '1 000.00') + tr('Sum', '', '1 000.00') + tr('Pose: 512324789405', '', '') + tr('Differanse', '', '') + tr('Kontant:', '', '+1 000.00') + tr('Sum', '', '+1 000.00') + '</table>',
   't-1': '<table>' + tr('RETUR VARE', '', '') .replace('<td></td><td></td>', '') + tr('399 PANTELAPP', '', '-150.00') + tr('399 PANTELAPP', '', '-106.00') + '<tr><td>Kontant tilbake:</td><td></td><td>256.00</td></tr></table>',
   't-3': '<table>' + tr('7044610877488 PEPSI MAX 0.5L', '', '32.90') + tr('220 PANT', '', '2.00') + tr('7330196001042 SKRUF NO4 FRESH S4', '', '101.90') + '</table>',
   't-4': '<table>' + tr('7038010002274 BIOLA JORDBÆR 1000G', '', '39.90') + tr('7044416015367 REGAL HVETEMEL 1KG', '', '20.50') + '</table>',
@@ -52,11 +53,13 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
   page.on('dialog', d => d.accept('Bakeri'));
+  const failIds = new Set();
   await page.route('https://chainweb.coop.no/**', async r => {
     const u = r.request().url();
     if (u.endsWith('/Api/GetReceiptDetails')) {
       const body = JSON.parse(r.request().postData());
       const id = 't-' + body.sequenceNum;
+      if (failIds.has(id)) return r.fulfill({ contentType: 'application/json', body: '""' });
       return r.fulfill({ contentType: 'application/json', body: JSON.stringify(RECEIPTS[id] || '') });
     }
     return r.fulfill({ contentType: 'text/html', body: html });
@@ -122,7 +125,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   await tab('Innhold');
   await page.click('text=Skann innhold (synlige)');
   await page.waitForFunction(() => /Ferdig\. Skannet/.test(document.getElementById('kvr-panel').innerText), null, { timeout: 15000 });
-  assert.match(await page.textContent('#kvr-panel'), /Skannet 4/);
+  assert.match(await page.textContent('#kvr-panel'), /Skannet 5/);
   await page.selectOption('.kvr-f:has-text("Pant (krever") select', 'return');
   assert.deepStrictEqual(await vis(), ['t-1']);
   await page.selectOption('.kvr-f:has-text("Pant (krever") select', 'sale');
@@ -158,10 +161,11 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   await page.fill('.kvr-f:has-text("Stor panteretur") input', '200');
   await page.click('text=Kjør avviksjekk');
   await page.waitForFunction(() => /Avviksjekk ferdig/.test(document.getElementById('kvr-panel').innerText));
-  assert.match(await page.innerText('.kvr-list'), /Stor panteretur \(256 kr\)/);
-  assert.match(await page.innerText('.kvr-list'), /Kontant tilbake uten salg/);
+  assert.match(await page.innerText('[data-sec=anom] .kvr-list'), /Stor panteretur \(256 kr\)/);
+  assert.match(await page.innerText('[data-sec=anom] .kvr-list'), /Kontant tilbake uten salg/);
   await page.click('text=Kun avvik');
-  assert.deepStrictEqual(await vis(), ['t-1']);
+  assert.deepStrictEqual(await vis(), ['t-1', 't-2']);
+  assert.match(await page.innerText('[data-sec=anom] .kvr-list'), /Kassadifferanse \(\+1000 kr\)/);
   await wipe();
 
   // CW-søk
@@ -183,10 +187,31 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   await page.click('text=Rask skanning via CW-API');
   await page.click('text=Skann innhold (synlige)');
   await page.waitForFunction(() => /Ferdig\. Skannet/.test(document.getElementById('kvr-panel').innerText), null, { timeout: 15000 });
-  assert.match(await page.textContent('#kvr-panel'), /Skannet 4/);
+  assert.match(await page.textContent('#kvr-panel'), /Skannet 5/);
   await page.selectOption('.kvr-f:has-text("Pant (krever") select', 'sale');
   assert.deepStrictEqual(await vis(), ['t-3']);
   await wipe();
+
+  // egne regler, rapport og kassaoppgjør
+  await tab('Avvik');
+  await page.click('button:text-is("Ny regel")');
+  await page.fill('.kvr-cond input[type=text]', '-200');
+  await page.press('.kvr-cond input[type=text]', 'Tab');
+  await page.click('text=Kjør avviksjekk');
+  await page.waitForFunction(() => /Regel: Ny regel/.test(document.querySelector('[data-sec=anom] .kvr-list').innerText));
+  await wipe();
+  await tab('Rapport');
+  const repTxt = await page.innerText('[data-sec=report] .kvr-table');
+  assert.match(repTxt, /Totalt/); assert.match(repTxt, /Kasse 6/); assert.match(repTxt, /Kasse 4/);
+  await page.selectOption('[data-sec=report] select', 'kasserer');
+  assert.match(await page.innerText('[data-sec=report] .kvr-table'), /Kasserer 10/);
+  const [rd] = await Promise.all([page.waitForEvent('download'), page.click('button:text-is("Eksporter rapport (CSV)")')]);
+  const repCsv = fs.readFileSync(await rd.path(), 'utf8');
+  assert.ok(repCsv.startsWith('\ufeffDag;Gruppe;Antall salg;Sum;'));
+  assert.ok(repCsv.includes('Kasserer 10'));
+  const settleTxt = await page.innerText('[data-sec=settle]');
+  assert.match(settleTxt, /Differanse \+1[\s\u00a0]000,00/);
+  assert.match(settleTxt, /Pose 512324789405/);
 
   // CSV
   await page.click('button:text-is("Velg alle")');
@@ -203,7 +228,8 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   await page.waitForTimeout(300);
   assert.ok(!!(await idbGet('kv', 'kvr.saved.v1')).test);
 
-  // PNG-eksport (rask modus er på: t-2 har ingen kvittering og skal feile)
+  // PNG-eksport (rask modus er på: t-5 feiler med vilje)
+  failIds.add('t-5');
   await page.click('button:text-is("Velg alle")');
   const [pd] = await Promise.all([page.waitForEvent('download', { timeout: 60000 }), page.click('.kvr-foot button:has-text("PNG")')]);
   const zipBuf = fs.readFileSync(await pd.path());
@@ -260,11 +286,10 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
     await page.addStyleTag({ path: path.join(dir, 'src/panel.css') });
     await page.addScriptTag({ path: path.join(dir, 'src/content.js') });
     await page.waitForSelector('#kvr-panel');
-    await page.click('.kvr-tab:has-text("Filter")');
-    await page.click('text=Negativ sum');
-    await page.fill('input[placeholder="medlemsnr"]', 'M1');
+    await page.click('.kvr-tab:has-text("Rapport")');
     await page.screenshot({ path: process.env.SHOT });
-    await page.click('.kvr-tab:has-text("Innhold")');
+    await page.click('.kvr-tab:has-text("Avvik")');
+    await page.click('button:text-is("Eksempel")');
     await page.screenshot({ path: process.env.SHOT.replace('.png', '-b.png') });
   }
 

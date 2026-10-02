@@ -24,9 +24,15 @@ Chrome MV3-utvidelse for Lindbak Chain Web → Kvitteringsjournal. Leser kun gri
 
 All lagring (innstillinger, lagrede filtre, regler, skannecache) ligger i en egen IndexedDB (`kvr-store`). Ingenting skrives til localStorage eller sessionStorage, så Lindbaks egne data kan ikke bli påvirket. Cachen er begrenset til 2000 kvitteringer (eldste fjernes). Gamle `kvr.*`-nøkler i localStorage fra tidligere versjoner flyttes og slettes ved oppstart.
 
+## Rapport, kassaoppgjør og egne regler
+
+- **Rapport:** dagsrapport for synlige kvitteringer, per kasse eller kasserer, valgfritt per dag: antall salg, sum, retur, pant (skannede), avvik og kassadifferanse. CSV-eksport.
+- **Kassaoppgjør (type 2):** skannes og leses ut: telt kontant/sjekk/kreditt/sum, differanse, pose-nr, sendt bank og valører. Rød markering ved differanse over terskelen (standard 1 kr), som også er en innebygd avviksregel.
+- **Egne avviksregler:** bygg regler med flere vilkår (OG) på sum, klokkeslett, kasse, kasserer, butikk, type, medlem, panteretur, pantsalg, antall pantelapper/varelinjer, kontant tilbake, kassadifferanse, vare, varegruppe og betalingsmåte. Regler som bruker innhold (*) krever skanning, og kjøres kun når du trykker «Kjør avviksjekk».
+
 ## Oppbygging av panelet
 
-Faner: **Søk** (CW-søk), **Filter** (lagrede filtre, dato/tid, butikk/kasse/type, sum/medlem/bong/vare, sortering), **Innhold** (skanning, pant, varegrupper), **Avvik**, **Eksport**. Aktive filtre vises som chips under tallene og fjernes med ett klikk. Faste knapper nederst: Velg alle, Fjern valg, CSV og PNG (viser antall valgte). Fremdrift og Stopp vises øverst uansett fane.
+Faner: **Søk** (CW-søk), **Filter** (lagrede filtre, dato/tid, butikk/kasse/type, sum/medlem/bong/vare, sortering), **Innhold** (skanning, pant, varegrupper), **Rapport**, **Avvik** (innebygde og egne regler), **Eksport**. Aktive filtre vises som chips under tallene og fjernes med ett klikk. Faste knapper nederst: Velg alle, Fjern valg, CSV og PNG (viser antall valgte). Fremdrift og Stopp vises øverst uansett fane.
 
 ## Avkrysning, fremdrift og PNG
 
