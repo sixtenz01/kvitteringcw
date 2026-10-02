@@ -33,6 +33,7 @@
       item: '',
       groups: [],
       onlyAnom: false,
+      note: '',
       sort: 'none'
     };
   }
@@ -94,6 +95,11 @@
     if (f.groups && f.groups.length) {
       var gs = ctx && ctx.groupsOf && ctx.groupsOf(item.transactionId);
       if (!gs || !gs.some(function (g) { return f.groups.indexOf(g) !== -1; })) return false;
+    }
+    if (f.note) {
+      var nt = ctx && ctx.notes && ctx.notes[item.transactionId];
+      if (f.note === 'any') { if (!nt || (!nt.note && !nt.status)) return false; }
+      else if (!nt || nt.status !== f.note) return false;
     }
     if (f.onlyAnom && !(ctx && ctx.anom && ctx.anom[item.transactionId] && ctx.anom[item.transactionId].length)) return false;
     if (f.pant) {
@@ -167,7 +173,7 @@
 
   function parseReceipt(rows) {
     var items = [], pay = {}, last = null;
-    var sale = 0, ret = 0, saleLines = 0, retLines = 0, np = 0;
+    var sale = 0, ret = 0, saleLines = 0, retLines = 0, np = 0, neg = 0;
     (rows || []).forEach(function (cells) {
       if (!cells || !cells.length) return;
       var c0 = String(cells[0] || '').trim();
@@ -189,9 +195,9 @@
       items.push(last);
       if (PANT_LINE.test(c0)) {
         if (amount < 0) { ret += amount; retLines++; } else { sale += amount; saleLines++; }
-      } else np++;
+      } else { np++; if (amount < 0) neg++; }
     });
-    return { v: 2, items: items, pay: pay, np: np, sale: round2(sale), ret: round2(ret), saleLines: saleLines, retLines: retLines };
+    return { v: 2, items: items, pay: pay, np: np, neg: neg, sale: round2(sale), ret: round2(ret), saleLines: saleLines, retLines: retLines };
   }
 
   function sumPant(items, scanMap) {
@@ -523,6 +529,268 @@
     return '﻿' + rows.map(function (r) { return r.map(q).join(';'); }).join('\r\n');
   }
 
+
+  // ---- kontroller på tvers av kvitteringer ----------------------------------------
+  function mins(t) {
+    var m = /^(\d{1,2}):(\d{2})$/.exec(String(t || ''));
+    return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+  }
+  function cnum(v, d) { return hasNum(v) ? Number(v) : d; }
+  function dayOf(it) { return parseDT(it.endDateTime).date; }
+  function timeOf(it) { return mins(parseDT(it.endDateTime).time); }
+  function seqNum(tid) {
+    var n = parseInt(String(tid).substr(String(tid).lastIndexOf('-') + 1), 10);
+    return isNaN(n) ? null : n;
+  }
+  function numCmp(a, b) { return String(a).localeCompare(String(b), 'nb', { numeric: true }); }
+
+  var CONTROL_FIELDS = [
+    ['closeTime', 'Stengetid (HH:MM)', '22:00'], ['closeWindow', 'Minutter før stenging', '60'],
+    ['smallReturn', 'Liten retur ≤ kr', '100'], ['smallReturnN', 'Små returer ≥ antall', '3'],
+    ['cashNoSaleN', 'Kontant tilbake uten salg ≥ antall', '3'], ['repeatN', 'Samme beløp ≥ antall', '3'],
+    ['repeatMin', 'Gjentatt beløp ≥ kr', '50'], ['pantRepeatN', 'Samme pantebeløp ≥ antall', '2'],
+    ['pantMin', 'Pantebeløp ≥ kr', '20'], ['pantRatio', 'Panteretur > salg ×', '1'],
+    ['openFrom', 'Åpner (HH:MM)', '06:00'], ['openTo', 'Stenger (HH:MM)', '23:00'],
+    ['maxGap', 'Maks hull i bongnr', '50'], ['profFactor', 'Avvik fra snitt ×', '1.5'],
+    ['profMin', 'Minst antall for profil', '5'], ['reconTol', 'Avstemt toleranse kr', '1']
+  ];
+
+  function defaultControl() {
+    var o = {};
+    CONTROL_FIELDS.forEach(function (f) { o[f[0]] = f[2]; });
+    return o;
+  }
+
+  function sanitizeControl(raw) {
+    var d = defaultControl();
+    if (!raw || typeof raw !== 'object') return d;
+    Object.keys(d).forEach(function (k) { if (k in raw) d[k] = String(raw[k]); });
+    return d;
+  }
+
+  function isSale(it) { return it.receiptType === 1 && typeof it.totalAmount === 'number'; }
+
+  // Kassererprofil: forholdstall per kasserer mot butikksnittet.
+  function profiles(items, scanMap, cfg) {
+    var f = cnum(cfg.profFactor, 1.5), minN = cnum(cfg.profMin, 5);
+    var acc = {}, tot = null;
+    var fresh = function () { return { count: 0, ret: 0, pos: 0, posSum: 0, scanned: 0, lapper: 0, neg: 0 }; };
+    tot = fresh();
+    items.forEach(function (it) {
+      if (!isSale(it)) return;
+      var a = acc[it.cashierNumber] || (acc[it.cashierNumber] = fresh());
+      var sc = scanMap && scanMap[it.transactionId];
+      [a, tot].forEach(function (x) {
+        x.count++;
+        if (it.totalAmount < 0) x.ret++;
+        if (it.totalAmount > 0) { x.pos++; x.posSum += it.totalAmount; }
+        if (sc) { x.scanned++; x.lapper += sc.retLines || 0; x.neg += sc.neg || 0; }
+      });
+    });
+    var met = function (x) {
+      return {
+        count: x.count, retShare: x.count ? x.ret / x.count : 0, avg: x.pos ? x.posSum / x.pos : 0,
+        scanned: x.scanned, lapper: x.lapper, lapperPer: x.scanned ? x.lapper / x.scanned : 0,
+        neg: x.neg, negPer: x.scanned ? x.neg / x.scanned : 0
+      };
+    };
+    var store = met(tot);
+    var rows = Object.keys(acc).sort(numCmp).map(function (id) {
+      var m = met(acc[id]);
+      m.id = id;
+      m.flags = {};
+      if (m.count >= minN) {
+        m.flags.retShare = store.retShare > 0 && m.retShare >= store.retShare * f;
+        m.flags.avg = store.avg > 0 && (m.avg >= store.avg * f || (m.avg > 0 && m.avg <= store.avg / f));
+      }
+      if (m.scanned >= minN) {
+        m.flags.lapperPer = store.lapperPer > 0 && m.lapperPer >= store.lapperPer * f;
+        m.flags.negPer = store.negPer > 0 && m.negPer >= store.negPer * f;
+      }
+      m.flagged = Object.keys(m.flags).some(function (k) { return m.flags[k]; });
+      return m;
+    });
+    return { rows: rows, store: store };
+  }
+
+  function groupInto(map, key, it) { (map[key] = map[key] || []).push(it); }
+
+  // Mønstre: små returer før stenging, kontant tilbake uten salg flere ganger, samme beløp gjentatt.
+  function patterns(items, scanMap, cfg) {
+    var out = [];
+    var scanOf = function (it) { return scanMap && scanMap[it.transactionId]; };
+    var close = mins(cfg.closeTime);
+    if (close === 0) close = 1440;
+    if (close !== null && hasNum(cfg.smallReturnN)) {
+      var win = cnum(cfg.closeWindow, 60), small = cnum(cfg.smallReturn, 100), g = {};
+      items.forEach(function (it) {
+        if (!isSale(it)) return;
+        var sc = scanOf(it);
+        if (!(it.totalAmount < 0 || (sc && sc.retLines > 0))) return;
+        if (Math.abs(it.totalAmount) > small) return;
+        var m = timeOf(it);
+        if (m === null || m < close - win || m > close) return;
+        groupInto(g, dayOf(it) + '|' + it.workstationNumber, it);
+      });
+      Object.keys(g).forEach(function (k) {
+        if (g[k].length < Number(cfg.smallReturnN)) return;
+        var p = k.split('|');
+        out.push({ kind: 'Mønster', code: 'smallReturns', title: 'Små returer før stenging', flag: true,
+          detail: 'Kasse ' + p[1] + ' ' + p[0] + ': ' + g[k].length + ' returer ≤ ' + small + ' kr de siste ' + win + ' min før ' + cfg.closeTime,
+          ids: g[k].map(function (x) { return x.transactionId; }) });
+      });
+    }
+    if (hasNum(cfg.cashNoSaleN)) {
+      var g2 = {};
+      items.forEach(function (it) {
+        var sc = scanOf(it);
+        if (!sc || sc.np !== 0 || !(sc.retLines > 0) || !((sc.pay['Kontant tilbake'] || 0) > 0)) return;
+        groupInto(g2, String(it.workstationNumber), it);
+      });
+      Object.keys(g2).forEach(function (k) {
+        if (g2[k].length < Number(cfg.cashNoSaleN)) return;
+        var sum = round2(g2[k].reduce(function (a, it) { return a + (scanOf(it).pay['Kontant tilbake'] || 0); }, 0));
+        out.push({ kind: 'Mønster', code: 'cashNoSale', title: 'Kontant tilbake uten salg flere ganger', flag: true,
+          detail: 'Kasse ' + k + ': ' + g2[k].length + ' ganger, totalt ' + sum + ' kr',
+          ids: g2[k].map(function (x) { return x.transactionId; }) });
+      });
+    }
+    if (hasNum(cfg.repeatN)) {
+      var g3 = {}, min = cnum(cfg.repeatMin, 50);
+      items.forEach(function (it) {
+        if (!isSale(it) || Math.abs(it.totalAmount) < min) return;
+        groupInto(g3, dayOf(it) + '|' + it.cashierNumber + '|' + it.totalAmount, it);
+      });
+      Object.keys(g3).forEach(function (k) {
+        if (g3[k].length < Number(cfg.repeatN)) return;
+        var p = k.split('|');
+        out.push({ kind: 'Mønster', code: 'repeatAmount', title: 'Samme beløp gjentatt', flag: true,
+          detail: 'Kasserer ' + p[1] + ' ' + p[0] + ': ' + p[2] + ' kr × ' + g3[k].length,
+          ids: g3[k].map(function (x) { return x.transactionId; }) });
+      });
+    }
+    return out;
+  }
+
+  // Pantelapp-sjekk: samme pantebeløp utbetalt flere ganger, og pantebalanse (salg mot retur) per dag og butikk.
+  function pantCheck(items, scanMap, cfg) {
+    var findings = [], bal = {}, g = {};
+    var min = cnum(cfg.pantMin, 20);
+    items.forEach(function (it) {
+      if (it.receiptType !== 1) return;
+      var sc = scanMap && scanMap[it.transactionId];
+      if (!sc) return;
+      var key = dayOf(it) + '|' + it.storeNumber;
+      var b = bal[key] || (bal[key] = { day: dayOf(it), store: it.storeNumber, sale: 0, ret: 0, n: 0 });
+      b.sale += sc.sale; b.ret += Math.abs(sc.ret); b.n++;
+      if (sc.ret < 0 && Math.abs(sc.ret) >= min) groupInto(g, dayOf(it) + '|' + it.workstationNumber + '|' + Math.abs(sc.ret), it);
+    });
+    if (hasNum(cfg.pantRepeatN)) {
+      Object.keys(g).forEach(function (k) {
+        if (g[k].length < Number(cfg.pantRepeatN)) return;
+        var p = k.split('|');
+        findings.push({ kind: 'Pant', code: 'pantRepeat', title: 'Samme pantebeløp utbetalt flere ganger', flag: true,
+          detail: 'Kasse ' + p[1] + ' ' + p[0] + ': ' + p[2] + ' kr × ' + g[k].length,
+          ids: g[k].map(function (x) { return x.transactionId; }) });
+      });
+    }
+    var ratio = cnum(cfg.pantRatio, null);
+    var rows = Object.keys(bal).map(function (k) {
+      var b = bal[k];
+      b.sale = round2(b.sale); b.ret = round2(b.ret); b.diff = round2(b.sale - b.ret);
+      b.flag = ratio !== null && b.ret > 0 && b.ret > b.sale * ratio;
+      return b;
+    }).sort(function (a, b) { return a.day < b.day ? -1 : a.day > b.day ? 1 : numCmp(a.store, b.store); });
+    return { findings: findings, balance: rows };
+  }
+
+  // Sekvens: hull i bongnummer per kasse, og bonger utenfor åpningstid.
+  function sequence(items, cfg) {
+    var findings = [], byK = {}, skipped = 0;
+    var maxGap = cnum(cfg.maxGap, 50);
+    items.forEach(function (it) {
+      var n = seqNum(it.transactionId);
+      if (n === null) return;
+      groupInto(byK, it.storeNumber + '|' + it.workstationNumber, { n: n, it: it });
+    });
+    Object.keys(byK).forEach(function (k) {
+      var arr = byK[k].sort(function (a, b) { return a.n - b.n; });
+      var uniq = [];
+      arr.forEach(function (x) { if (!uniq.length || uniq[uniq.length - 1].n !== x.n) uniq.push(x); });
+      for (var i = 1; i < uniq.length; i++) {
+        var gap = uniq[i].n - uniq[i - 1].n - 1;
+        if (gap > maxGap) { skipped++; continue; }
+        if (gap > 0) {
+          findings.push({ kind: 'Sekvens', code: 'gap', title: 'Hull i bongnummer', flag: false,
+            detail: 'Kasse ' + k.split('|')[1] + ': mangler ' + (uniq[i - 1].n + 1) + (gap > 1 ? '–' + (uniq[i].n - 1) : '') + ' (' + gap + ')',
+            ids: [uniq[i - 1].it.transactionId, uniq[i].it.transactionId] });
+        }
+      }
+    });
+    var from = mins(cfg.openFrom), to = mins(cfg.openTo);
+    if (from !== null && to !== null) {
+      var g = {};
+      items.forEach(function (it) {
+        if (!isSale(it)) return;
+        var m = timeOf(it);
+        if (m !== null && (m < from || m > to)) groupInto(g, dayOf(it) + '|' + it.workstationNumber, it);
+      });
+      Object.keys(g).forEach(function (k) {
+        var p = k.split('|');
+        var times = g[k].map(function (x) { return parseDT(x.endDateTime).time; }).sort();
+        findings.push({ kind: 'Sekvens', code: 'hours', title: 'Bonger utenfor åpningstid', flag: true,
+          detail: 'Kasse ' + p[1] + ' ' + p[0] + ': ' + g[k].length + ' bonger (' + times[0] + (times.length > 1 ? '–' + times[times.length - 1] : '') + ', åpent ' + cfg.openFrom + '–' + cfg.openTo + ')',
+          ids: g[k].map(function (x) { return x.transactionId; }) });
+      });
+    }
+    return { findings: findings, skippedGaps: skipped };
+  }
+
+  // Dagsavstemming: salg per betalingsmåte mot kassaoppgjør (telt kontant, sendt bank) per kasse og dag.
+  function reconcile(items, scanMap, cfg) {
+    var rows = {}, tol = cnum(cfg.reconTol, 1);
+    items.forEach(function (it) {
+      var sc = scanMap && scanMap[it.transactionId];
+      var k = dayOf(it) + '|' + it.workstationNumber;
+      var r = rows[k] || (rows[k] = { day: dayOf(it), kasse: it.workstationNumber, pay: {}, salgTotal: 0, salgScanned: 0, settleCount: 0, telt: 0, bank: 0 });
+      if (isSale(it)) {
+        r.salgTotal++;
+        if (sc) {
+          r.salgScanned++;
+          Object.keys(sc.pay).forEach(function (l) { r.pay[l] = round2((r.pay[l] || 0) + sc.pay[l]); });
+        }
+      } else if (it.receiptType === 2 && sc && sc.settle) {
+        r.settleCount++;
+        r.telt += sc.settle.telt.kontant || 0;
+        r.bank += sc.settle.bank || 0;
+      }
+    });
+    var out = Object.keys(rows).map(function (k) { return rows[k]; })
+      .filter(function (r) { return r.salgScanned > 0 || r.settleCount > 0; })
+      .map(function (r) {
+        r.expected = round2((r.pay['Kontant'] || 0) - (r.pay['Kontant tilbake'] || 0));
+        r.telt = round2(r.telt); r.bank = round2(r.bank);
+        r.diff = r.settleCount ? round2(r.telt - r.expected) : null;
+        r.flag = r.diff !== null && Math.abs(r.diff) >= tol && r.diff !== 0;
+        r.complete = r.salgScanned === r.salgTotal;
+        return r;
+      })
+      .sort(function (a, b) { return a.day < b.day ? -1 : a.day > b.day ? 1 : numCmp(a.kasse, b.kasse); });
+    return out;
+  }
+
+  function relativeRange(name, now) {
+    var d = now || new Date(), day = 864e5, a = d, b = d;
+    if (name === 'yesterday') { a = b = new Date(d.getTime() - day); }
+    else if (name === 'last7') { a = new Date(d.getTime() - 7 * day); b = new Date(d.getTime() - day); }
+    else if (name === 'lastweek') {
+      var dow = (d.getDay() + 6) % 7;
+      var monThis = new Date(d.getTime() - dow * day);
+      a = new Date(monThis.getTime() - 7 * day); b = new Date(monThis.getTime() - day);
+    }
+    return { dateFrom: ymd(a), dateTo: ymd(b) };
+  }
+
   function pad(n) { return n < 10 ? '0' + n : String(n); }
   function ymd(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
 
@@ -571,6 +839,16 @@
     findDuplicates: findDuplicates,
     sumSelected: sumSelected,
     parseReceipt: parseReceipt,
+    CONTROL_FIELDS: CONTROL_FIELDS,
+    defaultControl: defaultControl,
+    sanitizeControl: sanitizeControl,
+    profiles: profiles,
+    patterns: patterns,
+    pantCheck: pantCheck,
+    sequence: sequence,
+    reconcile: reconcile,
+    relativeRange: relativeRange,
+    mins: mins,
     parseSettlement: parseSettlement,
     report: report,
     RULE_FIELDS: RULE_FIELDS,

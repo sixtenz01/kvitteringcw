@@ -40,7 +40,7 @@
 
 /* faner */
 #kvr-panel .kvr-tabs{display:flex;border-bottom:1px solid var(--kv-line);background:#fff}
-#kvr-panel .kvr-tab{position:relative;flex:1;padding:9px 2px;font-size:12px;border:0;border-bottom:3px solid transparent;background:none;color:var(--kv-muted);font:inherit;font-weight:600;cursor:pointer}
+#kvr-panel .kvr-tab{position:relative;flex:1;padding:9px 1px;font-size:11.5px;border:0;border-bottom:3px solid transparent;background:none;color:var(--kv-muted);font:inherit;font-weight:600;cursor:pointer}
 #kvr-panel .kvr-tab:hover{color:var(--kv-fg);background:var(--kv-soft)}
 #kvr-panel .kvr-tab.kvr-active{color:var(--kv-accent);border-bottom-color:var(--kv-accent)}
 #kvr-panel .kvr-dot{display:inline-block;margin-left:5px;min-width:16px;padding:0 4px;border-radius:999px;background:var(--kv-accent);color:#fff;font-style:normal;font-size:10px;line-height:16px;text-align:center}
@@ -104,3 +104,29 @@ input.kvr-cb,#kvr-select-all{width:16px;height:16px;cursor:pointer;accent-color:
 #kvr-panel .kvr-li.kvr-ok{border-left-color:#00704a}
 #kvr-panel .kvr-li.kvr-na{border-left-color:#9aa8a1}
 #kvr-panel .kvr-cond{display:grid;grid-template-columns:1.7fr .8fr 1fr auto;gap:4px;align-items:center}
+
+#kvr-panel .kvr-bad{background:#fde7e5;color:#a1170c;font-weight:700}
+#kvr-panel .kvr-grid2{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:8px 0}
+tr.kvr-noted>td.kvr-cb-cell::after{content:'●';color:#1a73e8;font-size:9px;margin-left:2px}
+tr.kvr-follow>td.kvr-cb-cell::after{color:#e37400}
+.kvr-modal{position:fixed;inset:0;z-index:100000;background:rgba(10,30,22,.45);display:flex;align-items:center;justify-content:center;padding:20px;font:13px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:#1b2a24}
+.kvr-modal *{box-sizing:border-box}
+.kvr-dlg{background:#fff;border-radius:14px;box-shadow:0 18px 50px rgba(0,0,0,.4);width:min(780px,100%);max-height:90vh;display:flex;flex-direction:column;overflow:hidden}
+.kvr-dlg-h{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#00704a;color:#fff;font-size:15px}
+.kvr-dlg-b{padding:14px 16px;overflow:auto;flex:1}
+.kvr-dlg-f{display:flex;gap:8px;justify-content:flex-end;padding:10px 16px;border-top:1px solid #dde5e1;background:#f0faf5}
+.kvr-dlg .kvr-btn{cursor:pointer;min-height:30px;padding:5px 12px;border:1px solid #b7c6bf;background:#fff;border-radius:8px;font:inherit;font-size:12px;font-weight:550;color:#1b2a24}
+.kvr-dlg .kvr-btn.kvr-primary{background:#00704a;border-color:#00704a;color:#fff}
+.kvr-dlg .kvr-sm{padding:2px 8px;min-height:24px}
+.kvr-dlg-h .kvr-btn{background:rgba(255,255,255,.2);border-color:transparent;color:#fff}
+.kvr-dlg select,.kvr-dlg textarea{width:100%;padding:6px 8px;border:1px solid #c3cfca;border-radius:8px;font:inherit}
+.kvr-dlg .kvr-secbody{display:flex;flex-direction:column;gap:10px}
+.kvr-dlg .kvr-f span{display:block;font-size:11px;color:#5f6f68;margin-bottom:3px}
+.kvr-dlg .kvr-hint{font-size:12px;color:#5f6f68}
+.kvr-sum h5{margin:12px 0 4px;font-size:13px;color:#00704a}
+.kvr-sum ul{margin:0;padding-left:18px}
+.kvr-cmp{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px}
+.kvr-cmpcol{border:1px solid #dde5e1;border-radius:10px;padding:8px;background:#fafcfb}
+.kvr-cmphead{display:flex;flex-direction:column;gap:2px;padding-bottom:6px;margin-bottom:6px;border-bottom:2px dashed #aab7b0;font-size:12px}
+.kvr-cmprow{display:flex;justify-content:space-between;gap:8px;padding:3px 4px;border-bottom:1px dotted #d2dad6;font-size:12px}
+.kvr-cmprow.kvr-only{background:#fff3cd}

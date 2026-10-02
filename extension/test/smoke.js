@@ -23,7 +23,7 @@ const RECEIPTS = {
 const html = `<!doctype html><html><body>
 <input id="fromDatePicker"><input id="toDatePicker"><input id="freetextSearchInput"><input id="receiptNumber">
 <input ng-model="vm.selectedFilters.memberNumber"><input ng-model="vm.selectedFilters.externalLoyaltyNumber">
-<button ng-click="vm.applyFilters()" onclick="window.__applied=(window.__applied||0)+1">Oppdater</button>
+<button ng-click="vm.applyFilters()" onclick="window.__applied=(window.__applied||0)+1;(window.__bound||[]).forEach(function(f){f()})">Oppdater</button>
 <div class="k-grid-header"><table><colgroup><col><col><col></colgroup><thead><tr><th>DATO</th><th>TID</th><th>SUM</th></tr></thead></table></div>
 <table id="g" data-role="grid"><colgroup><col><col><col></colgroup><tbody>
 ${rows.map(r => `<tr data-id="${r.transactionId}"><td></td><td>${r.endDateTime}</td><td>${r.totalAmount}</td></tr>`).join('')}
@@ -37,7 +37,7 @@ var items=rows.map(function(r,i){var o=Object.assign({uid:'u'+i},r);o.toJSON=fun
 var cur=null;
 var grid={tbody:[document.querySelector('tbody')],dataSource:{view:function(){return items}},
  dataItem:function(tr){return items.filter(function(i){return i.transactionId===tr.getAttribute('data-id')})[0]},
- bind:function(){},
+ bind:function(n,f){ (window.__bound=window.__bound||[]).push(f) },
  select:function(tr){ if(!arguments.length) return cur?[cur]:[]; cur=tr; var id=tr.getAttribute('data-id'); setTimeout(function(){ document.getElementById('rc').contentDocument.body.innerHTML=receipts[id]||'<table><tr><td>X</td><td></td><td>1.00</td></tr></table>'; },200); },
  clearSelection:function(){cur=null}};
 var ms={dataSource:{data:function(){return [{get:function(k){return {number:1005,text:'Coop Mega Kolbotn'}[k]}},{get:function(k){return {number:1010,text:'Extra Testby'}[k]}}]}},value:function(v){window.__storesSet=v},trigger:function(){}};
@@ -213,6 +213,66 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   assert.match(settleTxt, /Differanse \+1[\s\u00a0]000,00/);
   assert.match(settleTxt, /Pose 512324789405/);
 
+  // kontroller på tvers av bonger
+  await tab('Kontroll');
+  await page.click('button:text-is("Kjør alle kontroller (synlige)")');
+  await page.waitForFunction(() => /Kontroller ferdig/.test(document.getElementById('kvr-panel').innerText), null, { timeout: 30000 });
+  assert.match(await page.innerText('[data-sec=profile]'), /Butikksnitt/);
+  assert.match(await page.innerText('[data-sec=findings]'), /Bonger utenfor åpningstid/);
+  assert.match(await page.innerText('[data-sec=recon]'), /Forventet/);
+  assert.match(await page.innerText('[data-sec=pantbal]'), /2026-10-02/);
+  await wipe();
+
+  // notater, tastaturflyt og sammenligning
+  await page.click('button:text-is("Fjern valg")');
+  const sel = () => page.evaluate(() => { const s = grid.select()[0]; return s ? s.getAttribute('data-id') : null; });
+  await page.evaluate(() => grid.select(document.querySelector('tr[data-id="t-3"]')));
+  await page.evaluate(() => document.activeElement && document.activeElement.blur());
+  await page.keyboard.press('n');
+  await page.waitForSelector('.kvr-modal textarea');
+  await page.selectOption('.kvr-modal select', 'oppfolging');
+  await page.fill('.kvr-modal textarea', 'Sjekk kvittering mot kasse');
+  await page.click('.kvr-modal button:text-is("Lagre")');
+  assert.strictEqual(await page.$$eval('.kvr-modal', n => n.length), 0);
+  assert.ok(await page.$eval('tr[data-id="t-3"]', t => t.classList.contains('kvr-follow')));
+  assert.match(await page.innerText('[data-sec=notes]'), /Til oppfølging: Sjekk kvittering mot kasse/);
+  await tab('Filter');
+  await page.selectOption('.kvr-f:has-text("Notat/status") select', 'oppfolging');
+  assert.deepStrictEqual(await vis(), ['t-3']);
+  await wipe();
+  await page.keyboard.press('ArrowDown');
+  assert.strictEqual(await sel(), 't-4');
+  await page.keyboard.press('ArrowUp');
+  assert.strictEqual(await sel(), 't-3');
+  await page.keyboard.press('m');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('m');
+  assert.match(await tiles(), /2\s+Valgt/);
+  await page.click('.kvr-foot button:text-is("Sammenlign")');
+  await page.waitForSelector('.kvr-modal .kvr-cmp');
+  assert.match(await page.innerText('.kvr-modal'), /0 like linjer · 3 bare i venstre · 2 bare i høyre/);
+  await page.keyboard.press('Escape');
+  assert.strictEqual(await page.$$eval('.kvr-modal', n => n.length), 0);
+  await page.click('button:text-is("Fjern valg")');
+  assert.ok(await page.$eval('.kvr-foot button:text-is("Sammenlign")', b => b.style.display === 'none'));
+
+  // arbeidsoppgave: Morgenkontroll
+  await tab('Kontroll');
+  const y = new Date(Date.now() - 864e5);
+  const yd = String(y.getDate()).padStart(2, '0') + '.' + String(y.getMonth() + 1).padStart(2, '0') + '.' + y.getFullYear();
+  await page.click('[data-sec=tasks] button:text-is("Kjør")');
+  await page.waitForSelector('.kvr-modal .kvr-sum', { timeout: 40000 });
+  assert.strictEqual(await page.inputValue('#fromDatePicker'), yd);
+  const sumTxt = await page.innerText('.kvr-modal');
+  assert.match(sumTxt, /Oversikt/); assert.match(sumTxt, /Avvik \(\d+ bonger\)/); assert.match(sumTxt, /Dagsavstemming/);
+  await page.keyboard.press('Escape');
+  await tab('Kontroll');
+  await page.fill('[data-sec=tasks] input[placeholder^="navn"]', 'Mandagens kontroll');
+  await page.selectOption('[data-sec=tasks] select >> nth=1', 'lastweek');
+  await page.click('button:text-is("Lagre som oppgave")');
+  assert.ok((await page.$$eval('[data-sec=tasks] select option', o => o.map(x => x.textContent))).includes('Mandagens kontroll'));
+  await wipe();
+
   // CSV
   await page.click('button:text-is("Velg alle")');
   const [dl] = await Promise.all([page.waitForEvent('download'), page.click('.kvr-foot button:has-text("CSV")')]);
@@ -286,10 +346,13 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
     await page.addStyleTag({ path: path.join(dir, 'src/panel.css') });
     await page.addScriptTag({ path: path.join(dir, 'src/content.js') });
     await page.waitForSelector('#kvr-panel');
-    await page.click('.kvr-tab:has-text("Rapport")');
+    await page.click('.kvr-tab:has-text("Kontroll")');
+    await page.click('button:text-is("Kjør alle kontroller (synlige)")');
+    await page.waitForFunction(() => /Kontroller ferdig/.test(document.getElementById('kvr-panel').innerText), null, { timeout: 30000 });
+    await page.evaluate(() => { document.querySelector('.kvr-scroll').scrollTop = 330; });
     await page.screenshot({ path: process.env.SHOT });
-    await page.click('.kvr-tab:has-text("Avvik")');
-    await page.click('button:text-is("Eksempel")');
+    await page.click('[data-sec=tasks] button:text-is("Kjør")');
+    await page.waitForSelector('.kvr-modal .kvr-sum', { timeout: 40000 });
     await page.screenshot({ path: process.env.SHOT.replace('.png', '-b.png') });
   }
 

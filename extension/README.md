@@ -30,6 +30,19 @@ All lagring (innstillinger, lagrede filtre, regler, skannecache) ligger i en ege
 - **Kassaoppgjør (type 2):** skannes og leses ut: telt kontant/sjekk/kreditt/sum, differanse, pose-nr, sendt bank og valører. Rød markering ved differanse over terskelen (standard 1 kr), som også er en innebygd avviksregel.
 - **Egne avviksregler:** bygg regler med flere vilkår (OG) på sum, klokkeslett, kasse, kasserer, butikk, type, medlem, panteretur, pantsalg, antall pantelapper/varelinjer, kontant tilbake, kassadifferanse, vare, varegruppe og betalingsmåte. Regler som bruker innhold (*) krever skanning, og kjøres kun når du trykker «Kjør avviksjekk».
 
+## Kontroll-fanen
+
+- **Arbeidsoppgaver:** lagre filter + datovalg (i går, i dag, siste 7 dager, forrige uke) + skanning + kontroller + sammendrag som én knapp. «Morgenkontroll (i går)» er innebygd: henter gårsdagen fra CW, skanner, kjører alle kontroller og viser et sammendrag som kan kopieres som tekst. Lagrede filtre (Filter-fanen) setter bare filter.
+- **Kjør alle kontroller:** kjører først avviksjekken per kvittering (Avvik-fanen) og deretter kontrollene under. Funn som flagger bonger legges i samme avviksliste («Kun avvik»). Tom terskel slår av en sjekk.
+- **Kassererprofil:** returandel, snittbeløp, pantelapper per salg og korrigeringer (negative varelinjer utenom pant) per kasserer mot butikksnittet. Rødt = minst 1,5× snittet (innstilling).
+- **Mønstre:** små returer rett før stenging, kontant tilbake uten salg flere ganger på samme kasse, samme beløp gjentatt (per kasserer og dag). Dette er kontroller på tvers av bonger; «Mulige duplikater» i Filter-fanen er noe annet (samme beløp, kasse og minutt).
+- **Pantelapp-sjekk:** samme pantebeløp utbetalt flere ganger, og pantebalanse (salg mot utbetalt) per dag og butikk.
+- **Sekvens:** hull i bongnummer per kasse (kun pålitelig når CW-listen ikke er filtrert på type, kasse eller tid) og bonger utenfor åpningstid.
+- **Dagsavstemming:** forventet kontant (kontant − kontant tilbake fra salg) mot telt kontant i kassaoppgjør, per kasse og dag, med bank/kort og sendt bank til info.
+- **Oppfølging:** notat og status (sjekket / til oppfølging) per bong, oppfølgingsliste, filter og CSV-eksport. Radene får en prikk.
+- **Sammenlign bonger:** velg to bonger, trykk «Sammenlign» nederst. Linjer som ikke finnes på den andre markeres.
+- **Tastaturflyt:** ↑/↓ bytter bong, N notat, M velg/fjern, Esc lukker. Kan slås av.
+
 ## Oppbygging av panelet
 
 Faner: **Søk** (CW-søk), **Filter** (lagrede filtre, dato/tid, butikk/kasse/type, sum/medlem/bong/vare, sortering), **Innhold** (skanning, pant, varegrupper), **Rapport**, **Avvik** (innebygde og egne regler), **Eksport**. Aktive filtre vises som chips under tallene og fjernes med ett klikk. Faste knapper nederst: Velg alle, Fjern valg, CSV og PNG (viser antall valgte). Fremdrift og Stopp vises øverst uansett fane.

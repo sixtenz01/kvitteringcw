@@ -178,4 +178,105 @@ assert.strictEqual(L.evalRule({ name: 'x', enabled: false, conds: [mk('sum', '<'
 assert.strictEqual(L.evalRule({ name: 'x', conds: [] }, itm, null, null), false);
 assert.deepStrictEqual(L.anomalies(itm, scn, Object.assign({}, cfg, { bigReturn: '', manyLapper: '', cashNoSale: false, roundMin: '' }), [rl(mk('sum', '<', '0'))], null), ['Regel: T']);
 assert.deepStrictEqual(L.sanitizeCustom([{ name: 'a', conds: [{ f: 'sum', op: '>=', v: 5 }, { f: 'bogus', op: '=', v: 1 }, { f: 'sum', op: '??', v: 1 }] }])[0].conds, [{ f: 'sum', op: '>=', v: '5' }]);
+
+// ---- kontroller
+const C = L.defaultControl();
+const rcpt = (rows) => L.parseReceipt(rows);
+const neg1 = rcpt([['7000000000001 BANAN KG', '', '-15.00'], ['399 PANTELAPP', '', '-20.00']]);
+assert.strictEqual(neg1.neg, 1);
+assert.strictEqual(neg1.retLines, 1);
+const mkI = (id, day, time, kasse, kasserer, total, type) => ({ transactionId: id, endDateTime: day + ' ' + time, storeNumber: 1005, workstationNumber: kasse, cashierNumber: kasserer, totalAmount: total, receiptType: type || 1, memberNumber: null });
+
+// profil: kasserer B har mange returer
+const pi = [];
+const pscan = {};
+for (let i = 0; i < 10; i++) { pi.push(mkI('a-' + (100 + i), '2026-10-02', '10:0' + i, 1, 'A', 100 + i)); pscan['a-' + (100 + i)] = rcpt([['7000 VARE', '', '100.00']]); }
+for (let i = 0; i < 10; i++) {
+  const neg = i < 6;
+  pi.push(mkI('b-' + (200 + i), '2026-10-02', '11:0' + i, 2, 'B', neg ? -30 : 100));
+  pscan['b-' + (200 + i)] = rcpt(neg ? [['399 PANTELAPP', '', '-30.00'], ['399 PANTELAPP', '', '-5.00']] : [['7000 VARE', '', '100.00']]);
+}
+const prof = L.profiles(pi, pscan, C);
+const pa = prof.rows.find(r => r.id === 'A'), pb = prof.rows.find(r => r.id === 'B');
+assert.strictEqual(pa.retShare, 0);
+assert.strictEqual(pb.retShare, 0.6);
+assert.strictEqual(pb.flags.retShare, true);
+assert.strictEqual(pb.flags.lapperPer, true);
+assert.strictEqual(pa.flagged, false);
+assert.strictEqual(pb.flagged, true);
+assert.strictEqual(prof.store.count, 20);
+assert.strictEqual(L.profiles(pi.slice(0, 3), pscan, C).rows[0].flags.retShare, undefined, 'for få til profil');
+
+// mønstre
+const mi = [
+  mkI('m-1', '2026-10-02', '21:10', 3, 'X', -40), mkI('m-2', '2026-10-02', '21:30', 3, 'X', -25), mkI('m-3', '2026-10-02', '21:55', 3, 'X', -60),
+  mkI('m-4', '2026-10-02', '15:00', 3, 'X', -30), mkI('m-5', '2026-10-02', '21:20', 4, 'X', -30),
+  mkI('r-1', '2026-10-02', '12:00', 5, 'Y', 199), mkI('r-2', '2026-10-02', '12:30', 5, 'Y', 199), mkI('r-3', '2026-10-02', '13:00', 6, 'Y', 199),
+  mkI('r-4', '2026-10-03', '12:00', 5, 'Y', 199), mkI('r-5', '2026-10-02', '14:00', 5, 'Y', 20), mkI('r-6', '2026-10-02', '14:05', 5, 'Y', 20), mkI('r-7', '2026-10-02', '14:10', 5, 'Y', 20)
+];
+const cn = rcpt([['399 PANTELAPP', '', '-50.00'], ['Kontant tilbake:', '', '50.00']]);
+const mscan = { 'c-1': cn, 'c-2': cn, 'c-3': cn, 'c-4': rcpt([['7000 VARE', '', '10.00'], ['399 PANTELAPP', '', '-5.00'], ['Kontant tilbake:', '', '5.00']]) };
+const ci = ['c-1', 'c-2', 'c-3', 'c-4'].map((id, i) => mkI(id, '2026-10-02', '09:0' + i, 7, 'Z', -50));
+const pat = L.patterns(mi.concat(ci), mscan, C);
+const byCode = c => pat.filter(x => x.code === c);
+assert.strictEqual(byCode('smallReturns').length, 1);
+assert.deepStrictEqual(byCode('smallReturns')[0].ids, ['m-1', 'm-2', 'm-3']);
+assert.strictEqual(byCode('cashNoSale').length, 1);
+assert.strictEqual(byCode('cashNoSale')[0].ids.length, 3);
+assert.match(byCode('cashNoSale')[0].detail, /Kasse 7: 3 ganger, totalt 150 kr/);
+assert.deepStrictEqual(byCode('repeatAmount').map(x => x.detail).sort(), ['Kasserer Y 2026-10-02: 199 kr × 3', 'Kasserer Z 2026-10-02: -50 kr × 4']);
+assert.strictEqual(L.patterns(mi, {}, Object.assign({}, C, { repeatN: '2' })).filter(x => x.code === 'repeatAmount').length, 1);
+assert.strictEqual(L.patterns(mi, {}, Object.assign({}, C, { smallReturnN: '' })).filter(x => x.code === 'smallReturns').length, 0, 'tom verdi = av');
+assert.strictEqual(L.patterns(mi, {}, Object.assign({}, C, { closeTime: '00:00', closeWindow: '60' })).filter(x => x.code === 'smallReturns').length, 0);
+
+// pantcheck
+const pci = [mkI('p-1', '2026-10-02', '10:00', 1, 'A', -150, 1), mkI('p-2', '2026-10-02', '11:00', 1, 'A', -150, 1), mkI('p-3', '2026-10-02', '12:00', 1, 'A', 30, 1), mkI('p-4', '2026-10-02', '12:10', 2, 'A', -150, 1)];
+const pcs = { 'p-1': rcpt([['399 PANTELAPP', '', '-150.00']]), 'p-2': rcpt([['399 PANTELAPP', '', '-150.00']]), 'p-3': rcpt([['220 PANT', '', '2.00']]), 'p-4': rcpt([['399 PANTELAPP', '', '-150.00']]) };
+const pk = L.pantCheck(pci, pcs, C);
+assert.strictEqual(pk.findings.length, 1);
+assert.strictEqual(pk.findings[0].ids.length, 2);
+assert.match(pk.findings[0].detail, /Kasse 1 2026-10-02: 150 kr × 2/);
+assert.deepStrictEqual(pk.balance.map(b => [b.sale, b.ret, b.diff, b.flag]), [[2, 450, -448, true]]);
+assert.strictEqual(L.pantCheck(pci, pcs, Object.assign({}, C, { pantRatio: '' })).balance[0].flag, false);
+
+// sekvens
+const si = [mkI('x-100', '2026-10-02', '10:00', 1, 'A', 10), mkI('x-101', '2026-10-02', '10:05', 1, 'A', 10), mkI('x-104', '2026-10-02', '10:10', 1, 'A', 10),
+  mkI('x-105', '2026-10-02', '10:15', 1, 'A', 10), mkI('y-500', '2026-10-02', '10:00', 2, 'A', 10), mkI('y-900', '2026-10-02', '10:30', 2, 'A', 10),
+  mkI('z-1', '2026-10-02', '03:10', 3, 'A', 10), mkI('z-2', '2026-10-02', '23:30', 3, 'A', 10), mkI('z-3', '2026-10-02', '12:00', 3, 'A', 10)];
+const sq = L.sequence(si, C);
+const gaps = sq.findings.filter(f => f.code === 'gap');
+assert.strictEqual(gaps.length, 1 + 0);
+assert.match(gaps[0].detail, /Kasse 1: mangler 102–103 \(2\)/);
+assert.strictEqual(sq.skippedGaps, 1, 'hull over maks hoppes over');
+const hrs = sq.findings.filter(f => f.code === 'hours');
+assert.strictEqual(hrs.length, 1);
+assert.strictEqual(hrs[0].ids.length, 2);
+assert.strictEqual(L.sequence(si, Object.assign({}, C, { openFrom: '', openTo: '' })).findings.filter(f => f.code === 'hours').length, 0);
+
+// avstemming
+const ri = [mkI('s-1', '2026-10-02', '10:00', 1, 'A', 300), mkI('s-2', '2026-10-02', '11:00', 1, 'A', 120), mkI('s-3', '2026-10-02', '12:00', 1, 'A', -50), mkI('s-4', '2026-10-02', '23:00', 1, 'A', null, 2), mkI('s-5', '2026-10-02', '10:00', 2, 'A', 80)];
+const rs = {
+  's-1': rcpt([['7000 V', '', '300.00'], ['Kontant:', '', '300.00']]),
+  's-2': rcpt([['7000 V', '', '120.00'], ['Bank:', '', '120.00']]),
+  's-3': rcpt([['399 PANTELAPP', '', '-50.00'], ['Kontant tilbake:', '', '50.00']]),
+  's-4': L.parseSettlement([['Kontant:', '240.00'], ['Sum', '240.00'], ['Sendt bank:'], ['NOK', '200.00'], ['Differanse'], ['Sum', '0.00']]),
+  's-5': rcpt([['7000 V', '', '80.00'], ['Bank:', '', '80.00']])
+};
+const rec = L.reconcile(ri, rs, C);
+assert.strictEqual(rec.length, 2);
+assert.deepStrictEqual([rec[0].expected, rec[0].telt, rec[0].diff, rec[0].flag, rec[0].bank, rec[0].pay.Bank], [250, 240, -10, true, 200, 120]);
+assert.strictEqual(rec[1].diff, null);
+assert.strictEqual(rec[0].complete, true);
+assert.strictEqual(L.reconcile(ri, rs, Object.assign({}, C, { reconTol: '20' }))[0].flag, false);
+
+// relative datoer og filter/notat
+assert.deepStrictEqual(L.relativeRange('yesterday', new Date(2026, 9, 2, 12)), { dateFrom: '2026-10-01', dateTo: '2026-10-01' });
+assert.deepStrictEqual(L.relativeRange('lastweek', new Date(2026, 9, 2, 12)), { dateFrom: '2026-09-21', dateTo: '2026-09-27' });
+assert.deepStrictEqual(L.relativeRange('last7', new Date(2026, 9, 8, 12)), { dateFrom: '2026-10-01', dateTo: '2026-10-07' });
+const nctx = { notes: { 'a-1': { status: 'oppfolging', note: 'sjekk' }, 'a-2': { status: 'sjekket' }, 'a-3': { status: '', note: 'hei' } } };
+assert.deepStrictEqual(ids(F({ note: 'any' }), nctx), ['a-1', 'a-2', 'a-3']);
+assert.deepStrictEqual(ids(F({ note: 'oppfolging' }), nctx), ['a-1']);
+assert.deepStrictEqual(ids(F({ note: 'sjekket' }), nctx), ['a-2']);
+assert.strictEqual(L.sanitizeControl({ closeTime: '21:30', bogus: 1 }).closeTime, '21:30');
+assert.strictEqual(L.mins('07:05'), 425);
 console.log('logic: ok');
