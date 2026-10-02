@@ -76,9 +76,9 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   const idbGet = (store, key) => page.evaluate(([st, k]) => new Promise(res => { const rq = indexedDB.open('kvr-store', 1); rq.onsuccess = () => { const g = rq.result.transaction(st).objectStore(st).get(k); g.onsuccess = () => res(g.result === undefined ? null : g.result); }; }), [store, key]);
   const vis = () => page.$$eval('tbody tr', trs => trs.filter(t => t.style.display !== 'none').map(t => t.getAttribute('data-id')));
   const tiles = () => page.innerText('.kvr-tiles');
-  const sec = (name) => page.click(`summary:text-is("${name}")`);
+  const tab = (name) => page.click(`.kvr-tab:has-text("${name}")`);
   const grp = (name) => page.selectOption('.kvr-f:has-text("Filter: varegruppe") select', name ? name.split(',') : []);
-  const wipe = () => page.click('button:text-is("Nullstill")');
+  const wipe = async () => { for (;;) { const c = await page.$('.kvr-fchip'); if (!c) break; await c.click(); } };
 
   assert.deepStrictEqual(await vis(), ['t-1', 't-2', 't-3', 't-4', 't-5']);
   assert.strictEqual(await page.$$eval('tr.kvr-dup', n => n.length), 2);
@@ -90,6 +90,14 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   assert.match(await tiles(), /5\s+Valgt/);
   await page.click('#kvr-select-all');
   assert.match(await tiles(), /0\s+Valgt/);
+
+  await page.click('text=Negativ sum');
+  assert.match(await page.innerText('.kvr-chipsrow'), /Negativ sum/);
+  assert.strictEqual(await page.innerText('.kvr-tab.kvr-active .kvr-dot'), '1');
+  await page.click('.kvr-fchip');
+  assert.deepStrictEqual(await vis(), ['t-1', 't-2', 't-3', 't-4', 't-5']);
+  assert.strictEqual(await page.$$eval('.kvr-fchip', n => n.length), 0);
+  assert.ok(await page.$eval('.kvr-foot button:has-text("PNG")', b => b.disabled));
 
   // butikknavn fra CW-widgeten
   const opts = await page.$$eval('#kvr-panel option', o => o.map(x => x.textContent));
@@ -111,6 +119,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   await page.selectOption('.kvr-f:has-text("Sortering") select', 'none');
 
   // skanning (DOM)
+  await tab('Innhold');
   await page.click('text=Skann innhold (synlige)');
   await page.waitForFunction(() => /Ferdig\. Skannet/.test(document.getElementById('kvr-panel').innerText), null, { timeout: 15000 });
   assert.match(await page.textContent('#kvr-panel'), /Skannet 4/);
@@ -121,10 +130,11 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   await wipe();
 
   // varevarsøk og varegrupper
+  await tab('Filter');
   await page.fill('input[placeholder="EAN eller varenavn (skannede)"]', 'banan');
   assert.deepStrictEqual(await vis(), ['t-5']);
   await wipe();
-  await sec('Varegrupper');
+  await tab('Innhold');
   await grp('Tobakk'); assert.deepStrictEqual(await vis(), ['t-3']);
   await grp('Meieri'); assert.deepStrictEqual(await vis(), ['t-4']);
   await grp('Frukt'); assert.deepStrictEqual(await vis(), ['t-5']);
@@ -139,11 +149,11 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   await grp(''); await wipe();
   await page.waitForTimeout(300);
   assert.ok((await idbGet('kv', 'kvr.rules.v1')).find(r => r.name === 'Bakeri').include.includes('REGAL HVETEMEL 1KG'));
-  await page.click('button:text-is("Velg synlige")');
+  await page.click('button:text-is("Velg alle")');
   assert.match(await page.innerText('.kvr-table'), /Tobakk/);
 
   // avvik (kun på knapp)
-  await sec('Avvik');
+  await tab('Avvik');
   assert.strictEqual(await page.$$eval('tr.kvr-flag', n => n.length), 0);
   await page.fill('.kvr-f:has-text("Stor panteretur") input', '200');
   await page.click('text=Kjør avviksjekk');
@@ -155,6 +165,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   await wipe();
 
   // CW-søk
+  await tab('Søk');
   await page.fill('input[placeholder="EAN eller varenavn"]', 'ban');
   await page.fill('input[placeholder="bongnr"]', '1005-4-3');
   await page.selectOption('#kvr-panel select[multiple][size="6"]', '1005');
@@ -167,6 +178,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   assert.deepStrictEqual(await page.evaluate(() => window.__storesSet), [1005]);
 
   // rask skanning via API
+  await tab('Innhold');
   await page.click('text=Tøm cache');
   await page.click('text=Rask skanning via CW-API');
   await page.click('text=Skann innhold (synlige)');
@@ -177,24 +189,23 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   await wipe();
 
   // CSV
-  await sec('Eksport');
-  await page.click('button:text-is("Velg synlige")');
-  const [dl] = await Promise.all([page.waitForEvent('download'), page.click('button:text-is("CSV: valgte")')]);
+  await page.click('button:text-is("Velg alle")');
+  const [dl] = await Promise.all([page.waitForEvent('download'), page.click('.kvr-foot button:has-text("CSV")')]);
   const csv = fs.readFileSync(await dl.path(), 'utf8');
   assert.ok(csv.startsWith('﻿Tid;Butikk;Kasse;Kasserer;Bongnr;Type;Sum;Medlem;Pant salg;Pant retur;Varegrupper;Avvik'));
   assert.ok(csv.includes('1005 – Coop Mega Kolbotn') && csv.includes('Tobakk'));
   assert.strictEqual(csv.trim().split('\r\n').length, 6);
 
   // lagring av filter
-  await sec('Lagrede filtre');
+  await tab('Filter');
   await page.fill('input[placeholder="navn på filter"]', 'test');
   await page.click('button:text-is("Lagre")');
   await page.waitForTimeout(300);
   assert.ok(!!(await idbGet('kv', 'kvr.saved.v1')).test);
 
   // PNG-eksport (rask modus er på: t-2 har ingen kvittering og skal feile)
-  await page.click('button:text-is("Velg synlige")');
-  const [pd] = await Promise.all([page.waitForEvent('download', { timeout: 60000 }), page.click('button:text-is("PNG: valgte (ZIP)")')]);
+  await page.click('button:text-is("Velg alle")');
+  const [pd] = await Promise.all([page.waitForEvent('download', { timeout: 60000 }), page.click('.kvr-foot button:has-text("PNG")')]);
   const zipBuf = fs.readFileSync(await pd.path());
   assert.strictEqual(zipBuf.slice(0, 2).toString(), 'PK');
   assert.ok(zipBuf.includes(Buffer.from('\x89PNG', 'latin1')), 'PNG-data i zip');
@@ -206,8 +217,9 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   await load();
   assert.deepStrictEqual(await page.evaluate(() => Object.keys(localStorage).filter(k => k.indexOf('kvr') === 0)), []);
   assert.strictEqual(await page.evaluate(() => localStorage.getItem('lindbak-own')), 'uendret');
-  await sec('Lagrede filtre');
+  await tab('Filter');
   assert.ok((await page.$$eval('#kvr-panel select option', o => o.map(x => x.textContent))).includes('test'), 'lagret filter overlever omlasting');
+  await tab('Innhold');
   await page.click('text=Skann innhold (synlige)');
   assert.match(await page.textContent('#kvr-panel'), /Ingenting å skanne/);
 
@@ -235,7 +247,12 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
     await page.addStyleTag({ path: path.join(dir, 'src/panel.css') });
     await page.addScriptTag({ path: path.join(dir, 'src/content.js') });
     await page.waitForSelector('#kvr-panel');
+    await page.click('.kvr-tab:has-text("Filter")');
+    await page.click('text=Negativ sum');
+    await page.fill('input[placeholder="medlemsnr"]', 'M1');
     await page.screenshot({ path: process.env.SHOT });
+    await page.click('.kvr-tab:has-text("Innhold")');
+    await page.screenshot({ path: process.env.SHOT.replace('.png', '-b.png') });
   }
 
   assert.deepStrictEqual(errors, []);

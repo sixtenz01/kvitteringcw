@@ -7,8 +7,9 @@
   var K = {
     saved: 'kvr.saved.v1', collapsed: 'kvr.collapsed.v1', scan: 'kvr.scan.v2', pos: 'kvr.pos.v1',
     size: 'kvr.size.v1', sec: 'kvr.sec.v1', rules: 'kvr.rules.v1', anom: 'kvr.anom.v1',
-    stores: 'kvr.stores.v1', fast: 'kvr.fast.v1'
+    stores: 'kvr.stores.v1', fast: 'kvr.fast.v1', tab: 'kvr.tab.v1'
   };
+  var sayTimer = null;
   var failedRecs = [];
   var lastRetry = null;
   var API_ROOT = '/LindbakRetail_1/Journal/Viewer/Api/';
@@ -293,7 +294,7 @@
   async function scanList(todo) {
     if (scanning || !todo.length) return { done: 0, failed: 0 };
     scanning = true; cancelScan = false;
-    ui.scanBtn.disabled = true; ui.anomBtn.disabled = true; ui.stopBtn.disabled = false; ui.retryBtn.disabled = true; if (ui.retryBtn2) ui.retryBtn2.disabled = true;
+    ui.scanBtn.disabled = true; ui.anomBtn.disabled = true; ui.stopBtn.disabled = false; ui.stopTop.style.display = ''; ui.retryBtn.disabled = true; if (ui.retryBtn2) ui.retryBtn2.disabled = true;
     var prev = grid.select();
     var prevTr = prev && prev[0];
     var done = 0, failed = 0, t0 = Date.now();
@@ -321,7 +322,7 @@
     }
     scanning = false;
     ui.scanBtn.disabled = false; ui.anomBtn.disabled = false; ui.stopBtn.disabled = true;
-    ui.scanStatus.textContent = (cancelScan ? 'Stoppet. ' : 'Ferdig. ') + 'Skannet ' + done + (failed ? ', feilet ' + failed : '') + '.';
+    say((cancelScan ? 'Stoppet. ' : 'Ferdig. ') + 'Skannet ' + done + (failed ? ', feilet ' + failed : '') + '.');
     return { done: done, failed: failed };
   }
 
@@ -338,10 +339,19 @@
     var elapsed = (Date.now() - t0) / 1000;
     var rem = i > 0 ? Math.round(elapsed / i * (total - i)) : 0;
     var pct = Math.round(i / total * 100);
-    setProgress(pct);
+    setProgress(Math.max(pct, 2));
     var msg = label + ' ' + (i + 1) + ' av ' + total + ' (' + pct + '%)' + etaText(rem) + (failed ? ' · feilet: ' + failed : '');
+    say(msg);
+  }
+
+  function say(msg) {
     ui.scanStatus.textContent = msg;
     ui.exportStatus.textContent = msg;
+    ui.opText.textContent = msg;
+    ui.opRow.style.display = msg || scanning ? 'flex' : 'none';
+    ui.stopTop.style.display = scanning ? '' : 'none';
+    clearTimeout(sayTimer);
+    if (msg && !scanning) sayTimer = setTimeout(function () { say(''); }, 9000);
   }
 
   function setProgress(pct) {
@@ -546,6 +556,49 @@
     ui.badge.textContent = (active ? active + ' filter' : 'ingen filter') + (sm.count ? ' · ' + sm.count + ' valgt' : '');
     ui.badge.classList.toggle('kvr-on', active > 0);
     renderGroupSums(chosen);
+    renderChips();
+    ui.pantLine.style.display = sm.count ? '' : 'none';
+    ui.footPng.disabled = sm.count === 0 || scanning;
+    ui.footCsv.textContent = sm.count ? 'CSV (' + sm.count + ')' : 'CSV';
+    ui.footPng.textContent = sm.count ? 'PNG (' + sm.count + ')' : 'PNG';
+  }
+
+
+  function chipDefs() {
+    var f = filters, out = [];
+    var add = function (label, clear) { out.push({ label: label, clear: clear }); };
+    var rng = function (a, b) { return (a || '…') + ' → ' + (b || '…'); };
+    if (f.stores.length) add('Butikk: ' + f.stores.map(sLabel).join(', '), function () { f.stores = []; });
+    if (f.workstations.length) add('Kasse: ' + f.workstations.join(', '), function () { f.workstations = []; });
+    if (f.cashiers.length) add('Kasserer: ' + f.cashiers.join(', '), function () { f.cashiers = []; });
+    if (f.types.length) add('Type: ' + f.types.map(L.typeLabel).join(', '), function () { f.types = []; });
+    if (f.dateFrom || f.dateTo) add('Dato ' + rng(f.dateFrom, f.dateTo), function () { f.dateFrom = ''; f.dateTo = ''; });
+    if (f.timeFrom || f.timeTo) add('Tid ' + rng(f.timeFrom, f.timeTo), function () { f.timeFrom = ''; f.timeTo = ''; });
+    if (f.sumMin !== '' || f.sumMax !== '') add('Sum ' + rng(f.sumMin, f.sumMax), function () { f.sumMin = ''; f.sumMax = ''; });
+    if (f.onlyNegative) add('Negativ sum', function () { f.onlyNegative = false; });
+    if (f.member) add('Medlem: ' + f.member, function () { f.member = ''; });
+    if (f.onlyMember) add('Kun medlem', function () { f.onlyMember = false; });
+    if (f.onlyDup) add('Duplikater', function () { f.onlyDup = false; });
+    if (f.onlyAnom) add('Kun avvik', function () { f.onlyAnom = false; });
+    if (f.bong) add('Bong: ' + f.bong, function () { f.bong = ''; });
+    if (f.item) add('Vare: ' + f.item, function () { f.item = ''; });
+    if (f.pant) add('Pant: ' + ({ any: 'pant/retur', sale: 'salg', 'return': 'retur' }[f.pant] || f.pant), function () { f.pant = ''; });
+    if (f.groups.length) add('Gruppe: ' + f.groups.join(', '), function () { f.groups = []; });
+    return out;
+  }
+
+  function renderChips() {
+    var defs = chipDefs();
+    ui.chips.innerHTML = '';
+    ui.chips.style.display = defs.length ? 'flex' : 'none';
+    defs.forEach(function (d) {
+      ui.chips.appendChild(el('button', { type: 'button', class: 'kvr-fchip', title: 'Fjern filter', onclick: function () { d.clear(); writeForm(); apply(); } }, [
+        el('span', { text: d.label }), el('b', { text: '×' })
+      ]));
+    });
+    if (defs.length > 1) ui.chips.appendChild(el('button', { type: 'button', class: 'kvr-link', text: 'Nullstill alle', onclick: function () { filters = L.defaultFilters(); writeForm(); apply(); } }));
+    ui.tabDot.style.display = defs.length ? '' : 'none';
+    ui.tabDot.textContent = defs.length ? String(defs.length) : '';
   }
 
   function renderGroupSums(chosen) {
@@ -716,7 +769,7 @@
     if (!window.html2canvas || !window.JSZip) { ui.exportStatus.textContent = 'Biblioteker (html2canvas/JSZip) er ikke lastet.'; return; }
     if (!list.length) { ui.exportStatus.textContent = 'Velg kvitteringer først.'; return; }
     scanning = true; cancelScan = false;
-    ui.scanBtn.disabled = true; ui.anomBtn.disabled = true; ui.stopBtn.disabled = false; ui.retryBtn.disabled = true; if (ui.retryBtn2) ui.retryBtn2.disabled = true;
+    ui.scanBtn.disabled = true; ui.anomBtn.disabled = true; ui.stopBtn.disabled = false; ui.stopTop.style.display = ''; ui.retryBtn.disabled = true; if (ui.retryBtn2) ui.retryBtn2.disabled = true;
     var prev = grid.select();
     var prevTr = prev && prev[0];
     var files = [], failed = [], t0 = Date.now();
@@ -750,7 +803,7 @@
     scanning = false;
     ui.scanBtn.disabled = false; ui.anomBtn.disabled = false; ui.stopBtn.disabled = true;
     syncRetry();
-    ui.exportStatus.textContent = (cancelScan ? 'Stoppet. ' : 'Ferdig. ') + files.length + ' PNG' + (failed.length ? ', feilet ' + failed.length : '') + '.';
+    say((cancelScan ? 'Stoppet. ' : 'Ferdig. ') + files.length + ' PNG' + (failed.length ? ', feilet ' + failed.length : '') + '.');
   }
 
   function selectedRecs() {
@@ -857,17 +910,8 @@
   }
 
   // ---- panel ----------------------------------------------------------------
-  function section(id, title, kids, open) {
-    var body = el('div', { class: 'kvr-secbody' }, kids);
-    var d = el('details', { class: 'kvr-sec' }, [el('summary', { text: title }), body]);
-    var st = store(K.sec) || {};
-    d.open = id in st ? !!st[id] : open;
-    d.addEventListener('toggle', function () {
-      var m = store(K.sec) || {};
-      m[id] = d.open;
-      store(K.sec, m);
-    });
-    return d;
+  function section(id, title, kids) {
+    return el('div', { class: 'kvr-card', 'data-sec': id }, [el('h4', { text: title }), el('div', { class: 'kvr-secbody' }, kids)]);
   }
 
   function tile(label) {
@@ -952,7 +996,11 @@
     ui.pantLine = el('div', { class: 'kvr-pantline', text: '' });
     ui.bar = el('div', { class: 'kvr-bar' });
     ui.barWrap = el('div', { class: 'kvr-barwrap', style: 'display:none' }, [ui.bar]);
-    var stats = el('div', { class: 'kvr-stats' }, [el('div', { class: 'kvr-tiles' }, [t1.node, t2.node, t3.node, t4.node]), ui.pantLine, ui.barWrap]);
+    ui.chips = el('div', { class: 'kvr-chipsrow' });
+    ui.opText = el('span', { class: 'kvr-optext' });
+    ui.stopTop = el('button', { type: 'button', class: 'kvr-btn kvr-sm', text: 'Stopp', style: 'display:none', onclick: function () { cancelScan = true; } });
+    ui.opRow = el('div', { class: 'kvr-oprow', style: 'display:none' }, [ui.opText, ui.stopTop]);
+    var stats = el('div', { class: 'kvr-stats' }, [el('div', { class: 'kvr-tiles' }, [t1.node, t2.node, t3.node, t4.node]), ui.chips, ui.pantLine, ui.opRow, ui.barWrap]);
 
     // --- Søk i CW
     var cwFrom = el('input', { type: 'date' }), cwTo = el('input', { type: 'date' });
@@ -975,7 +1023,7 @@
     cwFree.addEventListener('input', function () { cw.free = cwFree.value.trim(); });
     cwBong.addEventListener('input', function () { cw.bong = cwBong.value.trim(); });
     ui.cwStatus = el('div', { class: 'kvr-note', text: '' });
-    var secCw = section('cw', 'Søk i CW (hele journalen)', [
+    var secCw = section('cw', 'Søk i hele journalen (CW)', [
       el('div', { class: 'kvr-row' }, [field('Dato fra', cwFrom), field('Dato til', cwTo)]),
       field('Butikker (navn som i CW)', cwQ), ui.cwStores, ui.cwCount,
       field('Medlemsnr', cwMem), field('Lojalitets-ID', cwLoy),
@@ -996,7 +1044,7 @@
     });
     ui.dateFrom = input('date'); ui.dateTo = input('date');
     ui.timeFrom = input('time'); ui.timeTo = input('time');
-    var secTime = section('time', 'Filtrer listen: dato og tid', [
+    var secTime = section('time', 'Dato og tid', [
       quick,
       el('div', { class: 'kvr-row' }, [field('Dato fra', ui.dateFrom), field('Dato til', ui.dateTo)]),
       el('div', { class: 'kvr-row' }, [field('Tid fra', ui.timeFrom), field('Tid til', ui.timeTo)])
@@ -1006,7 +1054,7 @@
     var storeNames = el('textarea', { rows: '3', placeholder: '1005=Coop Mega Kolbotn', title: 'Egne butikknavn (nr=navn per linje). Brukes hvis CW-listen ikke finnes.' });
     storeNames.value = manualStores;
     storeNames.addEventListener('change', function () { manualStores = storeNames.value; store(K.stores, manualStores); optsKey = ''; apply(); });
-    var secWho = section('who', 'Filtrer listen: butikk, kasse og type', [
+    var secWho = section('who', 'Butikk, kasse og type', [
       el('div', { class: 'kvr-row' }, [field('Butikk', ui.stores), field('Kasse', ui.workstations)]),
       el('div', { class: 'kvr-row' }, [field('Kasserer', ui.cashiers), field('Type', ui.types)]),
       el('div', { class: 'kvr-hint', text: 'Hold Ctrl for flere valg.' }),
@@ -1021,7 +1069,7 @@
     var dp = check('Kun mulige duplikater'); ui.onlyDup = dp.box;
     ui.bong = input('text', { placeholder: 'bongnr, f.eks. 1005-6-123' });
     ui.item = input('text', { placeholder: 'EAN eller varenavn (skannede)' });
-    var secSum = section('sum', 'Filtrer listen: sum, medlem, bong og vare', [
+    var secSum = section('sum', 'Sum, medlem, bong og vare', [
       el('div', { class: 'kvr-row' }, [field('Sum fra', ui.sumMin), field('Sum til', ui.sumMax)]),
       neg.node, field('Medlemssøk', ui.member), mem.node, dp.node,
       field('Bongnr', ui.bong), field('Vare (krever skanning)', ui.item)
@@ -1150,25 +1198,60 @@
     ui.exportStatus = el('div', { class: 'kvr-note', text: '' });
     var secExport = section('export', 'Eksport', [
       el('div', { class: 'kvr-row' }, [btn('CSV: synlige', function () { exportCsv(false); }), btn('CSV: valgte', function () { exportCsv(true); })]),
-      el('div', { class: 'kvr-row' }, [btn('PNG: valgte (ZIP)', function () { exportPng(selectedRecs()); }, 'kvr-primary'), ui.retryBtn2 = btn('Prøv feilede på nytt', function () { if (lastRetry) lastRetry(); })]),
+      el('div', { class: 'kvr-row' }, [btn('PNG: valgte (ZIP)', function () { exportPng(selectedRecs()); }), ui.retryBtn2 = btn('Prøv feilede på nytt', function () { if (lastRetry) lastRetry(); })]),
       pH.node, pM.node,
       el('div', { class: 'kvr-hint', text: 'Semikolon-separert, åpnes direkte i Excel. Varegrupper og pant tas med for skannede kvitteringer.' }),
       ui.exportStatus
     ], false);
 
-    var scroll = el('div', { class: 'kvr-scroll' }, [secCw, secTime, secWho, secSum, secScan, secGroups, secAnom, secSort, secSaved, secExport]);
+    var tabDefs = [
+      ['cw', 'Søk', [secCw]],
+      ['filter', 'Filter', [secSaved, secTime, secWho, secSum, secSort]],
+      ['content', 'Innhold', [el('p', { class: 'kvr-intro', text: 'Skann kvitteringene for å finne pant, varegrupper og varer. Filtrer listen først, så skanner du bare det som er synlig.' }), secScan, secGroups]],
+      ['anom', 'Avvik', [secAnom]],
+      ['export', 'Eksport', [secExport]]
+    ];
+    ui.tabBtns = {}; ui.panes = {};
+    var tabBar = el('div', { class: 'kvr-tabs', role: 'tablist' });
+    var scroll = el('div', { class: 'kvr-scroll' });
+    function showTab(id) {
+      Object.keys(ui.panes).forEach(function (k) {
+        ui.panes[k].style.display = k === id ? '' : 'none';
+        ui.tabBtns[k].classList.toggle('kvr-active', k === id);
+        ui.tabBtns[k].setAttribute('aria-selected', k === id ? 'true' : 'false');
+      });
+      store(K.tab, id);
+      scroll.scrollTop = 0;
+    }
+    tabDefs.forEach(function (t) {
+      var b = el('button', { type: 'button', class: 'kvr-tab', role: 'tab', text: t[1] });
+      b.addEventListener('click', function () { showTab(t[0]); });
+      ui.tabBtns[t[0]] = b;
+      tabBar.appendChild(b);
+      ui.panes[t[0]] = el('div', { class: 'kvr-pane', role: 'tabpanel' }, t[2]);
+      scroll.appendChild(ui.panes[t[0]]);
+    });
+    ui.tabDot = el('i', { class: 'kvr-dot', style: 'display:none' });
+    ui.tabBtns.filter.appendChild(ui.tabDot);
+
+    ui.footPng = btn('PNG', function () { exportPng(selectedRecs()); }, 'kvr-primary');
+    ui.footPng.title = 'Last ned valgte kvitteringer som PNG (ZIP ved flere)';
+    ui.footCsv = btn('CSV', function () { exportCsv(Object.keys(selected).length > 0); });
+    ui.footCsv.title = 'Eksporter valgte (eller synlige hvis ingen er valgt) til CSV';
     var foot = el('div', { class: 'kvr-foot' }, [
-      btn('Nullstill', function () { filters = L.defaultFilters(); writeForm(); apply(); }),
-      btn('Velg synlige', function () {
+      btn('Velg alle', function () {
         recs.forEach(function (r) { if (r.show) selected[r.item.transactionId] = r.item; });
         apply();
       }),
-      btn('Fjern valg', function () { selected = {}; apply(); })
+      btn('Fjern valg', function () { selected = {}; apply(); }),
+      ui.footCsv,
+      ui.footPng
     ]);
 
     panel.appendChild(head);
-    panel.appendChild(el('div', { class: 'kvr-main' }, [stats, scroll, foot]));
+    panel.appendChild(el('div', { class: 'kvr-main' }, [stats, tabBar, scroll, foot]));
     document.body.appendChild(panel);
+    showTab(ui.panes[store(K.tab)] ? store(K.tab) : 'filter');
 
     function setCollapsed(c) {
       panel.classList.toggle('kvr-collapsed', c);

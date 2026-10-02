@@ -24,6 +24,10 @@ Chrome MV3-utvidelse for Lindbak Chain Web → Kvitteringsjournal. Leser kun gri
 
 All lagring (innstillinger, lagrede filtre, regler, skannecache) ligger i en egen IndexedDB (`kvr-store`). Ingenting skrives til localStorage eller sessionStorage, så Lindbaks egne data kan ikke bli påvirket. Cachen er begrenset til 2000 kvitteringer (eldste fjernes). Gamle `kvr.*`-nøkler i localStorage fra tidligere versjoner flyttes og slettes ved oppstart.
 
+## Oppbygging av panelet
+
+Faner: **Søk** (CW-søk), **Filter** (lagrede filtre, dato/tid, butikk/kasse/type, sum/medlem/bong/vare, sortering), **Innhold** (skanning, pant, varegrupper), **Avvik**, **Eksport**. Aktive filtre vises som chips under tallene og fjernes med ett klikk. Faste knapper nederst: Velg alle, Fjern valg, CSV og PNG (viser antall valgte). Fremdrift og Stopp vises øverst uansett fane.
+
 ## Avkrysning, fremdrift og PNG
 
 - Egen avkrysningskolonne (col/th/td, samme teknikk som gamle pluginen) med «velg alle synlige». Settes inn på nytt når gridet tegnes om.
