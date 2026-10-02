@@ -34,7 +34,7 @@ All lagring (innstillinger, lagrede filtre, regler, skannecache) ligger i en ege
 
 **Omfang for analysen** (Analyse → Sjekk først) velger hva «Kjør analyse» ser på, uavhengig av filtrene i listen: periode (med hurtigvalg), butikk, kasserer, kasse, og alt dette kombinert. «Sammenlign med en annen periode» gir periode A mot B. Valget huskes. Går omfanget utenfor det som er hentet fra CW, vises en advarsel, og «Kjør analyse» henter det som mangler (setter datoer og butikker i CW, og tømmer medlems-, vare- og bongsøk). Tester som trenger hele bildet (hull i bongnummer, salg etter kassaoppgjør, falsk retur) bruker alle innlastede bonger i valgte butikker og viser bare funn som gjelder omfanget.
 
-Nye tester (vekter og terskler kan justeres under Detaljer):
+Nye tester (vekter og terskler justeres under Mer → Innstillinger):
 
 - **Falsk retur:** retur uten salg av varen i datagrunnlaget (krever at minst 80 % av salgene er skannet), kortkjøp refundert kontant, og salg og retur av samme beløp på samme kasse innen 60 minutter. Ren panteretur regnes ikke.
 - **Salg etter kassaoppgjør:** salg på en kasse etter dagens siste kassaoppgjør (frist 5 min). Oppgjør før åpningstid regnes som forrige dags avslutning.
@@ -56,7 +56,7 @@ Bruk:
 - **Rabattårsaker** (tekstnr i Lindbak): 1 Datovare, 2 Feil pris, 3 Prisløfte, 4 Reserveløsning kupong, 5 Annen rabattårsak, 6 Best før. Pluginen kjenner igjen både nummer og tekst på kvitteringen; ukjent tekst vises som den står.
 - **Filter:** «Rabatt (krever skanning)» under Skann: har rabatt, uten årsak, med årsak, har kupong, eller én bestemt årsak.
 - **Analyse → Detaljer → Rabatter og kuponger:** per kasserer antall bonger med rabatt, rabatt i kr, uten årsak, kuponger; butikksum; tabell «Rabatt per årsak» (klikk en årsak for å filtrere listen) og matrisen «Kasserer × årsak»; de vanligste kampanjene. Test «Rabatt uten årsak» flagger rabattlinjer på minst 30 % uten årsak (terskel kan endres, tom = av). «Mange rabatter uten årsak» flagger kasserere som ligger minst 1,5× butikkens andel.
-- **Overvåkede rabattårsaker:** test «Rabatt med overvåket årsak» flagger bonger med rabattlinje der årsaken står på en liste (standard 2 Feil pris, 4 Reserveløsning kupong, 5 Annen rabattårsak). Terskler under Detaljer: årsaker (tekstnr, komma; tom = av), rabatt minst x % og y kr (standard 0), og «Mange rabatter med overvåket årsak» når en kasserer har minst 3 bonger (tom = av). Egen vekt for begge (standard 3), justerbar under risikovekting. Kassererfunnet gir poeng på kassereren, ikke på bongene.
+- **Overvåkede rabattårsaker:** test «Rabatt med overvåket årsak» flagger bonger med rabattlinje der årsaken står på en liste (standard 2 Feil pris, 4 Reserveløsning kupong, 5 Annen rabattårsak). Terskler under Mer → Innstillinger → Rabatt: årsaker (tekstnr, komma; tom = av), rabatt minst x % og y kr (standard 0), og «Mange rabatter med overvåket årsak» når en kasserer har minst 3 bonger (tom = av). Egen vekt for begge (standard 3), justerbar under Innstillinger. Kassererfunnet gir poeng på kassereren, ikke på bongene.
 - **Egne regler:** felt for rabatt (kr), høyeste rabatt (%), rabattårsak, rabattlinjer uten årsak, antall kuponger og kupong (id/navn).
 - **Fokus:** rabatt og kuponger per kasserer eller kasse.
 
@@ -77,14 +77,25 @@ Ikke verifisert: om kvitteringen skriver årsaken som nummer eller tekst (begge 
 - **Sammenlign bonger:** velg to bonger, trykk «Sammenlign» nederst. Linjer som ikke finnes på den andre markeres.
 - **Tastaturflyt:** ↑/↓ bytter bong, N notat, M velg/fjern, Esc lukker. Kan slås av.
 
+## Innstillinger og hjelp
+
+- **Mer → Innstillinger** (eller ⚙ øverst) samler alle terskler, avviksgrenser og poeng, gruppert per test: Avvik per bong, Mønstre, Falsk retur, Salg etter kassaoppgjør, Slettede bonger, Kassadifferanse over tid, Tallanalyse, Rabatt, Pant, Åpningstider, Kassererprofil og Egne regler. Hver gruppe viser forklaring, enhet, hvor mange verdier som er endret, og «Standard for denne gruppen».
+- Tester som kan slås av har en «På»-bryter (avskrudd = tom verdi = testen kjøres ikke). Endrede verdier merkes med gul kant. Alt lagres med en gang.
+- Terskler gjelder fra neste analyse (Sjekk først og Innstillinger viser en melding og en knapp for å kjøre på nytt). Poeng gjelder med en gang.
+- **Generelt:** egne butikknavn, tastaturflyt, tilbakestilling av plassering, **Eksporter** og **Importer** innstillinger (JSON med terskler, poeng, egne regler, varegrupper og butikknavn) og «Alt til standard».
+- «Juster» ved siden av hver forklaring i «Hvorfor flagget?» åpner riktig innstillingsgruppe.
+- **?** øverst: kort veiledning, tegnforklaring (rød kant, gul stripe, risikonivå, «Ny», lenker, rødt tall) og snarveier. En ikke-blokkerende melding vises første gang.
+- Slettinger og tilbakestillinger bekreftes i panelet, ikke med nettleserdialoger.
+- Piltaster (← → Home End) bytter fane når en fane har fokus. Kortene i Detaljer kan foldes sammen, og valget huskes.
+
 ## Oppbygging av panelet
 
-**Analyse** har fem delfaner: **Sjekk først** (én prioritert liste med risikoscore, forklaring og handlinger), **Diagram**, **Rapport**, **Fokus** og **Detaljer** (terskler, egne regler, risikovekting, arbeidsoppgaver, notater og detaljresultater fra kontrollene).
+**Analyse** har fem delfaner: **Sjekk først** (én prioritert liste med risikoscore, forklaring og handlinger), **Diagram**, **Rapport**, **Fokus** og **Detaljer** (resultater fra kontrollene som sammenfoldbare kort, egne regler, arbeidsoppgaver og notater).
 
-- **Sjekk først:** «Kjør analyse» skanner det som mangler, kjører avvik og kontroller på tvers av bonger, og rangerer kvitteringene etter risikoscore (summen av vekter per avvik, justerbare under Detaljer → Risikovekting; høy ≥ 8, middels ≥ 4). Over listen står de fem kasserene med høyest score. Hver kvittering kan åpnes: «Hvorfor flagget?» med terskler og tall, bonglinjene (eller kassaoppgjøret), og knappene Sjekket, Til oppfølging, Notat, Velg og Vis i listen. Sjekkede bonger skjules (kan vises igjen), og bonger som ikke var flagget i forrige analyse merkes «Ny».
+- **Sjekk først:** «Kjør analyse» skanner det som mangler, kjører avvik og kontroller på tvers av bonger, og rangerer kvitteringene etter risikoscore (summen av vekter per avvik, justerbare under Mer → Innstillinger; høy ≥ 8, middels ≥ 4). Over listen står de fem kasserene med høyest score. Hver kvittering kan åpnes: «Hvorfor flagget?» med terskler og tall, bonglinjene (eller kassaoppgjøret), og knappene Sjekket, Til oppfølging, Notat, Velg og Vis i listen. Sjekkede bonger skjules (kan vises igjen), og bonger som ikke var flagget i forrige analyse merkes «Ny».
 - **Diagram:** salg per time, salg per dag, returandel per kasserer mot butikksnittet, kasse × time-kart og pant per dag (salg mot utbetalt). Klikk en søyle, rute eller kasserer for å filtrere listen; diagrammene ser bort fra filteret de selv styrer, så de ikke krymper. Hover viser tall, og «Tabell» viser samme data som tabell. Fargene (blå og oransje for to serier, ett grønt hue for størrelse) er validert for fargesyn.
 
-Fem faner: **Hent** (søk i hele journalen via CW), **Filtrer** (butikk som søkbar liste med navn og antall, som under Hent; dato/tid; kasse/kasserer/type som piller; sum, medlem, bong, vare, notat, sortering), **Skann** (skanning, pant, varegrupper), **Analyse** (Rapport, Avvik og Kontroll som delfaner) og **Mer** (eksport og innstillinger).
+Fem faner: **Hent** (søk i hele journalen via CW), **Filtrer** (butikk som søkbar liste med navn og antall, som under Hent; dato/tid; kasse/kasserer/type som piller; sum, medlem, bong, vare, notat, sortering), **Skann** (skanning, pant, varegrupper), **Analyse** (Rapport, Avvik og Kontroll som delfaner) og **Mer** (delfanene Eksport og Innstillinger).
 
 - **Skannestatus** vises alltid under tallene («Skannet 4 av 5» med «Skann nå»). Filter som krever skanning (pant, vare, varegruppe) viser en gul stripe med hvor mange som mangler. Skanning dekker alle kvitteringer som passerer de andre filtrene, også de som pantfilteret ellers skjuler.
 - **Én statuslinje** øverst viser fremdrift og resultat, og forsvinner av seg selv.
@@ -118,6 +129,8 @@ Fem faner: **Hent** (søk i hele journalen via CW), **Filtrer** (butikk som søk
 node test/logic.test.js
 NODE_PATH=<global node_modules> node test/smoke.js   # Playwright, fiktivt grid
 NODE_PATH=<global node_modules> node test/audit.js   # revisjonstester og omfang, eget datasett
+NODE_PATH=<global node_modules> node test/settings.js # innstillinger, hjelp, bekreftelser, import/eksport, piltaster
+TOUR=<mappe> NODE_PATH=<global node_modules> node test/tour.js  # skjermbilder av alle faner (valgfritt)
 ```
 
 ## Ikke verifisert mot ekte side

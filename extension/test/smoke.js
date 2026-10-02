@@ -79,7 +79,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   const idbGet = (store, key) => page.evaluate(([st, k]) => new Promise(res => { const rq = indexedDB.open('kvr-store', 1); rq.onsuccess = () => { const g = rq.result.transaction(st).objectStore(st).get(k); g.onsuccess = () => res(g.result === undefined ? null : g.result); }; }), [store, key]);
   const vis = () => page.$$eval('tbody tr', trs => trs.filter(t => t.style.display !== 'none').map(t => t.getAttribute('data-id')));
   const tiles = () => page.innerText('.kvr-tiles');
-  const TABMAP = { 'Søk': ['Hent'], 'Filter': ['Filtrer'], 'Innhold': ['Skann'], 'Rapport': ['Analyse', 'Rapport'], 'Avvik': ['Analyse', 'Detaljer'], 'Kontroll': ['Analyse', 'Detaljer'], 'Fokus': ['Analyse', 'Fokus'], 'Sjekk': ['Analyse', 'Sjekk først'], 'Diagram': ['Analyse', 'Diagram'], 'Eksport': ['Mer'] };
+  const TABMAP = { 'Søk': ['Hent'], 'Filter': ['Filtrer'], 'Innhold': ['Skann'], 'Rapport': ['Analyse', 'Rapport'], 'Avvik': ['Analyse', 'Detaljer'], 'Kontroll': ['Analyse', 'Detaljer'], 'Fokus': ['Analyse', 'Fokus'], 'Sjekk': ['Analyse', 'Sjekk først'], 'Diagram': ['Analyse', 'Diagram'], 'Eksport': ['Mer', 'Eksport'], 'Innstillinger': ['Mer', 'Innstillinger'] };
   const tab = async (name) => {
     const m = TABMAP[name];
     await page.click(`.kvr-tab:has-text("${m[0]}")`);
@@ -90,6 +90,14 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
     for (const p of await page.$$(box + ' .kvr-pill.kvr-on')) await p.click();
     if (name) await page.click(`${box} .kvr-pill:text-is("${name}")`);
   };
+  const setting = async (group, label, value) => {
+    await tab('Innstillinger');
+    if (!(await page.$eval(`[data-sec=set-${group}]`, d => d.open))) await page.click(`[data-sec=set-${group}] summary`);
+    const inp = page.locator(`[data-sec=set-${group}] input[aria-label="${label}"]`);
+    await inp.fill(value);
+    await inp.press('Tab');
+  };
+  const unfold = async (id) => { if (await page.$eval(`[data-sec=${id}]`, n => n.classList.contains('kvr-folded'))) await page.click(`[data-sec=${id}] > h4`); };
   const wipe = async () => { for (;;) { const c = await page.$('.kvr-fchip'); if (!c) break; await c.click(); } };
 
   assert.deepStrictEqual(await vis(), ['t-1', 't-2', 't-3', 't-4', 't-5']);
@@ -229,7 +237,8 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   // avvik (kun på knapp)
   await tab('Avvik');
   assert.strictEqual(await page.$$eval('tr.kvr-flag', n => n.length), 0);
-  await page.fill('.kvr-f:has-text("Stor panteretur") input', '200');
+  await setting('bong', 'Stor panteretur fra', '200');
+  await tab('Avvik');
   await page.click('text=Kjør avviksjekk');
   await page.waitForFunction(() => /Avviksjekk ferdig/.test(document.getElementById('kvr-panel').innerText));
   assert.match(await page.innerText('[data-sec=anom] .kvr-list'), /Stor panteretur \(256 kr\)/);
@@ -297,9 +306,11 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   await page.waitForFunction(() => /Kontroller ferdig/.test(document.getElementById('kvr-panel').innerText), null, { timeout: 30000 });
   assert.match(await page.innerText('[data-sec=profile]'), /Butikksnitt/);
   assert.match(await page.innerText('[data-sec=findings]'), /Bonger utenfor åpningstid/);
+  await unfold('recon');
   assert.match(await page.innerText('[data-sec=recon]'), /Forventet/);
   assert.match(await page.innerText('[data-sec=ctlsum]'), /\d+ funn · \d+ flaggede bonger/);
   await page.click('[data-sec=ctlsum] button:text-is("Avstemming")');
+  await unfold('pantbal');
   assert.match(await page.innerText('[data-sec=pantbal]'), /2026-10-02/);
   await wipe();
 
@@ -355,6 +366,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
 
   // Sjekk først: prioritert liste, forklaring og handlinger i raden
   await tab('Sjekk');
+  await page.evaluate(() => { document.querySelector('[data-sec=scope]').open = true; });
   assert.match(await page.innerText('[data-sec=scope]'), /Omfang: (?!hele listen).*→ \d+ av 5 kvitteringer/s, 'morgenkontrollen satte omfanget til i går');
   await page.click('[data-sec=scope] button:text-is("Nullstill omfang")');
   assert.match(await page.innerText('[data-sec=scope]'), /Omfang: hele listen → 5 av 5 kvitteringer/);

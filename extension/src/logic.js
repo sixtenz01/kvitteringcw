@@ -645,6 +645,93 @@
     ['discWatchKr', 'Overvåket: rabatt ≥ kr', '0'], ['discWatchN', 'Overvåket: kasserer ved ≥ antall bonger (tom = av)', '3']
   ];
 
+  // Innstillinger gruppert per test (brukes av Innstillinger-siden).
+  // src: 'ctl' (kontrolltersklene) eller 'anom' (avvik per bong). kind: num | time | text | flag.
+  // off: tom verdi slår testen av, og vises som av/på.
+  function sf(k, src, kind, label, unit, hint, off) { return { k: k, src: src, kind: kind, label: label, unit: unit || '', hint: hint || '', off: !!off }; }
+
+  var SETTING_GROUPS = [
+    { id: 'bong', title: 'Avvik per bong', text: 'Sjekkes på hver enkelt kvittering.', fields: [
+      sf('bigReturn', 'anom', 'num', 'Stor panteretur fra', 'kr', 'Utbetalt panteretur på én bong.', true),
+      sf('manyLapper', 'anom', 'num', 'Mange pantelapper fra', 'stk', 'Antall pantelapper på én bong.', true),
+      sf('roundMin', 'anom', 'num', 'Rundt beløp fra', 'kr', 'Totalen er et helt hundre-beløp på minst dette.', true),
+      sf('settleDiff', 'anom', 'num', 'Kassadifferanse fra', 'kr', 'Differanse i ett kassaoppgjør.', true),
+      sf('cashNoSale', 'anom', 'flag', 'Kontant tilbake uten salg', '', 'Bongen har bare pantelapper og kontant tilbake.')
+    ], weights: ['Stor panteretur', 'Mange pantelapper', 'Kontant tilbake uten salg', 'Rundt beløp', 'Kassadifferanse'] },
+    { id: 'patterns', title: 'Mønstre på tvers av bonger', text: 'Gjentakelser som er vanlige ved misbruk.', fields: [
+      sf('smallReturnN', 'ctl', 'num', 'Små returer før stenging: flagg ved', 'stk', 'Antall små returer på samme kasse rett før stenging.', true),
+      sf('smallReturn', 'ctl', 'num', 'Liten retur er opptil', 'kr'),
+      sf('closeTime', 'ctl', 'time', 'Stengetid', 'HH:MM'),
+      sf('closeWindow', 'ctl', 'num', 'Tidsrom før stenging', 'min'),
+      sf('cashNoSaleN', 'ctl', 'num', 'Kontant tilbake uten salg: flagg ved', 'stk', 'Gjentatt samme dag på samme kasse.', true),
+      sf('repeatN', 'ctl', 'num', 'Samme beløp gjentatt: flagg ved', 'stk', 'Samme bongsum flere ganger på samme kasse.', true),
+      sf('repeatMin', 'ctl', 'num', 'Gjentatt beløp er minst', 'kr')
+    ], weights: ['Små returer før stenging', 'Kontant tilbake uten salg flere ganger', 'Samme beløp gjentatt'] },
+    { id: 'falseRet', title: 'Falsk retur', text: 'Retur uten salg, kortkjøp refundert kontant og salg og retur av samme beløp.', fields: [
+      sf('falseRet', 'ctl', 'flag', 'Test på', '', 'Retur uten salg krever at minst 80 % av salgene er skannet.'),
+      sf('saleReturnMin', 'ctl', 'num', 'Salg og retur av samme beløp innen', 'min')
+    ], weights: ['Retur uten salg', 'Kortkjøp refundert kontant', 'Salg og retur av samme beløp'] },
+    { id: 'afterSettle', title: 'Salg etter kassaoppgjør', text: 'Salg på en kasse etter dagens siste kassaoppgjør. Oppgjør før åpningstid regnes som forrige dag.', fields: [
+      sf('settleGraceMin', 'ctl', 'num', 'Frist etter oppgjør', 'min', 'Salg innenfor fristen flagges ikke.', true)
+    ], weights: ['Salg etter kassaoppgjør'] },
+    { id: 'deleted', title: 'Slettede bonger (bongnummer)', text: 'Hull, dobbelte og feil rekkefølge i bongnummer. Gjelder bare hvis CW-listen ikke er filtrert på type, kasse eller tid.', fields: [
+      sf('maxGap', 'ctl', 'num', 'Størst hull som regnes som slettede bonger', 'stk', 'Større hull hoppes over, de skyldes oftest filtrering.', true)
+    ], weights: ['Hull i bongnummer', 'Bongnummer og tid stemmer ikke', 'Dobbelt bongnummer'] },
+    { id: 'diff', title: 'Kassadifferanse over tid', text: 'Gjentatte minusdifferanser per kasserer og kasse.', fields: [
+      sf('diffMin', 'ctl', 'num', 'Differanser telles fra', 'kr'),
+      sf('diffRepeatN', 'ctl', 'num', 'Minus i minst', 'oppgjør', 'Fordelt på minst to dager.', true),
+      sf('diffTotal', 'ctl', 'num', 'Eller minus totalt over', 'kr', '', true)
+    ], weights: ['Gjentatte kassadifferanser'] },
+    { id: 'numbers', title: 'Tallanalyse', text: 'Benford (første siffer i totalbeløp) og andel hele kroner. Indikasjon, ikke bevis.', fields: [
+      sf('benfordMin', 'ctl', 'num', 'Benford: minst antall bonger', 'stk'),
+      sf('benfordCashMin', 'ctl', 'num', 'Benford: minst per kasserer', 'stk'),
+      sf('benfordMad', 'ctl', 'num', 'Benford: avvik (MAD) over', '', 'Nigrini: over 0,015 er avvikende.'),
+      sf('roundShare', 'ctl', 'num', 'Hele kroner: andel over', '%', '', true),
+      sf('roundMinN', 'ctl', 'num', 'Hele kroner: minst antall bonger', 'stk')
+    ], weights: ['Avvikende sifferfordeling', 'Mange runde beløp'] },
+    { id: 'disc', title: 'Rabatt', text: 'Rabatt uten årsak, overvåkede årsaker (tekstnr 1 Datovare, 2 Feil pris, 3 Prisløfte, 4 Reserveløsning kupong, 5 Annen rabattårsak, 6 Best før) og sammenligning av kasserere.', fields: [
+      sf('discPct', 'ctl', 'num', 'Rabatt uten årsak fra', '%', 'Flagger bongen når en rabattlinje uten årsak er minst dette.', true),
+      sf('discCash', 'ctl', 'flag', 'Sammenlign kasserere (rabatt uten årsak)', '', 'Markerer kasserere som ligger over butikksnittet (se Kassererprofil).'),
+      sf('discWatch', 'ctl', 'text', 'Overvåkede årsaker (tekstnr, komma)', '', 'For eksempel 2,4,5.', true),
+      sf('discWatchPct', 'ctl', 'num', 'Overvåket: rabatt minst', '%'),
+      sf('discWatchKr', 'ctl', 'num', 'Overvåket: rabatt minst', 'kr'),
+      sf('discWatchN', 'ctl', 'num', 'Overvåket: marker kasserer ved', 'bonger', '', true)
+    ], weights: ['Rabatt uten årsak', 'Mange rabatter uten årsak', 'Rabatt med overvåket årsak', 'Mange rabatter med overvåket årsak'] },
+    { id: 'pant', title: 'Pant', text: 'Pantelapp-sjekk per dag og gjentatte pantebeløp.', fields: [
+      sf('pantRepeatN', 'ctl', 'num', 'Samme pantebeløp: flagg ved', 'stk', '', true),
+      sf('pantMin', 'ctl', 'num', 'Pantebeløp er minst', 'kr'),
+      sf('pantRatio', 'ctl', 'num', 'Panteretur over pantesalg ×', '', 'Rødt i balansen når utbetalt retur er over dette tallet ganger pantesalget.', true)
+    ], weights: ['Samme pantebeløp utbetalt flere ganger'] },
+    { id: 'hours', title: 'Åpningstider', text: 'Brukes til bonger utenfor åpningstid og til å avgjøre hvilken dag et kassaoppgjør hører til.', fields: [
+      sf('openFrom', 'ctl', 'time', 'Åpner', 'HH:MM'),
+      sf('openTo', 'ctl', 'time', 'Stenger', 'HH:MM')
+    ], weights: ['Bonger utenfor åpningstid'] },
+    { id: 'profile', title: 'Kassererprofil og avstemming', text: 'Sammenligning mot butikksnittet og toleranse i dagsavstemmingen.', fields: [
+      sf('profFactor', 'ctl', 'num', 'Avviker fra snittet fra', '×'),
+      sf('profMin', 'ctl', 'num', 'Minst antall bonger for profil', 'stk'),
+      sf('reconTol', 'ctl', 'num', 'Avstemming: toleranse', 'kr')
+    ], weights: [] },
+    { id: 'rules', title: 'Egne regler', text: 'Reglene bygges under Analyse → Detaljer → Egne avviksregler.', fields: [], weights: ['Regel'] }
+  ];
+
+  function groupForReason(reason) {
+    var b = reasonBase(reason);
+    if (/^Regel:/.test(b)) b = 'Regel';
+    for (var i = 0; i < SETTING_GROUPS.length; i++) if (SETTING_GROUPS[i].weights.indexOf(b) !== -1) return SETTING_GROUPS[i].id;
+    return null;
+  }
+
+  // Antall verdier i en gruppe som avviker fra standard (inkludert vekter).
+  function groupChanges(g, ctl, anom, weights) {
+    var dc = defaultControl(), da = defaultAnom(), n = 0;
+    g.fields.forEach(function (f) {
+      var cur = (f.src === 'anom' ? anom : ctl)[f.k], def = (f.src === 'anom' ? da : dc)[f.k];
+      if (String(cur) !== String(def)) n++;
+    });
+    g.weights.forEach(function (w) { if (Number((weights || {})[w]) !== RISK_WEIGHTS[w]) n++; });
+    return n;
+  }
+
   function defaultControl() {
     var o = {};
     CONTROL_FIELDS.forEach(function (f) { o[f[0]] = f[2]; });
@@ -1449,6 +1536,9 @@
     sumSelected: sumSelected,
     parseReceipt: parseReceipt,
     discounts: discounts,
+    SETTING_GROUPS: SETTING_GROUPS,
+    groupForReason: groupForReason,
+    groupChanges: groupChanges,
     DISC_REASONS: DISC_REASONS,
     reasonName: reasonName,
     watchReasons: watchReasons,

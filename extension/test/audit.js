@@ -77,6 +77,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   await go('Skann');
   await page.click('text=Rask skanning');
   await go('Analyse', 'Sjekk først');
+  await page.click('[data-sec=scope] summary');
 
   // omfang: hele listen, periode, butikk, kasserer og kombinasjoner
   assert.match(await scopeTxt(), /Omfang: hele listen → 11 av 11 kvitteringer/);
@@ -95,15 +96,16 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
 
   // hele analysen: alle fem nye tester
   await page.click('[data-sec=scope] button:text-is("Hele listen")');
-  await go('Analyse', 'Detaljer');
-  await page.click('summary:text-is("Terskler og åpningstider")');
-  await page.fill('.kvr-f:has-text("Kassadiff. minus totalt") input', '60');
-  await page.press('.kvr-f:has-text("Kassadiff. minus totalt") input', 'Tab');
+  await go('Mer', 'Innstillinger');
+  await page.click('[data-sec=set-diff] summary');
+  await page.fill('[data-sec=set-diff] input[aria-label="Eller minus totalt over"]', '60');
+  await page.press('[data-sec=set-diff] input[aria-label="Eller minus totalt over"]', 'Tab');
   await go('Analyse', 'Sjekk først');
   await runAnalysis();
   const lt = await listTxt();
   for (const re of [/Salg og retur av samme beløp/, /Kortkjøp refundert kontant/, /Retur uten salg/, /Salg etter kassaoppgjør/, /Hull i bongnummer/, /Gjentatte kassadifferanser/]) assert.match(lt, re);
   await go('Analyse', 'Detaljer');
+  await page.click('button:text-is("Åpne alle")');
   const fnd = (await page.innerText('[data-sec=findings]')).replace(/\s+/g, ' ');
   assert.match(fnd, /Kasse 1: salg 10:00 og retur 10:20, begge 100 kr \(kasserer A\)/);
   assert.match(fnd, /UKJENT VARE \(50 kr\) uten tilsvarende salg/);

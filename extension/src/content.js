@@ -7,7 +7,7 @@
   var K = {
     saved: 'kvr.saved.v1', collapsed: 'kvr.collapsed.v1', scan: 'kvr.scan.v2', pos: 'kvr.pos.v1',
     size: 'kvr.size.v1', sec: 'kvr.sec.v1', rules: 'kvr.rules.v1', anom: 'kvr.anom.v1',
-    stores: 'kvr.stores.v1', fast: 'kvr.fast.v1', tab: 'kvr.tab.v1', layout: 'kvr.layout.v1', arules: 'kvr.arules.v1', notes: 'kvr.notes.v1', tasks: 'kvr.tasks.v1', ctl: 'kvr.ctl.v1', keynav: 'kvr.keynav.v1', wide: 'kvr.wide.v1', sub: 'kvr.sub.v1', weights: 'kvr.weights.v1', lastrun: 'kvr.lastrun.v1', scope: 'kvr.scope.v1'
+    stores: 'kvr.stores.v1', fast: 'kvr.fast.v1', tab: 'kvr.tab.v1', layout: 'kvr.layout.v1', arules: 'kvr.arules.v1', notes: 'kvr.notes.v1', tasks: 'kvr.tasks.v1', ctl: 'kvr.ctl.v1', keynav: 'kvr.keynav.v1', wide: 'kvr.wide.v1', sub: 'kvr.sub.v1', weights: 'kvr.weights.v1', lastrun: 'kvr.lastrun.v1', scope: 'kvr.scope.v1', help: 'kvr.help.v1', sub2: 'kvr.sub2.v1'
   };
   var sayTimer = null;
   var failedRecs = [];
@@ -39,7 +39,7 @@
   var rules, anomCfg, manualStores, fastScan, customRules = [];
   var scope = null, lastMode = 'scope', fetched = null;
   var weights = null, checkState = { newIds: {}, at: null, shown: 15, showChecked: false }, expanded = {};
-  var notes = {}, ctlRes = null, ctlCfg = null, tasksCustom = [], boundCount = 0, keyNav = true;
+  var notes = {}, ctlRes = null, ctlCfg = null, tasksCustom = [], boundCount = 0, keyNav = true, settingsStale = false;
 
   function openDb() {
     return new Promise(function (res) {
@@ -505,6 +505,7 @@
       var reasons = L.anomalies(r.item, scanMap[r.item.transactionId], anomCfg, customRules, groupsOf(r.item.transactionId));
       if (reasons.length) { anomMap[r.item.transactionId] = reasons; n++; }
     });
+    settingsStale = false; renderStale();
     say('Avviksjekk ferdig: ' + n + ' kvitteringer flagget.');
     apply();
   }
@@ -968,8 +969,7 @@
           el('button', { type: 'button', class: 'kvr-btn kvr-sm', text: '↑', onclick: function () { move(-1); } }),
           el('button', { type: 'button', class: 'kvr-btn kvr-sm', text: '↓', onclick: function () { move(1); } }),
           el('button', { type: 'button', class: 'kvr-btn kvr-sm', text: '✕', title: 'Slett gruppe', onclick: function () {
-            if (!window.confirm('Slette varegruppen «' + r.name + '»?')) return;
-            rules.splice(i, 1); saveRules(); renderRules(); apply();
+            confirmBox('Slett varegruppe', 'Slette varegruppen «' + r.name + '»?', 'Slett', function () { rules.splice(i, 1); saveRules(); renderRules(); apply(); });
           } })]),
         el('span', { class: 'kvr-hint', text: 'Inkluder' }), inc,
         el('span', { class: 'kvr-hint', text: 'Ekskluder' }), exc
@@ -1196,8 +1196,7 @@
       var nm = el('input', { type: 'text', value: r.name, placeholder: 'Navn på regel' });
       nm.addEventListener('change', function () { r.name = uniqueRuleName(nm.value.trim() || r.name, r); nm.value = r.name; saveCustom(); });
       var del = btn('✕', function () {
-        if (!window.confirm('Slette regelen «' + r.name + '»?')) return;
-        customRules.splice(ri, 1); saveCustom(); renderCustom();
+        confirmBox('Slett regel', 'Slette regelen «' + r.name + '»?', 'Slett', function () { customRules.splice(ri, 1); saveCustom(); renderCustom(); });
       }, 'kvr-sm');
       var box = el('div', { class: 'kvr-rule' }, [el('div', { class: 'kvr-row' }, [en, nm, del])]);
       r.conds.forEach(function (c, ci) {
@@ -1293,6 +1292,7 @@
     ctlRes = res;
     apply();
     renderControl();
+    settingsStale = false; renderStale();
     say('Kontroller ferdig: ' + res.findings.length + ' funn, ' + Object.keys(anomMap).length + ' flaggede kvitteringer.');
   }
 
@@ -1667,10 +1667,11 @@
   function deleteTask() {
     var t = tasksCustom.filter(function (x) { return x.id === ui.taskSel.value; })[0];
     if (!t) { say('Innebygde oppgaver kan ikke slettes.'); return; }
-    if (!window.confirm('Slette oppgaven «' + t.name + '»?')) return;
-    tasksCustom = tasksCustom.filter(function (x) { return x !== t; });
-    store(K.tasks, tasksCustom);
-    renderTasks();
+    confirmBox('Slett oppgave', 'Slette oppgaven «' + t.name + '»?', 'Slett', function () {
+      tasksCustom = tasksCustom.filter(function (x) { return x !== t; });
+      store(K.tasks, tasksCustom);
+      renderTasks();
+    });
   }
 
 
@@ -1755,7 +1756,14 @@
     if (!F) {
       ui.focusBody.appendChild(el('div', { class: 'kvr-card' }, [el('h4', { text: 'Fokus' }),
         hintEl('Klikk på en kasserer eller kasse for å se alt som gjelder den: nøkkeltall, avvik, pant, varegrupper, betaling og aktivitet.'),
-        hintEl('Du finner dem som lenker i rapporter og lister, som piller under «Filtrer», eller med Alt+klikk på KASSERER eller KASSE i selve listen.')]));
+        hintEl('Velg under, eller bruk lenkene i rapporter og lister, pillene under «Filtrer», eller Alt+klikk på KASSERER eller KASSE i selve listen.')]));
+      var uniq = function (f) { var o = {}; recs.forEach(function (r) { o[String(f(r.item))] = true; }); return Object.keys(o).sort(function (a, b) { return a.localeCompare(b, 'nb', { numeric: true }); }); };
+      var picks = function (kind, label, list) {
+        if (!list.length) return null;
+        var box = el('div', { class: 'kvr-ents' }, list.slice(0, 40).map(function (id) { return entLink(kind, id); }));
+        return el('div', { class: 'kvr-card' }, [el('h4', { text: label }), box]);
+      };
+      [picks('kasserer', 'Kasserere i listen', uniq(function (i) { return i.cashierNumber; })), picks('kasse', 'Kasser i listen', uniq(function (i) { return i.workstationNumber; }))].forEach(function (c) { if (c) ui.focusBody.appendChild(c); });
       return;
     }
     var isK = F.kind === 'kasserer';
@@ -1913,7 +1921,9 @@
 
     var body = el('div', { class: 'kvr-ck-b' });
     var why = el('ul', { class: 'kvr-why' }, rk.reasons.map(function (r) {
-      return el('li', { text: L.explainReason(r, { id: id, cfg: anomCfg, ctl: ctlCfg, findings: ctlRes ? ctlRes.findings : [], rules: customRules }) });
+      var gid = L.groupForReason(r);
+      return el('li', {}, [el('span', { text: L.explainReason(r, { id: id, cfg: anomCfg, ctl: ctlCfg, findings: ctlRes ? ctlRes.findings : [], rules: customRules }) }),
+        gid ? el('button', { type: 'button', class: 'kvr-ent kvr-adj', text: 'Juster', title: 'Åpne terskler og poeng for denne testen', onclick: function () { openSettings(gid); } }) : null].filter(Boolean));
     }));
     body.appendChild(el('div', { class: 'kvr-hint', text: 'Hvorfor flagget?' }));
     body.appendChild(why);
@@ -2001,6 +2011,7 @@
     if (!ui.checkBody) return;
     var body = ui.checkBody;
     body.innerHTML = '';
+    ui.checkTop.innerHTML = '';
     renderScopeInfo();
     var items = analysisItems(lastMode);
     var all = L.rankReceipts(items, anomMap, weights);
@@ -2012,13 +2023,15 @@
     var done = base.filter(function (r) { return scanMap[r.item.transactionId]; }).length;
 
     var top = [
-      hintEl('Analyserer ' + items.length + ' kvitteringer i omfanget · skannet ' + done + ' av ' + base.length + (checkState.at ? ' · sist kjørt ' + new Date(checkState.at).toLocaleTimeString('nb-NO') : '')),
+      el('div', { class: 'kvr-scoperow' }, [el('span', { text: 'Omfang: ' + scopeSummary() + ' · ' + items.length + ' bonger' }), btn('Endre', function () { ui.scopeCard.open = true; ui.scopeCard.scrollIntoView({ block: 'nearest' }); }, 'kvr-sm')]),
+      hintEl('Skannet ' + done + ' av ' + base.length + (checkState.at ? ' · sist kjørt ' + new Date(checkState.at).toLocaleTimeString('nb-NO') : '')),
       btn('Kjør analyse', runAnalysis, 'kvr-primary')
     ];
+    if (settingsStale && checkState.at) top.push(el('div', { class: 'kvr-notice', role: 'status' }, [el('span', { text: 'Innstillingene er endret siden sist. Kjør analysen på nytt for å bruke dem.' }), btn('Innstillinger', function () { openSettings(); }, 'kvr-sm')]));
     if (vis.length) top.push(el('div', { class: 'kvr-ctlsum', text: vis.length + ' å sjekke · ' + high + ' høy risiko' + (nNew ? ' · ' + nNew + ' nye siden sist' : '') }));
     else if (checkState.at) top.push(el('div', { class: 'kvr-ctlsum', text: all.length ? 'Alt er sjekket.' : 'Ingen avvik funnet i dette utvalget.' }));
-    else top.push(hintEl('Analysen skanner det som mangler, kjører avvik og kontroller, og lager en prioritert liste. Velg omfang (periode, butikk, kasserer, kasse eller periode mot periode) over.'));
-    body.appendChild(section('chk-top', 'Analyse', top));
+    else top.push(hintEl('Analysen skanner det som mangler, kjører avvik og kontroller, og lager en prioritert liste. Under kan du velge omfang: periode, butikk, kasserer, kasse eller periode mot periode.'));
+    ui.checkTop.appendChild(section('chk-top', 'Analyse', top));
     if (!all.length) return;
 
     var cash = L.rankCashiers(items, anomMap, weights, ctlRes ? ctlRes.profile : null, ctlRes ? ctlRes.cashierExtra : null).slice(0, 5);
@@ -2265,13 +2278,15 @@
     var pd = L.chartData(scopedItems({ dateFrom: '', dateTo: '' }), scanMap).pant;
     var pbase = recs.filter(function (r) { return r.base && r.item.receiptType === 1; });
     var pdone = pbase.filter(function (r) { return scanMap[r.item.transactionId]; }).length;
-    if (pd.length) {
+    if (pd.some(function (d) { return d.sale || d.ret; })) {
       var pdata = pd.map(function (d) { return { label: d.day.slice(5), a: d.sale, b: d.ret, tip: d.day + ' · pantesalg ' + fmt(d.sale) + ' kr · utbetalt panteretur ' + fmt(d.ret) + ' kr', click: function () { setDay(d.day); } }; });
       body.appendChild(chartCard('ch-pant', 'Pant per dag: salg mot utbetalt', 'Kun skannede kvitteringer (' + pdone + ' av ' + pbase.length + '). Klikk en dag for å filtrere.',
         el('div', {}, [legend([[CH.blue, 'Pantesalg'], [CH.orange, 'Utbetalt panteretur']]), pairChart({ W: W, data: pdata, aria: 'Søylediagram: pantesalg og utbetalt panteretur per dag' })]),
         { heads: ['Dag', 'Pantesalg', 'Utbetalt'], rows: pd.map(function (d) { return [d.day, fmt(d.sale), fmt(d.ret)]; }) }));
     } else {
-      body.appendChild(el('div', { class: 'kvr-card', 'data-sec': 'ch-pant' }, [el('h4', { text: 'Pant per dag' }), hintEl('Skann kvitteringene for å se pantesalg mot utbetalt panteretur.'), btn('Skann nå', scanVisible, 'kvr-sm')]));
+      body.appendChild(el('div', { class: 'kvr-card', 'data-sec': 'ch-pant' }, pd.length
+        ? [el('h4', { text: 'Pant per dag' }), hintEl('Ingen pant i de skannede kvitteringene (' + pdone + ' av ' + pbase.length + ').')]
+        : [el('h4', { text: 'Pant per dag' }), hintEl('Skann kvitteringene for å se pantesalg mot utbetalt panteretur.'), btn('Skann nå', scanVisible, 'kvr-sm')]));
     }
   }
 
@@ -2379,6 +2394,259 @@
     });
   }
 
+  // ---- bekreftelse og innstillinger -------------------------------------------------
+  function confirmBox(title, text, yesLabel, onYes) {
+    var body = el('div', { class: 'kvr-secbody' }, [hintEl(text)]);
+    openModal(title, body, [btn('Avbryt', closeModal), btn(yesLabel || 'Bekreft', function () { closeModal(); onYes(); }, 'kvr-primary')]);
+  }
+
+  // Gjør et kort sammenfoldbart (klikk på tittelen). Tilstanden huskes.
+  var foldCards = [];
+  function fold(card, id, startOpen) {
+    var h = card.querySelector('h4');
+    if (!h) return card;
+    var saved = (store(K.sec) || {})[id];
+    var set = function (open) { card.classList.toggle('kvr-folded', !open); h.setAttribute('aria-expanded', String(open)); };
+    card.classList.add('kvr-fold');
+    h.tabIndex = 0;
+    h.setAttribute('role', 'button');
+    set(saved === undefined ? startOpen : !!saved);
+    var flip = function () {
+      var open = card.classList.contains('kvr-folded');
+      set(open);
+      var m = store(K.sec) || {};
+      m[id] = open;
+      store(K.sec, m);
+    };
+    h.addEventListener('click', flip);
+    h.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); flip(); } });
+    card.__set = set;
+    foldCards.push({ id: id, card: card });
+    return card;
+  }
+
+  function foldAll(open) {
+    var m = {};
+    foldCards.forEach(function (f) { f.card.__set(open); m[f.id] = open; });
+    store(K.sec, m);
+  }
+
+  function openSec(id) {
+    var n = document.querySelector('#kvr-panel [data-sec=' + id + ']');
+    if (!n) return null;
+    if (n.__set) n.__set(true);
+    return n;
+  }
+
+  function legendRow(sample, text) { return el('div', { class: 'kvr-leg' }, [sample, el('span', { text: text })]); }
+
+  function openHelp() {
+    store(K.help, 1);
+    if (ui.firstRun) ui.firstRun.style.display = 'none';
+    var li = function (t) { return el('li', { text: t }); };
+    var body = el('div', { class: 'kvr-secbody kvr-help' }, [
+      el('b', { class: 'kvr-subh', text: 'Slik går du frem' }),
+      el('ol', {}, [
+        li('Hent: søk i hele journalen (CW) etter dato, butikk, medlem, vare eller bong.'),
+        li('Filtrer: snevre inn listen. Alle valg vises som piller under tallene og fjernes med ×.'),
+        li('Skann: les innholdet i kvitteringene (pant, varer, rabatt). Trengs for vare-, pant- og rabattfilter og for de fleste tester.'),
+        li('Analyse → Sjekk først: velg omfang og trykk «Kjør analyse». Åpne en bong for å se hvorfor den ble flagget.'),
+        li('Mer: eksport (CSV, PNG) og Innstillinger for terskler og poeng.')
+      ]),
+      el('b', { class: 'kvr-subh', text: 'Tegnforklaring' }),
+      legendRow(el('span', { class: 'kvr-sw kvr-sw-flag', text: '' }), 'Rød kant: bongen er flagget i analysen.'),
+      legendRow(el('span', { class: 'kvr-sw kvr-sw-warn' }), 'Gul stripe: noe mangler (skanning eller data). Knappen ved siden av løser det.'),
+      legendRow(el('span', { class: 'kvr-sw kvr-sw-hi', text: 'Høy 8' }), 'Risikoscore er summen av poeng for avvikene. Høy fra 8, middels fra 4.'),
+      legendRow(el('span', { class: 'kvr-sw kvr-sw-new', text: 'Ny' }), 'Flagget siden forrige analyse.'),
+      legendRow(el('span', { class: 'kvr-sw kvr-sw-ent', text: 'Kasserer 12' }), 'Klikk for å se alt som gjelder kassereren eller kassen (Fokus).'),
+      legendRow(el('span', { class: 'kvr-sw kvr-sw-bad', text: '−70,00' }), 'Rødt tall i tabell: over terskelen.'),
+      el('b', { class: 'kvr-subh', text: 'Snarveier' }),
+      el('ul', {}, [
+        li('Alt+K skjuler og viser panelet. Dra i toppen for å flytte, dobbeltklikk for å nullstille plassering.'),
+        li('Alt+klikk på KASSERER eller KASSE i listen åpner Fokus.'),
+        li('↑ ↓ bytter bong, N notat, M velg eller fjern valg (utenfor tekstfelt).'),
+        li('← → bytter fane når en fane har fokus. Esc lukker dialoger.')
+      ])
+    ]);
+    openModal('Slik bruker du Kvitteringshenter', body, [btn('Innstillinger', function () { closeModal(); openSettings(); }), btn('Lukk', closeModal, 'kvr-primary')]);
+  }
+
+  function tabKeys(bar) {
+    bar.addEventListener('keydown', function (e) {
+      if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].indexOf(e.key) === -1) return;
+      var tabs = Array.prototype.slice.call(bar.querySelectorAll('[role=tab]'));
+      var i = tabs.indexOf(document.activeElement);
+      if (i < 0) return;
+      var n = e.key === 'Home' ? 0 : e.key === 'End' ? tabs.length - 1 : (i + (e.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+      e.preventDefault();
+      tabs[n].click();
+      tabs[n].focus();
+    });
+  }
+
+  function cfgOf(src) { return src === 'anom' ? anomCfg : ctlCfg; }
+  function saveCfg(src) { store(src === 'anom' ? K.anom : K.ctl, cfgOf(src)); }
+  function defOf(src) { return src === 'anom' ? L.defaultAnom() : L.defaultControl(); }
+
+  // Terskler gjelder fra neste analyse; poeng gjelder med en gang.
+  function markStale() {
+    settingsStale = true;
+    renderStale();
+    if (checkState.at) renderCheck();
+  }
+
+  function renderStale() {
+    var show = settingsStale && !!(checkState.at || ctlRes);
+    if (ui.setStale) ui.setStale.style.display = show ? 'flex' : 'none';
+  }
+
+  function settingRow(f, refresh) {
+    var src = f.src, def = String(defOf(src)[f.k]);
+    var cur = function () { return cfgOf(src)[f.k]; };
+    var isDef = function () { return String(cur()) === def; };
+    var left = el('div', { class: 'kvr-set-lw' }, [el('span', { class: 'kvr-set-l', text: f.label })].concat(f.hint ? [el('span', { class: 'kvr-set-h', text: f.hint })] : []));
+    var right = el('div', { class: 'kvr-set-c' });
+    var row = el('div', { class: 'kvr-set-row' + (isDef() ? '' : ' kvr-changed') }, [left, right]);
+    var put = function (v) { cfgOf(src)[f.k] = v; saveCfg(src); row.classList.toggle('kvr-changed', !isDef()); markStale(); refresh(); };
+    if (f.kind === 'flag') {
+      var fb = el('input', { type: 'checkbox' });
+      fb.checked = src === 'anom' ? !!cur() : cur() !== '';
+      fb.addEventListener('change', function () { put(src === 'anom' ? fb.checked : fb.checked ? (def || '1') : ''); });
+      right.appendChild(el('label', { class: 'kvr-c kvr-set-sw' }, [fb, el('span', { text: 'På' })]));
+      return row;
+    }
+    var inp = el('input', { type: f.kind === 'num' ? 'number' : f.kind === 'time' ? 'time' : 'text', step: 'any', 'aria-label': f.label });
+    inp.value = String(cur());
+    var sw = null;
+    if (!f.off) right.appendChild(el('span', { class: 'kvr-set-sw kvr-set-sp' }));
+    if (f.off) {
+      sw = el('input', { type: 'checkbox', 'aria-label': f.label + ': på' });
+      sw.checked = String(cur()) !== '';
+      inp.disabled = !sw.checked;
+      if (!sw.checked) inp.value = def;
+      right.appendChild(el('label', { class: 'kvr-c kvr-set-sw' }, [sw, el('span', { text: 'På' })]));
+      sw.addEventListener('change', function () {
+        if (sw.checked) { inp.disabled = false; if (!inp.value.trim()) inp.value = def; put(inp.value.trim()); }
+        else { inp.disabled = true; put(''); }
+      });
+    }
+    inp.addEventListener('change', function () {
+      var v = inp.value.trim();
+      if (f.off && v === '') { sw.checked = false; inp.disabled = true; inp.value = def; put(''); return; }
+      if (v === '') { inp.value = def; v = def; }
+      put(v);
+    });
+    right.appendChild(inp);
+    if (f.unit) right.appendChild(el('span', { class: 'kvr-set-u', text: f.unit }));
+    return row;
+  }
+
+  function weightRow(title, refresh) {
+    var inp = el('input', { type: 'number', step: '1', min: '0', 'aria-label': 'Poeng: ' + title });
+    inp.value = weights[title];
+    var row = el('div', { class: 'kvr-set-row' + (Number(weights[title]) === L.RISK_WEIGHTS[title] ? '' : ' kvr-changed') }, [
+      el('div', { class: 'kvr-set-lw' }, [el('span', { class: 'kvr-set-l', text: title === 'Regel' ? 'Treff på egne regler' : title })]),
+      el('div', { class: 'kvr-set-c' }, [inp, el('span', { class: 'kvr-set-u', text: 'poeng' })])]);
+    inp.addEventListener('change', function () {
+      weights[title] = hasNumber(inp.value) ? Number(inp.value) : L.RISK_WEIGHTS[title];
+      inp.value = weights[title];
+      store(K.weights, weights);
+      row.classList.toggle('kvr-changed', Number(weights[title]) !== L.RISK_WEIGHTS[title]);
+      renderCheck();
+      refresh();
+    });
+    return row;
+  }
+
+  function resetGroup(g) {
+    g.fields.forEach(function (f) { cfgOf(f.src)[f.k] = defOf(f.src)[f.k]; saveCfg(f.src); });
+    g.weights.forEach(function (w) { weights[w] = L.RISK_WEIGHTS[w]; });
+    store(K.weights, weights);
+    if (g.fields.length) markStale();
+    renderCheck();
+    renderSettings(g.id);
+    say('«' + g.title + '» er satt tilbake til standard.');
+  }
+
+  function settingGroup(g) {
+    var badge = el('span', { class: 'kvr-set-badge' });
+    var upd = function () {
+      var n = L.groupChanges(g, ctlCfg, anomCfg, weights);
+      badge.textContent = n + ' endret';
+      badge.style.display = n ? '' : 'none';
+    };
+    var kids = [el('p', { class: 'kvr-set-t', text: g.text })];
+    g.fields.forEach(function (f) { kids.push(settingRow(f, upd)); });
+    if (g.weights.length) {
+      kids.push(el('div', { class: 'kvr-set-sub', text: 'Poeng i risikoscore (høy fra 8, middels fra 4)' }));
+      g.weights.forEach(function (w) { kids.push(weightRow(w, upd)); });
+    }
+    kids.push(btn('Standard for denne gruppen', function () { resetGroup(g); }, 'kvr-sm'));
+    var d = el('details', { class: 'kvr-card kvr-set', 'data-sec': 'set-' + g.id }, [el('summary', {}, [el('b', { text: g.title }), badge]), el('div', { class: 'kvr-secbody' }, kids)]);
+    upd();
+    return d;
+  }
+
+  function exportSettings() {
+    var data = { app: 'kvitteringshenter', v: 1, ctl: ctlCfg, anom: anomCfg, weights: weights, customRules: customRules, groups: rules, stores: manualStores, keynav: keyNav };
+    download(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }), 'kvitteringshenter-innstillinger.json');
+    say('Innstillingene er lastet ned.');
+  }
+
+  function importSettings(text) {
+    var d;
+    try { d = JSON.parse(text); } catch (e) { d = null; }
+    if (!d || d.app !== 'kvitteringshenter') { say('Ugyldig innstillingsfil.'); return; }
+    ctlCfg = L.sanitizeControl(d.ctl); anomCfg = L.sanitizeAnom(d.anom); weights = L.sanitizeWeights(d.weights);
+    store(K.ctl, ctlCfg); store(K.anom, anomCfg); store(K.weights, weights);
+    if (Array.isArray(d.customRules)) { customRules = L.sanitizeCustom(d.customRules); saveCustom(); renderCustom(); }
+    if (Array.isArray(d.groups)) { rules = L.sanitizeRules(d.groups); saveRules(); renderRules(); }
+    if (typeof d.stores === 'string') { manualStores = d.stores; store(K.stores, manualStores); optsKey = ''; }
+    keyNav = d.keynav !== false; store(K.keynav, keyNav);
+    renderSettings();
+    markStale();
+    apply();
+    say('Innstillingene er lest inn.');
+  }
+
+  function resetAllSettings() {
+    ctlCfg = L.defaultControl(); anomCfg = L.defaultAnom(); weights = L.sanitizeWeights(null);
+    store(K.ctl, ctlCfg); store(K.anom, anomCfg); store(K.weights, weights);
+    renderSettings();
+    markStale();
+    renderCheck();
+    say('Terskler og poeng er satt tilbake til standard.');
+  }
+
+  function renderSettings(openId) {
+    if (!ui.setBody) return;
+    var keep = {};
+    Array.prototype.forEach.call(ui.setBody.querySelectorAll('details.kvr-set[open]'), function (d) { keep[d.getAttribute('data-sec')] = true; });
+    if (openId) keep['set-' + openId] = true;
+    ui.setBody.innerHTML = '';
+    ui.setBody.appendChild(ui.setStale);
+    renderStale();
+    ui.setBody.appendChild(hintEl('Alt lagres med en gang. Terskler gjelder neste analyse, poeng gjelder med en gang. Av = testen kjøres ikke.'));
+    ui.setBody.appendChild(ui.setGeneral);
+    ui.keyNavBox.box.checked = keyNav;
+    ui.storeNames.value = manualStores;
+    L.SETTING_GROUPS.forEach(function (g) {
+      var d = settingGroup(g);
+      if (keep['set-' + g.id]) d.open = true;
+      ui.setBody.appendChild(d);
+    });
+  }
+
+  function openSettings(groupId) {
+    ui.go('settings');
+    var panel = document.getElementById('kvr-panel');
+    if (panel && panel.classList.contains('kvr-collapsed')) panel.classList.remove('kvr-collapsed');
+    if (groupId) {
+      var d = ui.setBody && ui.setBody.querySelector('[data-sec=set-' + groupId + ']');
+      if (d) { d.open = true; d.scrollIntoView({ block: 'start' }); }
+    }
+  }
+
   // ---- panel ----------------------------------------------------------------
   function section(id, title, kids) {
     return el('div', { class: 'kvr-card', 'data-sec': id }, [el('h4', { text: title }), el('div', { class: 'kvr-secbody' }, kids)]);
@@ -2455,10 +2723,16 @@
     ui.badge = el('span', { class: 'kvr-badge', text: 'ingen filter' });
     var toggle = el('button', { type: 'button', class: 'kvr-icon', title: 'Skjul/vis (Alt+K)', text: '–' });
     ui.wideBtn = el('button', { type: 'button', class: 'kvr-icon', title: 'Utvid eller forminsk panelet (for rapporter)', text: '⤢' });
+    ui.helpBtn = el('button', { type: 'button', class: 'kvr-icon', title: 'Hjelp og tegnforklaring', 'aria-label': 'Hjelp', text: '?' });
+    ui.gearBtn = el('button', { type: 'button', class: 'kvr-icon', title: 'Innstillinger', 'aria-label': 'Innstillinger', text: '⚙' });
+    ui.helpBtn.addEventListener('click', openHelp);
+    ui.gearBtn.addEventListener('click', function () { openSettings(); });
     var head = el('div', { class: 'kvr-head', title: 'Dra for å flytte · dobbeltklikk for å nullstille plassering og størrelse' }, [
       el('span', { class: 'kvr-grip', text: '⠿' }),
       el('span', { class: 'kvr-title', text: 'Kvitteringshenter' }),
       ui.badge,
+      ui.helpBtn,
+      ui.gearBtn,
       ui.wideBtn,
       toggle
     ]);
@@ -2478,7 +2752,12 @@
     ui.scanWarnTxt = el('span', {});
     ui.scanWarnBtn = btn('Skann nå', scanVisible, 'kvr-sm');
     ui.scanWarn = el('div', { class: 'kvr-scanwarn', role: 'status', style: 'display:none' }, [ui.scanWarnTxt, ui.scanWarnBtn]);
-    var stats = el('div', { class: 'kvr-stats' }, [el('div', { class: 'kvr-tiles' }, [t1.node, t2.node, t3.node, t4.node]), ui.chips, ui.scanRow, ui.scanWarn, ui.pantLine, ui.opRow, ui.barWrap]);
+    ui.firstRun = el('div', { class: 'kvr-notice kvr-first', role: 'status', style: store(K.help) ? 'display:none' : '' }, [
+      el('span', { text: 'Første gang? Se kort veiledning og tegnforklaring.' }),
+      btn('Åpne', openHelp, 'kvr-sm kvr-primary'),
+      btn('✕', function () { store(K.help, 1); ui.firstRun.style.display = 'none'; }, 'kvr-sm')]);
+    ui.firstRun.lastChild.title = 'Skjul';
+    var stats = el('div', { class: 'kvr-stats' }, [ui.firstRun, el('div', { class: 'kvr-tiles' }, [t1.node, t2.node, t3.node, t4.node]), ui.chips, ui.scanRow, ui.scanWarn, ui.pantLine, ui.opRow, ui.barWrap]);
 
     // --- Søk i CW
     var cwFrom = el('input', { type: 'date' }), cwTo = el('input', { type: 'date' });
@@ -2596,7 +2875,7 @@
       if (!f) return;
       var fr = new FileReader();
       fr.onload = function () {
-        try { rules = L.sanitizeRules(JSON.parse(fr.result)); saveRules(); renderRules(); apply(); } catch (e) { window.alert('Ugyldig regelfil.'); }
+        try { rules = L.sanitizeRules(JSON.parse(fr.result)); saveRules(); renderRules(); apply(); } catch (e) { say('Ugyldig regelfil.'); }
       };
       fr.readAsText(f);
       fileIn.value = '';
@@ -2606,7 +2885,7 @@
         btn('Ny gruppe', function () { rules.push({ name: 'Ny gruppe', include: [], exclude: [] }); saveRules(); renderRules(); }),
         btn('Eksporter', function () { download(new Blob([JSON.stringify(rules, null, 2)], { type: 'application/json' }), 'varegrupper.json'); }),
         btn('Importer', function () { fileIn.click(); }),
-        btn('Standard', function () { if (window.confirm('Tilbakestille til standardregler?')) { rules = L.defaultRules(); saveRules(); renderRules(); apply(); } })
+        btn('Standard', function () { confirmBox('Standard varegrupper', 'Tilbakestille varegruppene til standardregler? Egne grupper og opplærte nøkkelord går tapt.', 'Tilbakestill', function () { rules = L.defaultRules(); saveRules(); renderRules(); apply(); }); })
       ]), fileIn]);
     var secGroups = section('groups', 'Varegrupper', [
       pfield('Filter: varegruppe (krever skanning)', ui.groups),
@@ -2616,25 +2895,14 @@
     ], false);
 
     // --- Avvik
-    var cfgFields = {};
-    function cfgInput(key, label, ph) {
-      var n = el('input', { type: 'number', step: '1', placeholder: ph });
-      n.value = anomCfg[key];
-      n.addEventListener('change', function () { anomCfg[key] = n.value; store(K.anom, anomCfg); });
-      cfgFields[key] = n;
-      return field(label, n);
-    }
-    var cashNo = check('Kontant tilbake uten salg', function () { anomCfg.cashNoSale = cashNo.box.checked; store(K.anom, anomCfg); });
-    cashNo.box.checked = anomCfg.cashNoSale;
     var oa = check('Kun avvik'); ui.onlyAnom = oa.box;
     ui.anomBtn = btn('Kjør avviksjekk (synlige)', function () { runAnom('visible'); }, 'kvr-primary');
     ui.anomList = el('div', { class: 'kvr-list' });
-    var secAnom = section('anom', 'Avvik', [
-      el('div', { class: 'kvr-hint', text: 'Kjøres kun når du trykker. Tom verdi = sjekken er av.' }),
-      el('div', { class: 'kvr-row' }, [cfgInput('bigReturn', 'Stor panteretur ≥ kr', '300'), cfgInput('manyLapper', 'Pantelapper ≥ antall', '8')]),
-      el('div', { class: 'kvr-row' }, [cfgInput('roundMin', 'Rundt beløp ≥ kr', '500'), cfgInput('settleDiff', 'Kassadifferanse ≥ kr', '1')]),
-      cashNo.node, oa.node, ui.anomBtn, ui.anomList
-    ], false);
+    var secAnom = fold(section('anom', 'Avvik per bong', [
+      el('div', { class: 'kvr-hint', text: 'Sjekker hver synlige bong mot grensene i Innstillinger. Kjøres kun når du trykker.' }),
+      el('div', { class: 'kvr-row' }, [ui.anomBtn, btn('Juster grenser', function () { openSettings('bong'); })]),
+      oa.node, ui.anomList
+    ], false), 'anom', true);
 
 
     // --- Rapport
@@ -2654,7 +2922,7 @@
 
     // --- Egne avviksregler
     ui.crules = el('div', {});
-    var secCustom = section('custom', 'Egne avviksregler', [
+    var secCustom = fold(section('custom', 'Egne avviksregler', [
       el('div', { class: 'kvr-hint', text: 'Alle vilkår i en regel må stemme (OG). Felt merket * krever skanning. Klokkeslett skrives HH:MM. Tomt medlemsnr: «Medlemsnr = (tomt)».' }),
       ui.crules,
       el('div', { class: 'kvr-row' }, [btn('Ny regel', function () {
@@ -2662,7 +2930,7 @@
       }), btn('Eksempel', function () {
         customRules.push({ id: 'r' + Date.now(), name: uniqueRuleName('Stor retur om kvelden'), enabled: true, conds: [{ f: 'sum', op: '<=', v: '-200' }, { f: 'tid', op: '>=', v: '20:00' }] }); saveCustom(); renderCustom();
       })])
-    ]);
+    ]), 'custom', true);
 
 
     // --- Kontroll
@@ -2672,63 +2940,57 @@
     var tScan = check('Skann', function () {}); ui.taskScan = tScan.box; tScan.box.checked = true;
     var tChk = check('Kontroller', function () {}); ui.taskChecks = tChk.box; tChk.box.checked = true;
     var tSum = check('Sammendrag', function () {}); ui.taskSummary = tSum.box; tSum.box.checked = true;
-    var secTasks = section('tasks', 'Arbeidsoppgaver', [
+    var secTasks = fold(section('tasks', 'Arbeidsoppgaver', [
       hintEl('En oppgave husker gjeldende filter, datovalg, skanning og kontroller, og kjøres med én knapp. Den bruker butikk, medlem og andre valg fra Søk-fanen. Lagrede filtre (Filter-fanen) setter bare filter.'),
       el('div', { class: 'kvr-row' }, [ui.taskSel, btn('Kjør', runTask, 'kvr-primary')]),
       el('div', { class: 'kvr-row' }, [ui.taskName, ui.taskRel]),
       el('div', { class: 'kvr-row' }, [tScan.node, tChk.node, tSum.node]),
       el('div', { class: 'kvr-row' }, [btn('Lagre som oppgave', saveTask), btn('Slett valgt', deleteTask)])
-    ]);
+    ]), 'tasks', true);
 
     ui.ctlInfo = hintEl('');
-    var ctlGrid = el('div', { class: 'kvr-grid2' });
-    L.CONTROL_FIELDS.forEach(function (f) {
-      var inp = el('input', { type: 'text', placeholder: f[2] });
-      inp.value = ctlCfg[f[0]];
-      inp.addEventListener('change', function () { ctlCfg[f[0]] = inp.value.trim(); store(K.ctl, ctlCfg); });
-      ctlGrid.appendChild(field(f[1], inp));
-    });
     var secChecks = section('checks', 'Kontroller', [
-      hintEl('Kjører først avviksjekken per kvittering (Avvik-fanen), så kontroller på tvers av bonger. Funn legges i samme avviksliste. Tom verdi slår av en sjekk.'),
-      btn('Kjør alle kontroller (synlige)', function () { runChecks('visible'); }, 'kvr-primary'),
-      ui.ctlInfo,
-      el('details', { class: 'kvr-sub' }, [el('summary', { text: 'Terskler og åpningstider' }), ctlGrid,
-        btn('Tilbakestill terskler', function () { ctlCfg = L.defaultControl(); store(K.ctl, ctlCfg); window.alert('Terskler tilbakestilt. Åpne panelet på nytt for å se verdiene.'); })])
+      hintEl('Kjører først avviksjekken per kvittering, så kontroller på tvers av bonger. Funn legges i samme avviksliste. Terskler og poeng justeres under Innstillinger.'),
+      el('div', { class: 'kvr-row' }, [btn('Kjør alle kontroller (synlige)', function () { runChecks('visible'); }, 'kvr-primary'), btn('Juster terskler', function () { openSettings(); })]),
+      ui.ctlInfo
     ]);
     ui.ctlProfile = el('div', {}); ui.ctlFindings = el('div', { class: 'kvr-list' }); ui.ctlPant = el('div', {}); ui.ctlRecon = el('div', {});
-    var secProfile = section('profile', 'Kassererprofil mot butikksnitt', [ui.ctlProfile]);
-    var secFindings = section('findings', 'Mønstre og funn', [ui.ctlFindings]);
-    var secPantBal = section('pantbal', 'Pantelapp-sjekk: balanse per dag', [ui.ctlPant]);
-    var secRecon = section('recon', 'Dagsavstemming per kasse', [ui.ctlRecon]);
+    var secProfile = fold(section('profile', 'Kassererprofil mot butikksnitt', [ui.ctlProfile]), 'profile', true);
+    var secFindings = fold(section('findings', 'Mønstre og funn', [ui.ctlFindings]), 'findings', true);
+    var secPantBal = fold(section('pantbal', 'Pantelapp-sjekk: balanse per dag', [ui.ctlPant]), 'pantbal', false);
+    var secRecon = fold(section('recon', 'Dagsavstemming per kasse', [ui.ctlRecon]), 'recon', false);
     ui.ctlDiff = el('div', {}); ui.ctlNum = el('div', {}); ui.ctlDisc = el('div', {});
-    var secDiff = section('diff', 'Kassadifferanse over tid', [ui.ctlDiff]);
-    var secNum = section('numbers', 'Tallanalyse: Benford og runde beløp', [ui.ctlNum]);
-    var secDisc = section('disc', 'Rabatter og kuponger', [ui.ctlDisc]);
+    var secDiff = fold(section('diff', 'Kassadifferanse over tid', [ui.ctlDiff]), 'diff', true);
+    var secNum = fold(section('numbers', 'Tallanalyse: Benford og runde beløp', [ui.ctlNum]), 'numbers', false);
+    var secDisc = fold(section('disc', 'Rabatter og kuponger', [ui.ctlDisc]), 'disc', true);
     ui.ctlSum = el('div', { class: 'kvr-ctlsum' });
     ui.ctlJump = el('div', { class: 'kvr-chips' });
     [['profile', 'Profil'], ['findings', 'Funn'], ['pantbal', 'Pant'], ['recon', 'Avstemming'], ['diff', 'Differanse'], ['numbers', 'Tall'], ['disc', 'Rabatt']].forEach(function (j) {
       ui.ctlJump.appendChild(btn(j[1], function () {
-        var n = document.querySelector('#kvr-panel [data-sec=' + j[0] + ']');
+        var n = openSec(j[0]);
         if (n) n.scrollIntoView({ block: 'start', behavior: 'smooth' });
       }, 'kvr-chip'));
     });
-    ui.ctlSumCard = section('ctlsum', 'Resultat', [ui.ctlSum, ui.ctlJump]);
+    ui.ctlSumCard = section('ctlsum', 'Resultat', [ui.ctlSum, ui.ctlJump,
+      el('div', { class: 'kvr-row' }, [btn('Fold sammen alle', function () { foldAll(false); }, 'kvr-sm'), btn('Åpne alle', function () { foldAll(true); }, 'kvr-sm'), btn('⤢ Bredere', function () { ui.wideBtn.click(); }, 'kvr-sm')]),
+      hintEl('Tabellene har mange kolonner. «Bredere» gir plass til alle.')]);
     ui.ctlResults = el('div', { class: 'kvr-pane' }, [secProfile, secFindings, secPantBal, secRecon, secDiff, secNum, secDisc]);
     ui.noteList = el('div', { class: 'kvr-list' });
     ui.noteCount = hintEl('');
     var kn = check('Tastaturflyt: ↑ ↓ bytter bong, N notat, M velg/fjern', function () { keyNav = kn.box.checked; store(K.keynav, keyNav); });
     kn.box.checked = keyNav;
-    var secNotes = section('notes', 'Oppfølging og tastatur', [
+    ui.keyNavBox = kn;
+    var secNotes = fold(section('notes', 'Oppfølging og tastatur', [
       ui.noteCount, ui.noteList,
       el('div', { class: 'kvr-row' }, [btn('Notat på valgt rad', function () { openNote(currentRec()); }), btn('Eksporter notater', exportNotes)]),
       btn('Fjern «sjekket»', function () {
-        if (!window.confirm('Fjerne alle notater med status «sjekket»?')) return;
-        Object.keys(notes).forEach(function (id) { if (notes[id].status === 'sjekket') delete notes[id]; });
-        saveNotes(); apply(); renderNotes();
+        confirmBox('Fjern sjekkede', 'Fjerne alle notater med status «sjekket»?', 'Fjern', function () {
+          Object.keys(notes).forEach(function (id) { if (notes[id].status === 'sjekket') delete notes[id]; });
+          saveNotes(); apply(); renderNotes();
+        });
       }),
-      kn.node,
-      hintEl('Piltaster og N/M virker når markøren ikke står i et tekstfelt. Esc lukker dialoger.')
-    ]);
+      hintEl('Tastaturflyt (↑ ↓ bytter bong, N notat, M velg/fjern) slås av og på under Mer → Innstillinger.')
+    ]), 'notes', true);
 
     // --- Sortering
     ui.sort = el('select', {}, [
@@ -2781,15 +3043,35 @@
       el('div', { class: 'kvr-hint', text: 'Semikolon-separert, åpnes direkte i Excel. Varegrupper og pant tas med for skannede kvitteringer.' })
     ], false);
 
-    var secSettings = section('settings', 'Innstillinger', [
+    ui.storeNames = storeNames;
+    var setFile = el('input', { type: 'file', accept: 'application/json', style: 'display:none' });
+    setFile.addEventListener('change', function () {
+      var f = setFile.files[0];
+      if (!f) return;
+      var fr = new FileReader();
+      fr.onload = function () { importSettings(String(fr.result)); };
+      fr.readAsText(f);
+      setFile.value = '';
+    });
+    ui.setStale = el('div', { class: 'kvr-notice', role: 'status', style: 'display:none' }, [el('span', { text: 'Innstillingene er endret siden siste analyse.' }), btn('Kjør analyse', function () { ui.go('check'); runAnalysis(); }, 'kvr-sm')]);
+    ui.setGeneral = section('set-general', 'Generelt', [
       field('Egne butikknavn (valgfritt, nr=navn per linje)', storeNames),
-      btn('Tilbakestill panelets plassering og størrelse', function () {
-        store(K.pos, null); store(K.size, null);
-        panel.style.width = ''; panel.style.height = '';
-        placePanel(panel);
-        say('Plassering og størrelse er tilbakestilt.');
-      })
+      kn.node,
+      el('div', { class: 'kvr-row' }, [btn('Eksporter innstillinger', exportSettings), btn('Importer…', function () { setFile.click(); })]), setFile,
+      el('div', { class: 'kvr-row' }, [
+        btn('Tilbakestill plassering', function () {
+          store(K.pos, null); store(K.size, null);
+          panel.style.width = ''; panel.style.height = '';
+          placePanel(panel);
+          say('Plassering og størrelse er tilbakestilt.');
+        }),
+        btn('Alt til standard', function () {
+          confirmBox('Alt til standard', 'Sette alle terskler, avviksgrenser og poeng tilbake til standard? Egne regler, varegrupper og butikknavn beholdes.', 'Tilbakestill', resetAllSettings);
+        })
+      ]),
+      hintEl('Eksport tar med terskler, poeng, egne regler, varegrupper og butikknavn. Skannede kvitteringer og notater tas ikke med.')
     ]);
+    ui.setBody = el('div', { class: 'kvr-pane' });
 
     ui.focusBody = el('div', { class: 'kvr-pane' });
 
@@ -2823,7 +3105,7 @@
     ui.scopeWarnTxt = el('span', {});
     ui.scopeWarn = el('div', { class: 'kvr-scanwarn', role: 'status', style: 'display:none' }, [ui.scopeWarnTxt, btn('Hent fra CW', fetchScopeData, 'kvr-sm')]);
     ui.scopeBrief = el('span', { class: 'kvr-scope-brief' });
-    ui.scopeCard = el('details', { class: 'kvr-card kvr-scope', 'data-sec': 'scope', open: 'open' }, [el('summary', { class: 'kvr-scope-h' }, [el('b', { text: 'OMFANG FOR ANALYSEN' }), ui.scopeBrief]), el('div', { class: 'kvr-secbody' }, [
+    ui.scopeCard = el('details', { class: 'kvr-card kvr-scope', 'data-sec': 'scope' }, [el('summary', { class: 'kvr-scope-h' }, [el('b', { text: 'Velg omfang' }), ui.scopeBrief]), el('div', { class: 'kvr-secbody' }, [
       scPresets,
       el('div', { class: 'kvr-row' }, [el('label', { class: 'kvr-f' }, [ui.scALabelFrom, ui.scFrom]), el('label', { class: 'kvr-f' }, [ui.scALabelTo, ui.scTo])]),
       ui.scB,
@@ -2832,30 +3114,15 @@
       scUf.node, ui.scopeInfo, ui.scopeWarn,
       btn('Nullstill omfang', function () { scope = defaultScope(); store(K.scope, scope); writeScope(); renderCheck(); })
     ])]);
+    ui.checkTop = el('div', { class: 'kvr-pane' });
     ui.checkBody = el('div', { class: 'kvr-pane' });
     ui.chartsBody = el('div', { class: 'kvr-pane' });
-    var wBox = el('div', { class: 'kvr-grid2' });
-    Object.keys(L.RISK_WEIGHTS).forEach(function (k) {
-      var inp = el('input', { type: 'number', step: '1', min: '0' });
-      inp.value = weights[k];
-      inp.addEventListener('change', function () {
-        weights[k] = hasNumber(inp.value) ? Number(inp.value) : L.RISK_WEIGHTS[k];
-        store(K.weights, weights);
-        renderCheck();
-      });
-      wBox.appendChild(field(k === 'Regel' ? 'Egne regler' : k, inp));
-    });
-    var secWeights = section('weights', 'Risikovekting', [
-      hintEl('Poeng per type avvik. Summen per kvittering gir risikonivået i «Sjekk først»: høy fra 8, middels fra 4.'),
-      wBox,
-      btn('Tilbakestill vekting', function () { weights = L.sanitizeWeights(null); store(K.weights, weights); renderCheck(); window.alert('Vektingen er tilbakestilt. Åpne panelet på nytt for å se verdiene.'); })
-    ]);
     var subDefs = [
-      ['check', 'Sjekk først', [ui.scopeCard, ui.checkBody]],
+      ['check', 'Sjekk først', [ui.checkTop, ui.scopeCard, ui.checkBody]],
       ['charts', 'Diagram', [ui.chartsBody]],
       ['report', 'Rapport', [secReport, secSettle]],
       ['focus', 'Fokus', [ui.focusBody]],
-      ['details', 'Detaljer', [ui.ctlSumCard, secChecks, ui.ctlResults, secAnom, secCustom, secWeights, secTasks, secNotes]]
+      ['details', 'Detaljer', [ui.ctlSumCard, secChecks, ui.ctlResults, secAnom, secCustom, secTasks, secNotes]]
     ];
     ui.subBtns = {}; ui.subPanes = {};
     var subNav = el('div', { class: 'kvr-subnav', role: 'tablist' });
@@ -2865,6 +3132,7 @@
         ui.subPanes[k].style.display = k === id ? '' : 'none';
         ui.subBtns[k].classList.toggle('kvr-active', k === id);
         ui.subBtns[k].setAttribute('aria-selected', k === id ? 'true' : 'false');
+        ui.subBtns[k].tabIndex = k === id ? 0 : -1;
       });
       store(K.sub, id);
       if (id === 'charts') renderCharts();
@@ -2878,12 +3146,37 @@
       subHost.appendChild(ui.subPanes[t[0]]);
     });
 
+    var moreDefs = [['export', 'Eksport', [secExport]], ['settings', 'Innstillinger', [ui.setBody]]];
+    ui.moreBtns = {}; ui.morePanes = {};
+    var moreNav = el('div', { class: 'kvr-subnav', role: 'tablist', 'aria-label': 'Mer' });
+    var moreHost = el('div', {});
+    function showMore(id) {
+      Object.keys(ui.morePanes).forEach(function (k) {
+        ui.morePanes[k].style.display = k === id ? '' : 'none';
+        ui.moreBtns[k].classList.toggle('kvr-active', k === id);
+        ui.moreBtns[k].setAttribute('aria-selected', k === id ? 'true' : 'false');
+        ui.moreBtns[k].tabIndex = k === id ? 0 : -1;
+      });
+      store(K.sub2, id);
+      if (id === 'settings') renderSettings();
+    }
+    moreDefs.forEach(function (t) {
+      var b = el('button', { type: 'button', class: 'kvr-sub', role: 'tab', text: t[1] });
+      b.addEventListener('click', function () { showMore(t[0]); });
+      ui.moreBtns[t[0]] = b;
+      moreNav.appendChild(b);
+      ui.morePanes[t[0]] = el('div', { class: 'kvr-pane', role: 'tabpanel' }, t[2]);
+      moreHost.appendChild(ui.morePanes[t[0]]);
+    });
+    tabKeys(moreNav);
+    tabKeys(subNav);
+
     var tabDefs = [
       ['cw', 'Hent', [hintEl('Henter nye kvitteringer fra Lindbak (hele journalen). Resultatet kan så filtreres under «Filtrer».'), secCw]],
       ['filter', 'Filtrer', [hintEl('Filtrerer kvitteringene som allerede er listet. Ingenting hentes på nytt.'), secStore, secTime, secWho, secSum, secSort, secSaved]],
       ['content', 'Skann', [el('p', { class: 'kvr-intro', text: 'Skann kvitteringene for å finne pant, varegrupper og varer. Filtrer listen først, så skanner du bare det som er synlig.' }), secScan, secGroups]],
       ['analyse', 'Analyse', [subNav, subHost]],
-      ['more', 'Mer', [secExport, secSettings]]
+      ['more', 'Mer', [moreNav, moreHost]]
     ];
     ui.tabBtns = {}; ui.panes = {};
     var tabBar = el('div', { class: 'kvr-tabs', role: 'tablist' });
@@ -2893,6 +3186,7 @@
         ui.panes[k].style.display = k === id ? '' : 'none';
         ui.tabBtns[k].classList.toggle('kvr-active', k === id);
         ui.tabBtns[k].setAttribute('aria-selected', k === id ? 'true' : 'false');
+        ui.tabBtns[k].tabIndex = k === id ? 0 : -1;
       });
       store(K.tab, id);
       scroll.scrollTop = 0;
@@ -2908,11 +3202,13 @@
     });
     ui.showTab = showTab;
     ui.go = function (name) {
-      var map = { cw: ['cw'], filter: ['filter'], content: ['content'], check: ['analyse', 'check'], charts: ['analyse', 'charts'], report: ['analyse', 'report'], anom: ['analyse', 'details'], control: ['analyse', 'details'], details: ['analyse', 'details'], focus: ['analyse', 'focus'], export: ['more'] };
+      var map = { cw: ['cw'], filter: ['filter'], content: ['content'], check: ['analyse', 'check'], charts: ['analyse', 'charts'], report: ['analyse', 'report'], anom: ['analyse', 'details'], control: ['analyse', 'details'], details: ['analyse', 'details'], focus: ['analyse', 'focus'], export: ['more', 'export'], settings: ['more', 'settings'] };
       var m = map[name] || [name];
       showTab(m[0]);
-      if (m[1]) showSub(m[1]);
+      if (m[0] === 'more') showMore(m[1] || 'export');
+      else if (m[1]) showSub(m[1]);
     };
+    tabKeys(tabBar);
     ui.tabDot = el('i', { class: 'kvr-dot', style: 'display:none' });
     ui.tabBtns.filter.appendChild(ui.tabDot);
 
@@ -2941,6 +3237,7 @@
     panel.appendChild(ui.tip);
     showTab(ui.panes[store(K.tab)] ? store(K.tab) : 'filter');
     showSub(ui.subPanes[store(K.sub)] ? store(K.sub) : 'check');
+    showMore(ui.morePanes[store(K.sub2)] ? store(K.sub2) : 'export');
     writeScope();
 
     function setCollapsed(c) {
