@@ -7,7 +7,7 @@
   var K = {
     saved: 'kvr.saved.v1', collapsed: 'kvr.collapsed.v1', scan: 'kvr.scan.v2', pos: 'kvr.pos.v1',
     size: 'kvr.size.v1', sec: 'kvr.sec.v1', rules: 'kvr.rules.v1', anom: 'kvr.anom.v1',
-    stores: 'kvr.stores.v1', fast: 'kvr.fast.v1', tab: 'kvr.tab.v1', layout: 'kvr.layout.v1', arules: 'kvr.arules.v1', notes: 'kvr.notes.v1', tasks: 'kvr.tasks.v1', ctl: 'kvr.ctl.v1', keynav: 'kvr.keynav.v1', wide: 'kvr.wide.v1', sub: 'kvr.sub.v1'
+    stores: 'kvr.stores.v1', fast: 'kvr.fast.v1', tab: 'kvr.tab.v1', layout: 'kvr.layout.v1', arules: 'kvr.arules.v1', notes: 'kvr.notes.v1', tasks: 'kvr.tasks.v1', ctl: 'kvr.ctl.v1', keynav: 'kvr.keynav.v1', wide: 'kvr.wide.v1', sub: 'kvr.sub.v1', weights: 'kvr.weights.v1', lastrun: 'kvr.lastrun.v1'
   };
   var sayTimer = null;
   var failedRecs = [];
@@ -37,6 +37,7 @@
   var dirty = {};
   var db = null;
   var rules, anomCfg, manualStores, fastScan, customRules = [];
+  var weights = null, checkState = { newIds: {}, at: null, shown: 15, showChecked: false }, expanded = {};
   var notes = {}, ctlRes = null, ctlCfg = null, tasksCustom = [], boundCount = 0, keyNav = true;
 
   function openDb() {
@@ -706,6 +707,8 @@
   }
 
   function renderDerived() {
+    renderCheck();
+    if (chartsVisible()) renderCharts();
     renderReport();
     renderSettle();
     renderFocus();
@@ -999,6 +1002,12 @@
   // ---- egne avviksregler ---------------------------------------------------------
   function saveCustom() { store(K.arules, customRules); }
 
+  function uniqueRuleName(base, except) {
+    var name = base, n = 2;
+    while (customRules.some(function (r) { return r !== except && r.name === name; })) name = base + ' ' + n++;
+    return name;
+  }
+
   function renderCustom() {
     ui.crules.innerHTML = '';
     if (!customRules.length) ui.crules.appendChild(el('div', { class: 'kvr-hint', text: 'Ingen egne regler ennå. Trykk «Ny regel» eller «Eksempel».' }));
@@ -1007,7 +1016,7 @@
       en.checked = r.enabled !== false;
       en.addEventListener('change', function () { r.enabled = en.checked; saveCustom(); });
       var nm = el('input', { type: 'text', value: r.name, placeholder: 'Navn på regel' });
-      nm.addEventListener('change', function () { r.name = nm.value.trim() || r.name; saveCustom(); });
+      nm.addEventListener('change', function () { r.name = uniqueRuleName(nm.value.trim() || r.name, r); nm.value = r.name; saveCustom(); });
       var del = btn('✕', function () {
         if (!window.confirm('Slette regelen «' + r.name + '»?')) return;
         customRules.splice(ri, 1); saveCustom(); renderCustom();
@@ -1029,7 +1038,7 @@
 
 
   // ---- kontroller, oppfølging, oppgaver --------------------------------------------
-  var BUILTIN_TASKS = [{ id: 'morgen', name: 'Morgenkontroll (i går)', cwRel: 'yesterday', filters: null, scan: true, checks: true, tab: 'control', summary: true, builtin: true }];
+  var BUILTIN_TASKS = [{ id: 'morgen', name: 'Morgenkontroll (i går)', cwRel: 'yesterday', filters: null, scan: true, checks: true, tab: 'check', summary: true, builtin: true }];
   var REL_LABEL = { none: 'Behold datoer', yesterday: 'I går', today: 'I dag', last7: 'Siste 7 dager', lastweek: 'Forrige uke' };
 
   function opt(v, t) { return el('option', { value: v, text: t }); }
@@ -1375,8 +1384,8 @@
     }
     filters = t.filters ? L.sanitizeFilters(t.filters) : L.defaultFilters();
     writeForm(); apply();
-    if (t.checks) await runChecks(); else if (t.scan) await scanVisible();
-    ui.go(t.tab || 'control');
+    if (t.checks) await runAnalysis(); else if (t.scan) await scanVisible();
+    ui.go(t.tab || 'check');
     if (t.summary) showSummary();
   }
 
@@ -1384,7 +1393,7 @@
     var name = ui.taskName.value.trim();
     if (!name) { ui.taskName.focus(); return; }
     readForm();
-    var t = { id: 't' + Date.now(), name: name, cwRel: ui.taskRel.value, filters: JSON.parse(JSON.stringify(filters)), scan: ui.taskScan.checked, checks: ui.taskChecks.checked, summary: ui.taskSummary.checked, tab: ui.taskChecks.checked ? 'control' : 'content' };
+    var t = { id: 't' + Date.now(), name: name, cwRel: ui.taskRel.value, filters: JSON.parse(JSON.stringify(filters)), scan: ui.taskScan.checked, checks: ui.taskChecks.checked, summary: ui.taskSummary.checked, tab: ui.taskChecks.checked ? 'check' : 'content' };
     tasksCustom = tasksCustom.filter(function (x) { return x.name !== name; }).concat([t]);
     store(K.tasks, tasksCustom);
     renderTasks();
@@ -1581,6 +1590,353 @@
 
     // aktivitet
     add(section('f-hours', 'Aktivitet per time', [hoursChart(st.hours), hintEl('Antall kvitteringer per klokketime.')]));
+  }
+
+
+  // ---- Sjekk først: prioritert liste med forklaring og handlinger -----------------------
+  function makeCtx() {
+    return { dupIds: ui.dup ? ui.dup.ids : {}, scan: scanMap, groupsOf: groupsOf, anom: anomMap, notes: notes };
+  }
+
+  function setStatus(rec, status) {
+    var it = rec.item, id = it.transactionId, cur = notes[id] || { note: '' };
+    if (!status && !cur.note) delete notes[id];
+    else notes[id] = { status: status, note: cur.note || '', t: Date.now(), tid: it.endDateTime, kasse: it.workstationNumber, kasserer: it.cashierNumber, bong: it.bongnr, sum: it.totalAmount };
+    saveNotes();
+    apply();
+    renderNotes();
+  }
+
+  async function runAnalysis() {
+    if (scanning || !grid) return;
+    var prev = store(K.lastrun);
+    await runChecks();
+    var ids = visibleItems().filter(function (i) { return anomMap[i.transactionId]; }).map(function (i) { return i.transactionId; });
+    var prevSet = {};
+    if (prev && prev.ids) prev.ids.forEach(function (id) { prevSet[id] = true; });
+    checkState.newIds = {};
+    if (prev) ids.forEach(function (id) { if (!prevSet[id]) checkState.newIds[id] = true; });
+    checkState.at = Date.now();
+    checkState.shown = 15;
+    store(K.lastrun, { at: checkState.at, ids: ids });
+    renderCheck();
+    ui.go('check');
+  }
+
+  function levelClass(score) { return { 'høy': 'kvr-hi', middels: 'kvr-mid', lav: 'kvr-lo' }[L.riskLevel(score)]; }
+
+  function riskBadge(score) {
+    var lvl = L.riskLevel(score);
+    return el('span', { class: 'kvr-risk ' + levelClass(score), title: 'Risikoscore ' + score, text: lvl.charAt(0).toUpperCase() + lvl.slice(1) + ' ' + score });
+  }
+
+  function checkRow(rk, first) {
+    var it = rk.item, rec = recById(rk.id), id = rk.id, n = notes[id];
+    var open = expanded[id] !== undefined ? expanded[id] : first;
+    var head = el('button', { type: 'button', class: 'kvr-ck-h', 'aria-expanded': String(open) }, [
+      riskBadge(rk.score),
+      el('span', { class: 'kvr-ck-t', text: it.endDateTime.slice(5) + ' · kasse ' + it.workstationNumber + ' · ' + (it.totalAmount === null ? L.typeLabel(it.receiptType) : fmt(it.totalAmount) + ' kr') }),
+      checkState.newIds[id] ? el('span', { class: 'kvr-new', text: 'Ny' }) : null,
+      n && n.status ? el('span', { class: 'kvr-st', text: n.status === 'sjekket' ? 'Sjekket' : 'Til oppfølging' }) : null
+    ].filter(Boolean));
+    head.addEventListener('click', function () { expanded[id] = !open; renderCheck(); });
+    var card = el('div', { class: 'kvr-ck' + (open ? ' kvr-open' : '') }, [head,
+      el('div', { class: 'kvr-reasons' }, rk.reasons.map(function (r) { return el('span', { class: 'kvr-reason', text: L.reasonBase(r) }); }))]);
+    if (!open) return card;
+
+    var body = el('div', { class: 'kvr-ck-b' });
+    var why = el('ul', { class: 'kvr-why' }, rk.reasons.map(function (r) {
+      return el('li', { text: L.explainReason(r, { id: id, cfg: anomCfg, ctl: ctlCfg, findings: ctlRes ? ctlRes.findings : [], rules: customRules }) });
+    }));
+    body.appendChild(el('div', { class: 'kvr-hint', text: 'Hvorfor flagget?' }));
+    body.appendChild(why);
+    var sc = scanMap[id];
+    body.appendChild(el('div', { class: 'kvr-hint', text: sc && sc.settle ? 'Kassaoppgjør' : 'Bonglinjer' }));
+    if (sc && sc.settle) {
+      var sd = sc.settle;
+      body.appendChild(tbl(['Post', 'Beløp'], [['Telt kontant', fmt(sd.telt.kontant || 0)], ['Telt sum', fmt(sd.telt.sum || 0)], ['Differanse', { t: (sd.diff.sum > 0 ? '+' : '') + fmt(sd.diff.sum || 0), bad: !!sd.diff.sum }], ['Sendt bank', fmt(sd.bank || 0)], ['Pose', sd.pose || '–']]));
+    } else if (sc && sc.items) {
+      var lines = sc.items.slice(0, 12).map(function (i) { return [i.n + (i.q ? ' (' + i.q + ' stk)' : ''), fmt(i.a)]; });
+      Object.keys(sc.pay || {}).forEach(function (k) { lines.push([k + ':', fmt(sc.pay[k])]); });
+      body.appendChild(tbl(['Linje', 'Beløp'], lines));
+      if (sc.items.length > 12) body.appendChild(hintEl('… og ' + (sc.items.length - 12) + ' flere linjer. Åpne bongen i listen for alt.'));
+    } else {
+      body.appendChild(el('div', { class: 'kvr-scanwarn' }, [el('span', { text: 'Ikke skannet, så linjene mangler.' }), btn('Skann nå', scanVisible, 'kvr-sm')]));
+    }
+    var acts = [];
+    if (n && n.status === 'sjekket') acts.push(btn('Angre sjekket', function () { setStatus(rec, ''); }));
+    else acts.push(btn('Sjekket', function () { setStatus(rec, 'sjekket'); }, 'kvr-primary'));
+    acts.push(btn('Til oppfølging', function () { setStatus(rec, 'oppfolging'); }));
+    acts.push(btn('Notat…', function () { openNote(rec); }));
+    acts.push(btn(selected[id] ? 'Fjern valg' : 'Velg', function () { if (selected[id]) delete selected[id]; else selected[id] = it; apply(); }));
+    acts.push(btn('Vis i listen', function () { jumpTo(rec); }));
+    body.appendChild(el('div', { class: 'kvr-acts' }, acts));
+    body.appendChild(entsFor(it));
+    card.appendChild(body);
+    return card;
+  }
+
+  function renderCheck() {
+    if (!ui.checkBody) return;
+    var body = ui.checkBody;
+    body.innerHTML = '';
+    var items = visibleItems();
+    var all = L.rankReceipts(items, anomMap, weights);
+    var checked = all.filter(function (r) { return notes[r.id] && notes[r.id].status === 'sjekket'; }).length;
+    var vis = all.filter(function (r) { return checkState.showChecked || !(notes[r.id] && notes[r.id].status === 'sjekket'); });
+    var high = vis.filter(function (r) { return L.riskLevel(r.score) === 'høy'; }).length;
+    var nNew = vis.filter(function (r) { return checkState.newIds[r.id]; }).length;
+    var base = recs.filter(function (r) { return r.base && (r.item.receiptType === 1 || r.item.receiptType === 2); });
+    var done = base.filter(function (r) { return scanMap[r.item.transactionId]; }).length;
+
+    var top = [
+      hintEl('Analyserer ' + items.length + ' synlige kvitteringer · skannet ' + done + ' av ' + base.length + (checkState.at ? ' · sist kjørt ' + new Date(checkState.at).toLocaleTimeString('nb-NO') : '')),
+      btn('Kjør analyse (synlige)', runAnalysis, 'kvr-primary')
+    ];
+    if (vis.length) top.push(el('div', { class: 'kvr-ctlsum', text: vis.length + ' å sjekke · ' + high + ' høy risiko' + (nNew ? ' · ' + nNew + ' nye siden sist' : '') }));
+    else if (checkState.at) top.push(el('div', { class: 'kvr-ctlsum', text: all.length ? 'Alt er sjekket.' : 'Ingen avvik funnet i dette utvalget.' }));
+    else top.push(hintEl('Analysen skanner det som mangler, kjører avvik og kontroller, og lager en prioritert liste. Filtrer listen først hvis du bare vil se på en dag, en kasse eller en kasserer.'));
+    body.appendChild(section('chk-top', 'Analyse', top));
+    if (!all.length) return;
+
+    var cash = L.rankCashiers(items, anomMap, weights, ctlRes ? ctlRes.profile : null).slice(0, 5);
+    if (cash.length) {
+      body.appendChild(section('chk-cash', 'Kasserere å se nærmere på', [el('div', { class: 'kvr-list' }, cash.map(function (c) {
+        var row = el('div', { class: 'kvr-li kvr-fl' }, [el('div', { class: 'kvr-fl-t' }, [
+          el('b', { text: 'Kasserer ' + c.id }),
+          el('span', { text: c.flagged + ' flaggede bonger' + (c.profile.length ? ' · ' + c.profile.join(', ') : '') })]),
+          riskBadge(c.score)]);
+        row.addEventListener('click', function () { setFocus('kasserer', c.id); });
+        return row;
+      }))]));
+    }
+
+    var listKids = [];
+    vis.slice(0, checkState.shown).forEach(function (rk, i) { listKids.push(checkRow(rk, i === 0)); });
+    if (vis.length > checkState.shown) listKids.push(btn('Vis flere (' + (vis.length - checkState.shown) + ')', function () { checkState.shown += 15; renderCheck(); }));
+    if (checked || checkState.showChecked) {
+      var sc = check('Vis sjekkede (' + checked + ')', function () { checkState.showChecked = sc.box.checked; renderCheck(); });
+      sc.box.checked = checkState.showChecked;
+      listKids.push(sc.node);
+    }
+    body.appendChild(section('chk-list', 'Sjekk først (' + vis.length + ')', listKids));
+  }
+
+  // ---- diagrammer -------------------------------------------------------------------
+  var NS = 'http://www.w3.org/2000/svg';
+  var CH = { bar: '#00704a', barOn: '#004d33', blue: '#2a78d6', orange: '#eb6834', grid: '#e3e9e6', axis: '#9aa8a1', text: '#1b2a24', text2: '#5f6f68', empty: '#f1f4f2' };
+  var RAMP = ['#d9eee4', '#a8d5c0', '#6bb394', '#2f8c66', '#00704a'];
+
+  function sv(tag, attrs, kids) {
+    var n = document.createElementNS(NS, tag);
+    Object.keys(attrs || {}).forEach(function (k) { if (k === 'text') n.textContent = attrs[k]; else n.setAttribute(k, attrs[k]); });
+    (kids || []).forEach(function (c) { n.appendChild(c); });
+    return n;
+  }
+
+  function tipShow(e, text) {
+    var panel = document.getElementById('kvr-panel');
+    if (!panel || !ui.tip) return;
+    ui.tip.textContent = text;
+    ui.tip.style.display = 'block';
+    var pr = panel.getBoundingClientRect();
+    var x = e.clientX - pr.left + 12, y = e.clientY - pr.top + 14;
+    ui.tip.style.left = Math.max(4, Math.min(x, pr.width - ui.tip.offsetWidth - 6)) + 'px';
+    ui.tip.style.top = Math.max(4, Math.min(y, pr.height - ui.tip.offsetHeight - 6)) + 'px';
+  }
+
+  function attachTip(node, text, onClick) {
+    var hide = function () { if (ui.tip) ui.tip.style.display = 'none'; };
+    node.addEventListener('mousemove', function (e) { tipShow(e, text); });
+    node.addEventListener('mouseenter', function (e) { tipShow(e, text); });
+    node.addEventListener('mouseleave', hide);
+    node.addEventListener('blur', hide);
+    node.addEventListener('focus', function () { var r = node.getBoundingClientRect(); tipShow({ clientX: r.left + r.width / 2, clientY: r.top }, text); });
+    if (onClick) {
+      node.addEventListener('click', onClick);
+      node.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } });
+    }
+  }
+
+  function fmtTick(v) { return v >= 1000 ? Math.round(v).toLocaleString('nb-NO') : String(Math.round(v * 10) / 10).replace('.', ','); }
+
+  function topRounded(x, y, w, h, r) {
+    r = Math.min(r, w / 2, h);
+    return 'M' + x + ',' + (y + h) + 'V' + (y + r) + 'Q' + x + ',' + y + ' ' + (x + r) + ',' + y + 'H' + (x + w - r) + 'Q' + (x + w) + ',' + y + ' ' + (x + w) + ',' + (y + r) + 'V' + (y + h) + 'Z';
+  }
+
+  function axes(svg, W, H, ml, mr, mt, mb, maxV) {
+    var plotH = H - mt - mb;
+    [0, 0.5, 1].forEach(function (f) {
+      var y = mt + plotH - f * plotH;
+      svg.appendChild(sv('line', { x1: ml, x2: W - mr, y1: y, y2: y, stroke: f === 0 ? CH.axis : CH.grid, 'stroke-width': 1 }));
+      svg.appendChild(sv('text', { x: ml - 5, y: y + 3, 'text-anchor': 'end', fill: CH.text2, 'font-size': 10, text: fmtTick(maxV * f) }));
+    });
+  }
+
+  function colChart(o) {
+    var W = o.W, H = o.H || 140, ml = 40, mr = 6, mt = 16, mb = 20, n = o.data.length;
+    var plotW = W - ml - mr, plotH = H - mt - mb;
+    var maxV = L.niceMax(Math.max.apply(null, o.data.map(function (d) { return d.value; }).concat([0])));
+    var svg = sv('svg', { width: W, height: H, viewBox: '0 0 ' + W + ' ' + H, role: 'img', 'aria-label': o.aria, class: 'kvr-svg' });
+    axes(svg, W, H, ml, mr, mt, mb, maxV);
+    var slot = plotW / n, bw = Math.min(24, slot * 0.7), peak = 0;
+    o.data.forEach(function (d, i) { if (d.value > o.data[peak].value) peak = i; });
+    o.data.forEach(function (d, i) {
+      var x = ml + i * slot + (slot - bw) / 2, h = Math.max(0, d.value) / maxV * plotH, y = mt + plotH - h;
+      if (h > 0) svg.appendChild(sv('path', { d: topRounded(x, y, bw, h, 4), fill: d.on ? CH.barOn : CH.bar }));
+      if (o.labelEvery && i % o.labelEvery === 0) svg.appendChild(sv('text', { x: ml + i * slot + slot / 2, y: H - 6, 'text-anchor': 'middle', fill: CH.text2, 'font-size': 10, text: d.label }));
+      var hit = sv('rect', { x: ml + i * slot, y: mt, width: slot, height: plotH, fill: 'transparent', tabindex: '0', role: 'button', 'aria-label': d.tip, class: 'kvr-hit' });
+      attachTip(hit, d.tip, d.click);
+      svg.appendChild(hit);
+    });
+    if (o.data[peak] && o.data[peak].value > 0) {
+      var ph = o.data[peak].value / maxV * plotH;
+      svg.appendChild(sv('text', { x: ml + peak * slot + slot / 2, y: Math.max(10, mt + plotH - ph - 4), 'text-anchor': 'middle', fill: CH.text, 'font-size': 10, 'font-weight': 600, text: o.peakText ? o.peakText(o.data[peak]) : fmtTick(o.data[peak].value) }));
+    }
+    return svg;
+  }
+
+  function pairChart(o) {
+    var W = o.W, H = o.H || 150, ml = 40, mr = 6, mt = 16, mb = 20, n = o.data.length;
+    var plotW = W - ml - mr, plotH = H - mt - mb;
+    var maxV = L.niceMax(Math.max.apply(null, o.data.map(function (d) { return Math.max(d.a, d.b); }).concat([0])));
+    var svg = sv('svg', { width: W, height: H, viewBox: '0 0 ' + W + ' ' + H, role: 'img', 'aria-label': o.aria, class: 'kvr-svg' });
+    axes(svg, W, H, ml, mr, mt, mb, maxV);
+    var slot = plotW / n, bw = Math.min(18, (slot * 0.8 - 2) / 2);
+    o.data.forEach(function (d, i) {
+      var cx = ml + i * slot + slot / 2;
+      [[d.a, CH.blue, cx - bw - 1], [d.b, CH.orange, cx + 1]].forEach(function (b) {
+        var h = Math.max(0, b[0]) / maxV * plotH;
+        if (h > 0) svg.appendChild(sv('path', { d: topRounded(b[2], mt + plotH - h, bw, h, 4), fill: b[1] }));
+      });
+      svg.appendChild(sv('text', { x: cx, y: H - 6, 'text-anchor': 'middle', fill: CH.text2, 'font-size': 10, text: d.label }));
+      var hit = sv('rect', { x: ml + i * slot, y: mt, width: slot, height: plotH, fill: 'transparent', tabindex: '0', role: 'button', 'aria-label': d.tip, class: 'kvr-hit' });
+      attachTip(hit, d.tip, d.click);
+      svg.appendChild(hit);
+    });
+    return svg;
+  }
+
+  function chartCard(id, title, sub, node, table) {
+    var tv = tbl(table.heads, table.rows);
+    tv.style.display = 'none';
+    var tgl = btn('Tabell', function () {
+      var on = tv.style.display === 'none';
+      tv.style.display = on ? '' : 'none';
+      node.style.display = on ? 'none' : '';
+      tgl.textContent = on ? 'Diagram' : 'Tabell';
+    }, 'kvr-sm');
+    return el('div', { class: 'kvr-card', 'data-sec': id }, [el('div', { class: 'kvr-chart-h' }, [el('h4', { text: title }), tgl]), sub ? hintEl(sub) : el('span'), node, tv]);
+  }
+
+  function legend(items) {
+    return el('div', { class: 'kvr-legend' }, items.map(function (i) { return el('span', {}, [el('i', { style: 'background:' + i[0] }), document.createTextNode(i[1])]); }));
+  }
+
+  function scopedItems(reset) {
+    var f = Object.assign({}, filters, reset), ctx = makeCtx();
+    return recs.filter(function (r) { return L.matches(r.item, f, ctx); }).map(function (r) { return r.item; });
+  }
+
+  function chartsVisible() {
+    var panel = document.getElementById('kvr-panel');
+    return !!(ui.panes && ui.panes.analyse && ui.panes.analyse.style.display !== 'none' && ui.subPanes && ui.subPanes.charts && ui.subPanes.charts.style.display !== 'none' && panel && !panel.classList.contains('kvr-collapsed'));
+  }
+
+  function renderChartsIfVisible() { if (chartsVisible()) renderCharts(); }
+
+  function two(n) { return (n < 10 ? '0' : '') + n; }
+
+  function renderCharts() {
+    if (!ui.chartsBody) return;
+    var body = ui.chartsBody;
+    body.innerHTML = '';
+    var W = Math.max(260, (body.clientWidth || 380) - 24);
+    if (!recs.length) { body.appendChild(el('div', { class: 'kvr-card' }, [hintEl('Ingen kvitteringer i listen.')])); return; }
+    var scopeNote = 'Diagrammene ser bort fra filteret de selv styrer, så de ikke krymper når du klikker.';
+    var setTime = function (h) { filters.timeFrom = two(h) + ':00'; filters.timeTo = two(h) + ':59'; writeForm(); apply(); };
+    var setDay = function (d) { filters.dateFrom = d; filters.dateTo = d; writeForm(); apply(); };
+
+    // salg per time
+    var hd = L.chartData(scopedItems({ timeFrom: '', timeTo: '' }), scanMap).hours;
+    var hours = hd.count.map(function (n, h) {
+      return { label: String(h), value: n, on: filters.timeFrom === two(h) + ':00' && filters.timeTo === two(h) + ':59',
+        tip: two(h) + ':00–' + two(h) + ':59 · ' + n + ' salg · ' + fmt(hd.sum[h]) + ' kr', click: function () { setTime(h); } };
+    });
+    body.appendChild(chartCard('ch-hours', 'Salg per time', 'Antall salg. Klikk en søyle for å filtrere på timen. ' + scopeNote,
+      colChart({ W: W, data: hours, labelEvery: 3, aria: 'Søylediagram: antall salg per time', peakText: function (d) { return String(d.value); } }),
+      { heads: ['Time', 'Salg', 'Sum kr'], rows: hd.count.map(function (n, h) { return [two(h) + ':00', n, fmt(hd.sum[h])]; }) }));
+
+    // salg per dag
+    var dd = L.chartData(scopedItems({ dateFrom: '', dateTo: '' }), scanMap).days;
+    if (dd.length >= 2) {
+      var days = dd.map(function (d) {
+        return { label: d.day.slice(5), value: d.sum, on: filters.dateFrom === d.day && filters.dateTo === d.day,
+          tip: d.day + ' · ' + d.count + ' salg · ' + fmt(d.sum) + ' kr', click: function () { setDay(d.day); } };
+      });
+      body.appendChild(chartCard('ch-days', 'Salg per dag', 'Sum i kr. Klikk en søyle for å filtrere på dagen.',
+        colChart({ W: W, data: days, labelEvery: Math.ceil(days.length / 6), aria: 'Søylediagram: salg per dag', peakText: function (d) { return fmtTick(d.value); } }),
+        { heads: ['Dag', 'Salg', 'Sum kr'], rows: dd.map(function (d) { return [d.day, d.count, fmt(d.sum)]; }) }));
+    }
+
+    // returandel per kasserer
+    var cd = L.chartData(scopedItems({ cashiers: [], workstations: [] }), scanMap);
+    if (cd.cashiers.length) {
+      var factor = Number(ctlCfg.profFactor) || 1.5, minN = Number(ctlCfg.profMin) || 5;
+      var axisMax = L.niceMax(Math.max(cd.cashiers[0].share, cd.storeShare, 0.1));
+      var list = el('div', { class: 'kvr-hbars' });
+      var rowsT = [];
+      cd.cashiers.slice(0, 12).forEach(function (c) {
+        var flag = c.count >= minN && cd.storeShare > 0 && c.share >= cd.storeShare * factor;
+        var tip = 'Kasserer ' + c.id + ' · ' + c.ret + ' av ' + c.count + ' salg er returer (' + pct(c.share) + ')' + (flag ? ' · minst ' + factor + '× snittet' : '');
+        var link = entLink('kasserer', c.id, 'Kasserer ' + c.id + ' (' + c.count + ')');
+        var bar = el('div', { class: 'kvr-hb-bar' + (flag ? ' kvr-flag' : ''), style: 'width:' + Math.max(c.share > 0 ? 1 : 0, c.share / axisMax * 100) + '%' });
+        var track = el('div', { class: 'kvr-hb-track' }, [bar, el('div', { class: 'kvr-hb-ref', style: 'left:' + (cd.storeShare / axisMax * 100) + '%' })]);
+        var val = el('span', { class: 'kvr-hb-v', text: pct(c.share) + (flag ? ' ▲' : '') });
+        var row = el('div', { class: 'kvr-hb', title: tip }, [link, track, val]);
+        list.appendChild(row);
+        rowsT.push(['Kasserer ' + c.id, c.count, c.ret, pct(c.share) + (flag ? ' (høy)' : '')]);
+      });
+      body.appendChild(chartCard('ch-cash', 'Returandel per kasserer', 'Andel salg med negativ sum. Den tynne streken er butikksnittet (' + pct(cd.storeShare) + '). Oransje ▲ = minst ' + factor + '× snittet. Klikk et navn for å se alt om kassereren.',
+        el('div', {}, [list, legend([[CH.bar, 'Returandel'], [CH.orange, 'Høy mot snitt']])]),
+        { heads: ['Kasserer', 'Salg', 'Returer', 'Andel'], rows: rowsT }));
+    }
+
+    // kasse x time
+    var hm = L.chartData(scopedItems({ workstations: [], timeFrom: '', timeTo: '' }), scanMap).heat;
+    if (hm.rows.length) {
+      var grid2 = el('div', { class: 'kvr-heat', style: 'grid-template-columns:62px repeat(24,1fr)' });
+      grid2.appendChild(el('span'));
+      for (var h = 0; h < 24; h++) grid2.appendChild(el('span', { class: 'kvr-hh', text: h % 3 === 0 ? String(h) : '' }));
+      var heatT = [];
+      hm.rows.forEach(function (r) {
+        grid2.appendChild(entLink('kasse', r.id, 'Kasse ' + r.id));
+        r.counts.forEach(function (n, hr) {
+          var idx = n === 0 ? -1 : Math.min(4, Math.ceil(n / hm.max * 5) - 1);
+          var cellEl = el('button', { type: 'button', class: 'kvr-hc', style: 'background:' + (idx < 0 ? CH.empty : RAMP[idx]), 'aria-label': 'Kasse ' + r.id + ' kl. ' + two(hr) + ': ' + n + ' salg' });
+          attachTip(cellEl, 'Kasse ' + r.id + ' · ' + two(hr) + ':00–' + two(hr) + ':59 · ' + n + ' salg', function () { filters.workstations = [r.id]; setTime(hr); });
+          grid2.appendChild(cellEl);
+        });
+        heatT.push(['Kasse ' + r.id].concat([r.counts.reduce(function (a, b) { return a + b; }, 0)]));
+      });
+      body.appendChild(chartCard('ch-heat', 'Når skjer det? Kasse × time', 'Antall salg per kasse og klokketime. Mørkere = flere. Klikk en rute for å filtrere på kassen og timen.',
+        el('div', {}, [grid2, el('div', { class: 'kvr-legend' }, [document.createTextNode('Færre '), el('span', { class: 'kvr-ramp' }, RAMP.map(function (c) { return el('i', { style: 'background:' + c }); })), document.createTextNode(' flere')])]),
+        { heads: ['Kasse', 'Salg'], rows: heatT }));
+    }
+
+    // pant per dag
+    var pd = L.chartData(scopedItems({ dateFrom: '', dateTo: '' }), scanMap).pant;
+    var pbase = recs.filter(function (r) { return r.base && r.item.receiptType === 1; });
+    var pdone = pbase.filter(function (r) { return scanMap[r.item.transactionId]; }).length;
+    if (pd.length) {
+      var pdata = pd.map(function (d) { return { label: d.day.slice(5), a: d.sale, b: d.ret, tip: d.day + ' · pantesalg ' + fmt(d.sale) + ' kr · utbetalt panteretur ' + fmt(d.ret) + ' kr', click: function () { setDay(d.day); } }; });
+      body.appendChild(chartCard('ch-pant', 'Pant per dag: salg mot utbetalt', 'Kun skannede kvitteringer (' + pdone + ' av ' + pbase.length + '). Klikk en dag for å filtrere.',
+        el('div', {}, [legend([[CH.blue, 'Pantesalg'], [CH.orange, 'Utbetalt panteretur']]), pairChart({ W: W, data: pdata, aria: 'Søylediagram: pantesalg og utbetalt panteretur per dag' })]),
+        { heads: ['Dag', 'Pantesalg', 'Utbetalt'], rows: pd.map(function (d) { return [d.day, fmt(d.sale), fmt(d.ret)]; }) }));
+    } else {
+      body.appendChild(el('div', { class: 'kvr-card', 'data-sec': 'ch-pant' }, [el('h4', { text: 'Pant per dag' }), hintEl('Skann kvitteringene for å se pantesalg mot utbetalt panteretur.'), btn('Skann nå', scanVisible, 'kvr-sm')]));
+    }
   }
 
   // ---- CSV ------------------------------------------------------------------
@@ -1954,9 +2310,9 @@
       el('div', { class: 'kvr-hint', text: 'Alle vilkår i en regel må stemme (OG). Felt merket * krever skanning. Klokkeslett skrives HH:MM. Tomt medlemsnr: «Medlemsnr = (tomt)».' }),
       ui.crules,
       el('div', { class: 'kvr-row' }, [btn('Ny regel', function () {
-        customRules.push({ id: 'r' + Date.now(), name: 'Ny regel', enabled: true, conds: [{ f: 'sum', op: '<=', v: '' }] }); saveCustom(); renderCustom();
+        customRules.push({ id: 'r' + Date.now(), name: uniqueRuleName('Ny regel'), enabled: true, conds: [{ f: 'sum', op: '<=', v: '' }] }); saveCustom(); renderCustom();
       }), btn('Eksempel', function () {
-        customRules.push({ id: 'r' + Date.now(), name: 'Stor retur om kvelden', enabled: true, conds: [{ f: 'sum', op: '<=', v: '-200' }, { f: 'tid', op: '>=', v: '20:00' }] }); saveCustom(); renderCustom();
+        customRules.push({ id: 'r' + Date.now(), name: uniqueRuleName('Stor retur om kvelden'), enabled: true, conds: [{ f: 'sum', op: '<=', v: '-200' }, { f: 'tid', op: '>=', v: '20:00' }] }); saveCustom(); renderCustom();
       })])
     ]);
 
@@ -2084,11 +2440,30 @@
     ]);
 
     ui.focusBody = el('div', { class: 'kvr-pane' });
+    ui.checkBody = el('div', { class: 'kvr-pane' });
+    ui.chartsBody = el('div', { class: 'kvr-pane' });
+    var wBox = el('div', { class: 'kvr-grid2' });
+    Object.keys(L.RISK_WEIGHTS).forEach(function (k) {
+      var inp = el('input', { type: 'number', step: '1', min: '0' });
+      inp.value = weights[k];
+      inp.addEventListener('change', function () {
+        weights[k] = hasNumber(inp.value) ? Number(inp.value) : L.RISK_WEIGHTS[k];
+        store(K.weights, weights);
+        renderCheck();
+      });
+      wBox.appendChild(field(k === 'Regel' ? 'Egne regler' : k, inp));
+    });
+    var secWeights = section('weights', 'Risikovekting', [
+      hintEl('Poeng per type avvik. Summen per kvittering gir risikonivået i «Sjekk først»: høy fra 8, middels fra 4.'),
+      wBox,
+      btn('Tilbakestill vekting', function () { weights = L.sanitizeWeights(null); store(K.weights, weights); renderCheck(); window.alert('Vektingen er tilbakestilt. Åpne panelet på nytt for å se verdiene.'); })
+    ]);
     var subDefs = [
+      ['check', 'Sjekk først', [ui.checkBody]],
+      ['charts', 'Diagram', [ui.chartsBody]],
       ['report', 'Rapport', [secReport, secSettle]],
-      ['anom', 'Avvik', [secAnom, secCustom]],
-      ['control', 'Kontroll', [ui.ctlSumCard, secChecks, ui.ctlResults, secTasks, secNotes]],
-      ['focus', 'Fokus', [ui.focusBody]]
+      ['focus', 'Fokus', [ui.focusBody]],
+      ['details', 'Detaljer', [ui.ctlSumCard, secChecks, ui.ctlResults, secAnom, secCustom, secWeights, secTasks, secNotes]]
     ];
     ui.subBtns = {}; ui.subPanes = {};
     var subNav = el('div', { class: 'kvr-subnav', role: 'tablist' });
@@ -2100,6 +2475,7 @@
         ui.subBtns[k].setAttribute('aria-selected', k === id ? 'true' : 'false');
       });
       store(K.sub, id);
+      if (id === 'charts') renderCharts();
     }
     subDefs.forEach(function (t) {
       var b = el('button', { type: 'button', class: 'kvr-sub', role: 'tab', text: t[1] });
@@ -2128,6 +2504,7 @@
       });
       store(K.tab, id);
       scroll.scrollTop = 0;
+      if (id === 'analyse') renderChartsIfVisible();
     }
     tabDefs.forEach(function (t) {
       var b = el('button', { type: 'button', class: 'kvr-tab', role: 'tab', text: t[1] });
@@ -2139,7 +2516,7 @@
     });
     ui.showTab = showTab;
     ui.go = function (name) {
-      var map = { cw: ['cw'], filter: ['filter'], content: ['content'], report: ['analyse', 'report'], anom: ['analyse', 'anom'], control: ['analyse', 'control'], focus: ['analyse', 'focus'], export: ['more'] };
+      var map = { cw: ['cw'], filter: ['filter'], content: ['content'], check: ['analyse', 'check'], charts: ['analyse', 'charts'], report: ['analyse', 'report'], anom: ['analyse', 'details'], control: ['analyse', 'details'], details: ['analyse', 'details'], focus: ['analyse', 'focus'], export: ['more'] };
       var m = map[name] || [name];
       showTab(m[0]);
       if (m[1]) showSub(m[1]);
@@ -2168,8 +2545,10 @@
     panel.appendChild(head);
     panel.appendChild(el('div', { class: 'kvr-main' }, [stats, tabBar, scroll, foot]));
     document.body.appendChild(panel);
+    ui.tip = el('div', { class: 'kvr-tip', role: 'tooltip', style: 'display:none' });
+    panel.appendChild(ui.tip);
     showTab(ui.panes[store(K.tab)] ? store(K.tab) : 'filter');
-    showSub(ui.subPanes[store(K.sub)] ? store(K.sub) : 'report');
+    showSub(ui.subPanes[store(K.sub)] ? store(K.sub) : 'check');
 
     function setCollapsed(c) {
       panel.classList.toggle('kvr-collapsed', c);
@@ -2184,6 +2563,7 @@
       panel.style.width = ''; panel.style.height = '';
       store(K.size, null); store(K.wide, w);
       clamp(panel);
+      setTimeout(renderChartsIfVisible, 60);
     });
     enableDrag(panel, head, function () { if (panel.classList.contains('kvr-collapsed')) flip(); });
     document.addEventListener('keydown', function (e) {
@@ -2191,7 +2571,7 @@
     });
     document.addEventListener('mouseup', function () {
       if (panel.classList.contains('kvr-collapsed')) return;
-      if (panel.style.width || panel.style.height) store(K.size, { width: panel.style.width, height: panel.style.height });
+      if (panel.style.width || panel.style.height) { store(K.size, { width: panel.style.width, height: panel.style.height }); renderChartsIfVisible(); }
     });
     window.addEventListener('resize', function () { clamp(panel); });
 
@@ -2243,6 +2623,7 @@
     tasksCustom = Array.isArray(store(K.tasks)) ? store(K.tasks) : [];
     ctlCfg = L.sanitizeControl(store(K.ctl));
     keyNav = store(K.keynav) !== false;
+    weights = L.sanitizeWeights(store(K.weights));
     setInterval(attach, 1500);
     attach();
   });

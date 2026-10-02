@@ -817,6 +817,131 @@
     return st;
   }
 
+
+  // ---- risikoscore og forklaring --------------------------------------------------
+  var RISK_WEIGHTS = {
+    'Stor panteretur': 3, 'Mange pantelapper': 3, 'Kontant tilbake uten salg': 4, 'Rundt beløp': 1, 'Kassadifferanse': 5,
+    'Små returer før stenging': 4, 'Kontant tilbake uten salg flere ganger': 5, 'Samme beløp gjentatt': 3,
+    'Samme pantebeløp utbetalt flere ganger': 4, 'Bonger utenfor åpningstid': 2, 'Regel': 3
+  };
+
+  function sanitizeWeights(raw) {
+    var out = {};
+    Object.keys(RISK_WEIGHTS).forEach(function (k) {
+      out[k] = raw && typeof raw === 'object' && hasNum(raw[k]) ? Number(raw[k]) : RISK_WEIGHTS[k];
+    });
+    return out;
+  }
+
+  function reasonBase(r) { return String(r).replace(/\s*\(.*$/, ''); }
+
+  function reasonWeight(r, weights) {
+    var w = weights || RISK_WEIGHTS, b = reasonBase(r);
+    if (/^Regel:/.test(b)) return cnum(w['Regel'], 3);
+    return b in w ? cnum(w[b], 2) : 2;
+  }
+
+  function riskScore(reasons, weights) {
+    return round2((reasons || []).reduce(function (a, r) { return a + reasonWeight(r, weights); }, 0));
+  }
+
+  function riskLevel(score) { return score >= 8 ? 'høy' : score >= 4 ? 'middels' : 'lav'; }
+
+  function rankReceipts(items, anomMap, weights) {
+    var out = [];
+    items.forEach(function (it) {
+      var r = anomMap && anomMap[it.transactionId];
+      if (!r || !r.length) return;
+      out.push({ id: it.transactionId, item: it, reasons: r, score: riskScore(r, weights) });
+    });
+    return out.sort(function (a, b) { return b.score - a.score || (a.item.endDateTime < b.item.endDateTime ? 1 : -1); });
+  }
+
+  function rankCashiers(items, anomMap, weights, profile) {
+    var acc = {};
+    items.forEach(function (it) {
+      var r = anomMap && anomMap[it.transactionId];
+      if (!r || !r.length) return;
+      var a = acc[it.cashierNumber] || (acc[it.cashierNumber] = { id: String(it.cashierNumber), score: 0, flagged: 0, profile: [] });
+      a.score += riskScore(r, weights); a.flagged++;
+    });
+    var names = { retShare: 'høy returandel', avg: 'avvikende snittbeløp', lapperPer: 'mange pantelapper', negPer: 'mange korrigeringer' };
+    ((profile && profile.rows) || []).forEach(function (p) {
+      var flags = Object.keys(p.flags || {}).filter(function (k) { return p.flags[k]; });
+      if (!flags.length) return;
+      var a = acc[p.id] || (acc[p.id] = { id: String(p.id), score: 0, flagged: 0, profile: [] });
+      a.score += 2 * flags.length;
+      a.profile = flags.map(function (k) { return names[k]; });
+    });
+    return Object.keys(acc).map(function (k) { acc[k].score = round2(acc[k].score); return acc[k]; })
+      .sort(function (a, b) { return b.score - a.score || numCmp(a.id, b.id); });
+  }
+
+  function ruleText(rule) {
+    return (rule.conds || []).map(function (c) { return (RULE_FIELDS[c.f] ? RULE_FIELDS[c.f].label : c.f) + ' ' + c.op + ' ' + (c.v === '' ? '(tomt)' : c.v); }).join(' OG ');
+  }
+
+  // ctx: { id, cfg (avviksterskler), ctl (kontrolltterskler), findings, rules (egne regler) }
+  function explainReason(reason, ctx) {
+    ctx = ctx || {};
+    var cfg = ctx.cfg || defaultAnom(), b = reasonBase(reason), m = /\(([^)]*)\)/.exec(String(reason)), v = m ? m[1] : '';
+    switch (b) {
+      case 'Stor panteretur': return 'Utbetalt panteretur på bongen er ' + v + '. Grensen er ' + cfg.bigReturn + ' kr.';
+      case 'Mange pantelapper': return 'Bongen har ' + v + ' pantelapper. Grensen er ' + cfg.manyLapper + '.';
+      case 'Kontant tilbake uten salg': return 'Bongen har bare pantelapper og kontant tilbake, ingen andre varer.';
+      case 'Rundt beløp': return 'Totalen er et helt hundre-beløp på minst ' + cfg.roundMin + ' kr.';
+      case 'Kassadifferanse': return 'Kassaoppgjøret viser differanse ' + v + '. Grensen er ' + cfg.settleDiff + ' kr.';
+      default: break;
+    }
+    if (/^Regel: /.test(b)) {
+      var name = b.slice(7);
+      var rule = (ctx.rules || []).filter(function (r) { return r.name === name; })[0];
+      return 'Treffer din regel «' + name + '»' + (rule ? ': ' + ruleText(rule) : '') + '.';
+    }
+    var f = (ctx.findings || []).filter(function (x) { return x.title === b && x.ids.indexOf(ctx.id) !== -1; })[0];
+    if (f) return f.detail + '.';
+    if (b === 'Bonger utenfor åpningstid') return 'Bongen er tatt utenfor åpningstid' + (ctx.ctl ? ' (' + ctx.ctl.openFrom + '–' + ctx.ctl.openTo + ')' : '') + '.';
+    return String(reason);
+  }
+
+  // ---- diagramdata --------------------------------------------------------------------
+  function chartData(items, scanMap) {
+    var hours = { count: [], sum: [] }, days = {}, cash = {}, heat = {}, pant = {}, tot = { n: 0, ret: 0 };
+    for (var h = 0; h < 24; h++) { hours.count.push(0); hours.sum.push(0); }
+    items.forEach(function (it) {
+      if (!isSale(it)) return;
+      var dt = parseDT(it.endDateTime), hr = Math.floor((mins(dt.time) || 0) / 60), day = dt.date;
+      hours.count[hr]++; hours.sum[hr] = round2(hours.sum[hr] + it.totalAmount);
+      var d = days[day] || (days[day] = { day: day, count: 0, sum: 0 });
+      d.count++; d.sum = round2(d.sum + it.totalAmount);
+      var c = cash[it.cashierNumber] || (cash[it.cashierNumber] = { id: String(it.cashierNumber), count: 0, ret: 0 });
+      c.count++; if (it.totalAmount < 0) c.ret++;
+      tot.n++; if (it.totalAmount < 0) tot.ret++;
+      var hm = heat[it.workstationNumber] || (heat[it.workstationNumber] = { id: String(it.workstationNumber), counts: hours.count.map(function () { return 0; }) });
+      hm.counts[hr]++;
+      var sc = scanMap && scanMap[it.transactionId];
+      if (sc) { var p = pant[day] || (pant[day] = { day: day, sale: 0, ret: 0 }); p.sale = round2(p.sale + sc.sale); p.ret = round2(p.ret + Math.abs(sc.ret)); }
+    });
+    var heatRows = Object.keys(heat).sort(numCmp).map(function (k) { return heat[k]; });
+    var max = 0;
+    heatRows.forEach(function (r) { r.counts.forEach(function (n) { if (n > max) max = n; }); });
+    return {
+      hours: hours,
+      days: Object.keys(days).sort().map(function (k) { return days[k]; }),
+      cashiers: Object.keys(cash).map(function (k) { var c = cash[k]; c.share = c.count ? c.ret / c.count : 0; return c; })
+        .sort(function (a, b) { return b.share - a.share || b.count - a.count || numCmp(a.id, b.id); }),
+      storeShare: tot.n ? tot.ret / tot.n : 0,
+      heat: { rows: heatRows, max: max },
+      pant: Object.keys(pant).sort().map(function (k) { return pant[k]; })
+    };
+  }
+
+  function niceMax(v) {
+    if (!(v > 0)) return 1;
+    var p = Math.pow(10, Math.floor(Math.log10(v))), f = v / p;
+    return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * p;
+  }
+
   function relativeRange(name, now) {
     var d = now || new Date(), day = 864e5, a = d, b = d;
     if (name === 'yesterday') { a = b = new Date(d.getTime() - day); }
@@ -886,6 +1011,18 @@
     sequence: sequence,
     reconcile: reconcile,
     relativeRange: relativeRange,
+    RISK_WEIGHTS: RISK_WEIGHTS,
+    sanitizeWeights: sanitizeWeights,
+    reasonBase: reasonBase,
+    reasonWeight: reasonWeight,
+    riskScore: riskScore,
+    riskLevel: riskLevel,
+    rankReceipts: rankReceipts,
+    rankCashiers: rankCashiers,
+    explainReason: explainReason,
+    ruleText: ruleText,
+    chartData: chartData,
+    niceMax: niceMax,
     focusStats: focusStats,
     mins: mins,
     parseSettlement: parseSettlement,

@@ -45,6 +45,11 @@ All lagring (innstillinger, lagrede filtre, regler, skannecache) ligger i en ege
 
 ## Oppbygging av panelet
 
+**Analyse** har fem delfaner: **Sjekk først** (én prioritert liste med risikoscore, forklaring og handlinger), **Diagram**, **Rapport**, **Fokus** og **Detaljer** (terskler, egne regler, risikovekting, arbeidsoppgaver, notater og detaljresultater fra kontrollene).
+
+- **Sjekk først:** «Kjør analyse» skanner det som mangler, kjører avvik og kontroller på tvers av bonger, og rangerer kvitteringene etter risikoscore (summen av vekter per avvik, justerbare under Detaljer → Risikovekting; høy ≥ 8, middels ≥ 4). Over listen står de fem kasserene med høyest score. Hver kvittering kan åpnes: «Hvorfor flagget?» med terskler og tall, bonglinjene (eller kassaoppgjøret), og knappene Sjekket, Til oppfølging, Notat, Velg og Vis i listen. Sjekkede bonger skjules (kan vises igjen), og bonger som ikke var flagget i forrige analyse merkes «Ny».
+- **Diagram:** salg per time, salg per dag, returandel per kasserer mot butikksnittet, kasse × time-kart og pant per dag (salg mot utbetalt). Klikk en søyle, rute eller kasserer for å filtrere listen; diagrammene ser bort fra filteret de selv styrer, så de ikke krymper. Hover viser tall, og «Tabell» viser samme data som tabell. Fargene (blå og oransje for to serier, ett grønt hue for størrelse) er validert for fargesyn.
+
 Fem faner: **Hent** (søk i hele journalen via CW), **Filtrer** (lagrede filtre, dato/tid, butikk/kasse/kasserer/type som piller, sum, medlem, bong, vare, notat, sortering), **Skann** (skanning, pant, varegrupper), **Analyse** (Rapport, Avvik og Kontroll som delfaner) og **Mer** (eksport og innstillinger).
 
 - **Skannestatus** vises alltid under tallene («Skannet 4 av 5» med «Skann nå»). Filter som krever skanning (pant, vare, varegruppe) viser en gul stripe med hvor mange som mangler. Skanning dekker alle kvitteringer som passerer de andre filtrene, også de som pantfilteret ellers skjuler.

@@ -79,7 +79,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   const idbGet = (store, key) => page.evaluate(([st, k]) => new Promise(res => { const rq = indexedDB.open('kvr-store', 1); rq.onsuccess = () => { const g = rq.result.transaction(st).objectStore(st).get(k); g.onsuccess = () => res(g.result === undefined ? null : g.result); }; }), [store, key]);
   const vis = () => page.$$eval('tbody tr', trs => trs.filter(t => t.style.display !== 'none').map(t => t.getAttribute('data-id')));
   const tiles = () => page.innerText('.kvr-tiles');
-  const TABMAP = { 'Søk': ['Hent'], 'Filter': ['Filtrer'], 'Innhold': ['Skann'], 'Rapport': ['Analyse', 'Rapport'], 'Avvik': ['Analyse', 'Avvik'], 'Kontroll': ['Analyse', 'Kontroll'], 'Fokus': ['Analyse', 'Fokus'], 'Eksport': ['Mer'] };
+  const TABMAP = { 'Søk': ['Hent'], 'Filter': ['Filtrer'], 'Innhold': ['Skann'], 'Rapport': ['Analyse', 'Rapport'], 'Avvik': ['Analyse', 'Detaljer'], 'Kontroll': ['Analyse', 'Detaljer'], 'Fokus': ['Analyse', 'Fokus'], 'Sjekk': ['Analyse', 'Sjekk først'], 'Diagram': ['Analyse', 'Diagram'], 'Eksport': ['Mer'] };
   const tab = async (name) => {
     const m = TABMAP[name];
     await page.click(`.kvr-tab:has-text("${m[0]}")`);
@@ -326,6 +326,72 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   assert.ok((await page.$$eval('[data-sec=tasks] select option', o => o.map(x => x.textContent))).includes('Mandagens kontroll'));
   await wipe();
 
+  // Sjekk først: prioritert liste, forklaring og handlinger i raden
+  await tab('Sjekk');
+  await page.click('[data-sec=chk-top] button:text-is("Kjør analyse (synlige)")');
+  await page.waitForSelector('[data-sec=chk-list] .kvr-ck', { timeout: 30000 });
+  const scores = await page.$$eval('[data-sec=chk-list] .kvr-ck .kvr-risk', n => n.map(x => parseFloat(x.textContent.split(' ').pop())));
+  assert.ok(scores.length >= 3, 'flere flaggede bonger');
+  assert.deepStrictEqual(scores, scores.slice().sort((a, b) => b - a), 'sortert etter risiko');
+  assert.match(await page.innerText('[data-sec=chk-list] .kvr-ck'), /Hvorfor flagget\?/);
+  assert.match(await page.innerText('[data-sec=chk-list] .kvr-ck'), /Bonglinjer/);
+  assert.match(await page.innerText('[data-sec=chk-top]'), /\d+ å sjekke · \d+ høy risiko/);
+  assert.match(await page.innerText('[data-sec=chk-cash]'), /Kasserer/i);
+  const n0 = scores.length;
+  await page.click('[data-sec=chk-list] .kvr-ck:first-child button:text-is("Sjekket")');
+  assert.strictEqual(await page.$$eval('[data-sec=chk-list] .kvr-ck', n => n.length), n0 - 1, 'sjekket forsvinner fra listen');
+  await page.click('[data-sec=chk-list] label:has-text("Vis sjekkede")');
+  assert.strictEqual(await page.$$eval('[data-sec=chk-list] .kvr-ck', n => n.length), n0);
+  assert.ok(await page.$('[data-sec=chk-list] .kvr-st:text-is("Sjekket")'));
+  await page.click('[data-sec=chk-list] label:has-text("Vis sjekkede")');
+  // ny siden sist: en ny regel flagger t-5 (50 kr) som ikke var flagget i forrige analyse
+  await tab('Avvik');
+  await page.click('[data-sec=custom] button:text-is("Ny regel")');
+  const lastRule = page.locator('[data-sec=custom] .kvr-rule').last();
+  await lastRule.locator('.kvr-cond select').nth(1).selectOption('=');
+  await lastRule.locator('.kvr-cond input[type=text]').fill('50');
+  await lastRule.locator('.kvr-cond input[type=text]').press('Tab');
+  await tab('Sjekk');
+  await page.click('[data-sec=chk-top] button:text-is("Kjør analyse (synlige)")');
+  await page.waitForFunction(() => document.querySelector('[data-sec=chk-list] .kvr-new'), null, { timeout: 30000 });
+  const newRow = await page.innerText('[data-sec=chk-list] .kvr-ck:has(.kvr-new)');
+  assert.match(newRow, /10-01 14:00/); assert.match(newRow, /Regel: Ny regel 2/);
+  assert.strictEqual(await page.$$eval('[data-sec=chk-list] .kvr-new', n => n.length), 1);
+  await page.click('[data-sec=chk-list] .kvr-ck:has(.kvr-new) .kvr-ck-h');
+  assert.match(await page.innerText('[data-sec=chk-list] .kvr-ck:has(.kvr-new)'), /Treffer din regel «Ny regel 2»: Sum \(kr\) = 50/);
+  await page.click('[data-sec=chk-list] .kvr-ck:has(.kvr-new) button:text-is("Til oppfølging")');
+  assert.match(await page.innerText('[data-sec=chk-list] .kvr-ck:has(.kvr-new)'), /Til oppfølging/);
+  await page.click('button:text-is("Fjern valg")');
+  await wipe();
+
+  // diagrammer: klikk filtrerer, tooltip og tabellvisning
+  await tab('Diagram');
+  assert.strictEqual(await page.$$eval('[data-sec=ch-hours] .kvr-hit', n => n.length), 24);
+  await page.hover('[data-sec=ch-hours] .kvr-hit >> nth=0');
+  assert.match(await page.innerText('.kvr-tip'), /00:00–00:59 · 3 salg/);
+  await page.click('[data-sec=ch-hours] .kvr-hit >> nth=0');
+  assert.match(await page.innerText('.kvr-chipsrow'), /Tid 00:00 → 00:59/);
+  assert.deepStrictEqual(await vis(), ['t-1', 't-2', 't-3', 't-4']);
+  assert.strictEqual(await page.$$eval('[data-sec=ch-hours] .kvr-hit', n => n.length), 24, 'diagrammet krymper ikke når du klikker i det');
+  await wipe();
+  assert.ok(await page.$('[data-sec=ch-days]'), 'dagsdiagram med flere dager');
+  await page.click('[data-sec=ch-days] .kvr-hit >> nth=0');
+  assert.match(await page.innerText('.kvr-chipsrow'), /Dato 2026-10-01 → 2026-10-01/);
+  assert.deepStrictEqual(await vis(), ['t-5']);
+  await wipe();
+  assert.ok((await page.$$eval('[data-sec=ch-cash] .kvr-hb', n => n.length)) >= 2);
+  assert.match(await page.innerText('[data-sec=ch-cash]'), /Kasserer 10 \(/);
+  assert.strictEqual(await page.$$eval('[data-sec=ch-heat] .kvr-hc', n => n.length), 3 * 24);
+  await page.click('[data-sec=ch-heat] .kvr-ent:text-is("Kasse 6") ~ .kvr-hc >> nth=0');
+  assert.deepStrictEqual(await vis(), ['t-1']);
+  assert.match(await page.innerText('.kvr-chipsrow'), /Kasse: 6/);
+  await wipe();
+  assert.match(await page.innerText('[data-sec=ch-pant]'), /Pantesalg/);
+  await page.click('[data-sec=ch-hours] button:text-is("Tabell")');
+  assert.ok(await page.$eval('[data-sec=ch-hours] .kvr-svg', n => n.style.display === 'none'));
+  assert.strictEqual(await page.$$eval('[data-sec=ch-hours] .kvr-table tr', n => n.length), 25);
+  await page.click('[data-sec=ch-hours] button:text-is("Diagram")');
+
   // fokus: alt om én kasserer eller kasse
   await tab('Filter');
   await page.click('[data-sec=who] .kvr-pill:text-is("12")');
@@ -430,21 +496,18 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
     await page.addStyleTag({ path: path.join(dir, 'src/panel.css') });
     await page.addScriptTag({ path: path.join(dir, 'src/content.js') });
     await page.waitForSelector('#kvr-panel');
-    await page.setViewportSize({ width: 1100, height: 1500 });
+    await page.setViewportSize({ width: 1100, height: 1900 });
     await page.evaluate(() => { const p = document.getElementById('kvr-panel'); p.style.top = '10px'; });
-    await tab('Filter');
-    await page.selectOption('.kvr-f:has-text("Sortering") select', 'sumDesc');
-    await page.click('text=Negativ sum');
-    await page.click('button:text-is("Velg alle")');
-    await tab('Søk');
-    await page.fill('input[placeholder="EAN eller varenavn"]', 'banan');
-    await page.fill('.kvr-f:has-text("Dato fra") input >> nth=0', '2026-10-01');
-    await (await page.$('#kvr-panel')).screenshot({ path: process.env.SHOT.replace('.png', '-chips.png'), clip: { x: 0, y: 0, width: 420, height: 330 } });
-    await page.click('.kvr-chipsrow .kvr-link:text-is("Nullstill alt")');
-    await tab('Filter');
-    await page.click('[data-sec=who] .kvr-pill:text-is("12")');
-    await tab('Fokus');
-    await (await page.$('#kvr-panel')).screenshot({ path: process.env.SHOT.replace('.png', '-fokus.png') });
+    await tab('Sjekk');
+    await page.click('[data-sec=chk-top] button:text-is("Kjør analyse (synlige)")');
+    await page.waitForSelector('[data-sec=chk-list] .kvr-ck', { timeout: 30000 });
+    await (await page.$('#kvr-panel')).screenshot({ path: process.env.SHOT.replace('.png', '-sjekk.png') });
+    await tab('Diagram');
+    await page.waitForTimeout(200);
+    await (await page.$('#kvr-panel')).screenshot({ path: process.env.SHOT.replace('.png', '-diagram.png') });
+    await page.click('.kvr-icon[title^="Utvid"]');
+    await page.waitForTimeout(300);
+    await (await page.$('#kvr-panel')).screenshot({ path: process.env.SHOT.replace('.png', '-diagram-bred.png') });
   }
 
   assert.deepStrictEqual(errors, []);

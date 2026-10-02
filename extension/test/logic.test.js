@@ -292,4 +292,42 @@ assert.deepStrictEqual([fo.hours[10], fo.hours[15], fo.hours[23], fo.hours[0]], 
 assert.deepStrictEqual([fo.pantRet, fo.lapper, fo.scanned, fo.scannable, fo.settle, fo.settleDiff], [-30, 1, 3, 4, 1, -5]);
 assert.deepStrictEqual(fo.pay, { 'Bank': 100, 'Kontant tilbake': 30 });
 assert.strictEqual(L.focusStats([], {}).avg, 0);
+
+// ---- risikoscore, rangering og forklaring
+const W = L.sanitizeWeights(null);
+assert.strictEqual(L.riskScore(['Stor panteretur (256 kr)', 'Kontant tilbake uten salg', 'Rundt beløp'], W), 8);
+assert.strictEqual(L.riskScore(['Regel: Min regel'], W), 3);
+assert.strictEqual(L.riskScore(['Ukjent grunn'], W), 2);
+assert.strictEqual(L.riskScore(['Stor panteretur (1 kr)'], Object.assign({}, W, { 'Stor panteretur': '10' })), 10);
+assert.strictEqual(L.sanitizeWeights({ 'Rundt beløp': 'abc' })['Rundt beløp'], 1);
+assert.deepStrictEqual([L.riskLevel(9), L.riskLevel(8), L.riskLevel(4), L.riskLevel(3.9)], ['høy', 'høy', 'middels', 'lav']);
+const rkItems = [mkI('k-1', '2026-10-02', '10:00', 1, 'A', 100), mkI('k-2', '2026-10-02', '11:00', 1, 'B', -300), mkI('k-3', '2026-10-02', '12:00', 2, 'B', 500), mkI('k-4', '2026-10-02', '13:00', 1, 'A', 50)];
+const rkAnom = { 'k-1': ['Rundt beløp'], 'k-2': ['Stor panteretur (300 kr)', 'Kontant tilbake uten salg'], 'k-3': ['Rundt beløp', 'Samme beløp gjentatt'] };
+const rkr = L.rankReceipts(rkItems, rkAnom, W);
+assert.deepStrictEqual(rkr.map(r => [r.id, r.score]), [['k-2', 7], ['k-3', 4], ['k-1', 1]]);
+const rkc = L.rankCashiers(rkItems, rkAnom, W, { rows: [{ id: 'A', flags: { retShare: true, avg: false } }, { id: 'C', flags: {} }] });
+assert.deepStrictEqual(rkc.map(c => [c.id, c.score, c.flagged]), [['B', 11, 2], ['A', 3, 1]]);
+assert.deepStrictEqual(rkc[1].profile, ['høy returandel']);
+const ex = r => L.explainReason(r, { id: 'k-2', cfg: L.defaultAnom(), ctl: L.defaultControl(), rules: [{ name: 'Min', conds: [{ f: 'sum', op: '<=', v: '-200' }, { f: 'tid', op: '>=', v: '20:00' }] }], findings: [{ title: 'Samme beløp gjentatt', ids: ['k-2'], detail: 'Kasserer B 2026-10-02: -300 kr × 3' }] });
+assert.match(ex('Stor panteretur (300 kr)'), /300 kr\. Grensen er 300 kr/);
+assert.match(ex('Mange pantelapper (9)'), /9 pantelapper\. Grensen er 8/);
+assert.match(ex('Kassadifferanse (+1000 kr)'), /differanse \+1000 kr/);
+assert.match(ex('Regel: Min'), /Treffer din regel «Min»: Sum \(kr\) <= -200 OG Klokkeslett \(HH:MM\) >= 20:00/);
+assert.match(ex('Samme beløp gjentatt'), /Kasserer B .* × 3/);
+assert.match(ex('Bonger utenfor åpningstid'), /06:00–23:00/);
+assert.strictEqual(ex('Noe annet'), 'Noe annet');
+
+// ---- diagramdata
+const cdI = [mkI('c-1', '2026-10-02', '10:05', 1, 'A', 100), mkI('c-2', '2026-10-02', '10:40', 1, 'A', -30), mkI('c-3', '2026-10-02', '15:00', 2, 'B', 300),
+  mkI('c-4', '2026-10-03', '10:00', 2, 'B', 50), mkI('c-5', '2026-10-03', '23:00', 2, 'B', null, 2)];
+const cdS = { 'c-1': rcpt([['220 PANT', '', '2.00']]), 'c-2': rcpt([['399 PANTELAPP', '', '-30.00']]) };
+const cd = L.chartData(cdI, cdS);
+assert.deepStrictEqual([cd.hours.count[10], cd.hours.count[15], cd.hours.count[23], cd.hours.sum[10]], [3, 1, 0, 120]);
+assert.deepStrictEqual(cd.days.map(d => [d.day, d.count, d.sum]), [['2026-10-02', 3, 370], ['2026-10-03', 1, 50]]);
+assert.deepStrictEqual(cd.cashiers.map(c => [c.id, c.count, c.ret, Math.round(c.share * 100)]), [['A', 2, 1, 50], ['B', 2, 0, 0]]);
+assert.strictEqual(Math.round(cd.storeShare * 100), 25);
+assert.deepStrictEqual(cd.heat.rows.map(r => [r.id, r.counts[10]]), [['1', 2], ['2', 1]]);
+assert.strictEqual(cd.heat.max, 2);
+assert.deepStrictEqual(cd.pant, [{ day: '2026-10-02', sale: 2, ret: 30 }]);
+assert.deepStrictEqual([L.niceMax(0), L.niceMax(3), L.niceMax(7), L.niceMax(12), L.niceMax(130), L.niceMax(0.4)], [1, 5, 10, 20, 200, 0.5]);
 console.log('logic: ok');
