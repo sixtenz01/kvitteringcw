@@ -6,7 +6,7 @@ Begrensning: ingen API-kall mot Lindbak. Kun gridets data og iframens DOM leses 
 
 | # | Funksjon | Kilde | Status |
 |---|---|---|---|
-| 1 | Finn kvitteringer med pant | detaljer (iframe) | trenger eksempel på pant-tekst |
+| 1 | Finn kvitteringer med pant | linjer `220 PANT` (salg) og `399 PANTELAPP` (retur) | mønster kartlagt |
 | 2 | Finn annullerte kvitteringer (f.eks. med pant) | detaljer / `receiptType` | trenger eksempel + kodeliste |
 | 3 | Filter på varegrupper | ukjent kilde | risiko: varegruppe vises kanskje ikke på kvitteringen |
 | 4 | Butikkfilter | `storeNumber` | lett |

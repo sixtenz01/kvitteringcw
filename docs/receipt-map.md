@@ -64,6 +64,29 @@ Rader observert:
 - MVA-tabell: `MVA-grunnlag | MVA-% | MVA | Sum`
 - Toppteksten (butikk, kasse, kasserer, bongnr) ligger utenfor `<tr>` og er ikke kartlagt.
 
+## Kvitteringstyper og tekstmønstre (observert)
+
+Gridkoder (108 rader, alle `journalSourceName=main`): `receiptType/saleChannel` 1/2 (98), 1/1 (7), 1/3 (1), 2/1 (1), 11/1 (1). Betydning av kanal 1/2/3 er ikke bekreftet.
+
+| type | observasjon | innhold |
+|---|---|---|
+| 1 | vanlig salg, også med pant og retur | varelinjer, betaling, MVA |
+| 2 | kassaoppgjør (ingen `totalAmount`) | `Kontant/Sjekk/Kreditt/Tilgodelapp`, `Sum`, `Pose: <nr>`, `Sendt bank`, `Differanse`, valørtabell `Valør | Beløp` |
+| 11 | kasse 77, PDA-operasjoner | linjer med `Operasjon utført av: pda (Antall)`, `Antall: 6.000 stk à Kr 15.90`, totalraden heter `Sum` (ikke `Totalt`), ingen betalingslinje; betydning uavklart |
+
+Mønstre i varelinjer:
+
+- Pant på salg: `220 PANT | | 2.00` (positivt beløp, MVA 0 %). EAN-linjer starter med 13 siffer, interne varenr er kortere (`220`, `399`, `1024`).
+- Panteretur: to rader, `RETUR VARE` etterfulgt av `399 PANTELAPP | | -150.00` (negativt beløp). Utbetaling: `Kontant tilbake: | | 556.00`.
+- Mengde/pris: ekstra rad `Antall: 6.000 stk à Kr 15.90` under varelinjen.
+- Avrunding: `Øreavrunding | -0.30`.
+- Betaling: `Bank: | | beløp`, `Kontant: | | beløp`, `Kontant tilbake: | | beløp`; `Referanse: <nr>` på bankbetaling.
+- Totalrad: `Subtotal:Totalt` (salg) eller `Subtotal:Sum` (type 11).
+- Fallgruve: `(SLETT…` i varenavn er produktstatus, ikke annullering.
+- Negativ `totalAmount` i gridet = panteretur/retur (-556, -0.7 observert).
+
+Ikke observert ennå: annullert kvittering, rabatt, manuell pris, parkert bong, medlem (`memberNumber != null` forekommer på 11 av 108 rader).
+
 ## Ikke i bruk: API-endepunkt
 
 Beslutning: pluginen kaller ikke Lindbaks API. Kun gridets data og iframens DOM leses. Endepunktene er dokumentert for referanse (`JournalUrls.journalApiRoot` + …).
@@ -84,9 +107,9 @@ Beslutning: pluginen kaller ikke Lindbaks API. Kun gridets data og iframens DOM 
 
 ## Ukjent / neste steg
 
-1. Kartlegg toppteksten (butikk, kasse, kasserer, bongnr, medlemsnr): `iframe.contentDocument.body.innerText`, første linjer.
-2. Kartlegg tom kolonne i varelinjer: bruk kvittering med flere varer, rabatt og retur.
-3. Kartlegg `saleChannel`- og `receiptType`-koder.
+1. Finn eksempel på annullert, rabatt, manuell pris, parkert bong og medlem.
+2. Kartlegg toppteksten (butikk, kasse, kasserer, bongnr, medlemsnr): `iframe.contentDocument.body.innerText`, første linjer.
+3. Bekreft `saleChannel` 1/2/3 og `receiptType` 11.
 4. Fastlegg robust parsing av iframen (rader, klasser `ReceiptTable`, `Subtotal`).
 
 ## Risiko
