@@ -83,4 +83,10 @@ assert.strictEqual(noLabel, 0, 'alle diagrammer har beskrivelse');
 assert.ok(new Set((html.match(/<marker id="([^"]+)"/g) || [])).size === (html.match(/<marker id="/g) || []).length, 'unike pil-id-er');
 // markørene i de annoterte bildene har en forklaring hver
 assert.deepStrictEqual([B.LEGENDS.oversikt.length, B.LEGENDS['sjekk-kort'].length, B.LEGENDS['innstillinger-rad'].length], [11, 7, 5]);
+// PDF-varianten: forside, innholdsfortegnelse med sidetall, åpne spørsmål, ingen late bilder
+const pdfHtml = B.pdfPage({ 'kom-i-gang': 3, innstillinger: 46 });
+assert.ok(pdfHtml.includes('class="cover"') && pdfHtml.includes('class="pdf-toc"') && !/\{\{/.test(pdfHtml));
+assert.ok(!pdfHtml.includes('loading="lazy"') && !/<details class="faq">/.test(pdfHtml), 'PDF: bilder lastes og spørsmål er åpne');
+assert.ok(/<span class="p">3<\/span>/.test(pdfHtml) && /<span class="p">46<\/span>/.test(pdfHtml), 'PDF: sidetall i innholdsfortegnelsen');
+assert.strictEqual((pdfHtml.match(/<h2 id=/g) || []).length, 12, 'PDF: alle kapitler');
 console.log('docs: ok (' + imgs + ' bilder, ' + (html.length / 1048576).toFixed(1) + ' MB)');

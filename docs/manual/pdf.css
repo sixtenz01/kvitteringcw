@@ -1,0 +1,67 @@
+/* Utskriftsvariant: A4, forside, innholdsfortegnelse med sidetall, ett kapittel per side. */
+@page { size: A4; margin: 20mm 16mm 20mm 16mm;
+  @top-left { content: "Kvitteringshenter · brukerveiledning"; font: 8pt system-ui, sans-serif; color: #5f6f68; }
+  @bottom-right { content: "Side " counter(page) " av " counter(pages); font: 8pt system-ui, sans-serif; color: #5f6f68; } }
+@page :first { margin: 24mm 18mm; @top-left { content: none; } @bottom-right { content: none; } }
+:root, :root[data-theme] { color-scheme: light; }
+html { scroll-behavior: auto; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body.pdf { background: #fff; color: #17231d; font-size: 10pt; line-height: 1.5; }
+.pdf .wrap { display: block; max-width: none; padding: 0; }
+.pdf main { padding: 0; }
+.pdf .toc, .pdf .toc-m, .pdf .q { display: none; }
+
+.pdf .cover { min-height: 235mm; display: flex; flex-direction: column; justify-content: center; break-after: page; }
+.pdf .cover .hero { padding: 0; }
+.pdf .cover h1 { font-size: 40pt; margin-bottom: 4pt; color: #00704a; }
+.pdf .cover .sub { font-size: 13pt; margin-bottom: 22pt; }
+.pdf .cover .lead { font-size: 12pt; max-width: none; }
+.pdf .paths { grid-template-columns: repeat(2, 1fr); }
+.pdf .paths a { box-shadow: none; break-inside: avoid; }
+.pdf .brandline { height: 6px; background: #00704a; border-radius: 3px; margin-bottom: 26pt; width: 90px; }
+
+.pdf .pdf-toc { break-after: page; }
+.pdf .pdf-toc h2 { break-before: auto; border-top: 0; padding-top: 0; margin-top: 0; }
+.pdf .pdf-toc ol { list-style: none; padding: 0; margin: 10pt 0 0; }
+.pdf .pdf-toc li { max-width: none; margin: 0; }
+.pdf .pdf-toc a { display: flex; align-items: baseline; gap: 10pt; padding: 7pt 0; text-decoration: none; color: inherit; font-size: 12pt; }
+.pdf .pdf-toc .n { color: #00704a; font-weight: 700; min-width: 1.6em; font-variant-numeric: tabular-nums; }
+.pdf .pdf-toc .dots { flex: 1; border-bottom: 1px dotted #8fa69b; transform: translateY(-3pt); }
+.pdf .pdf-toc .p { font-variant-numeric: tabular-nums; }
+.pdf .pdf-toc .sub { margin: 0 0 0 2.4em; font-size: 9.5pt; color: #556860; max-width: none; padding-bottom: 4pt; }
+
+.pdf main > h2, .pdf main h2 { break-before: page; margin: 0 0 8pt; padding-top: 0; border-top: 0; border-bottom: 2px solid #00704a; padding-bottom: 6pt; font-size: 20pt; }
+.pdf main > .cover + .pdf-toc + h2 { break-before: auto; }
+.pdf h3 { break-after: avoid; margin-top: 16pt; font-size: 13pt; }
+.pdf h4 { break-after: avoid; }
+.pdf p, .pdf li { max-width: none; orphans: 3; widows: 3; }
+.pdf figure, .pdf .fig, .pdf .callout, .pdf details.faq, .pdf .grp > .meta, .pdf .legend li, .pdf tr { break-inside: avoid; }
+.pdf .grp { break-inside: auto; box-shadow: none; padding: 12pt 14pt 2pt; }
+.pdf .grp > h3 { break-before: auto; break-after: avoid; }
+.pdf .shot img { box-shadow: none; }
+.pdf .shot.panel img { max-width: 370px; }
+.pdf .shot.mid img { max-width: 560px; }
+.pdf .side { grid-template-columns: 370px minmax(0, 1fr); gap: 18pt; }
+.pdf .side .shot.panel img { max-width: 370px; }
+.pdf .shots { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12pt; }
+.pdf .shots .shot.panel img { max-width: 100%; }
+.pdf .fig { overflow: visible; box-shadow: none; padding: 8pt 10pt 6pt; }
+.pdf .fig svg { min-width: 0; }
+.pdf .tw { overflow: visible; }
+.pdf table { font-size: 8.8pt; }
+.pdf th, .pdf td { padding: 4pt 6pt; }
+.pdf thead { display: table-header-group; }
+.pdf details.faq { border: 1px solid #c9d6cf; max-width: none; }
+.pdf details.faq summary { list-style: none; }
+.pdf details.faq summary::-webkit-details-marker { display: none; }
+.pdf .callout { max-width: none; }
+.pdf a { color: inherit; text-decoration: none; }
+.pdf .grp .meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.pdf .foot { margin-top: 20pt; }
+.pdf figcaption { font-size: 8.5pt; max-width: none; }
+.pdf .steps > li { max-width: none; }
+.pdf dl.gl { max-width: none; }
+
+.pdf table { break-inside: auto; }
+.pdf tr, .pdf .tw { break-inside: avoid; }
+.pdf .tw { break-inside: auto; }
+.pdf .coverdate { margin-top: 28pt; color: #556860; font-size: 10pt; }

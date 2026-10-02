@@ -31,6 +31,7 @@ async function openSession(width, height) {
   await page.goto('https://chainweb.coop.no/LindbakRetail_1/Journal/Viewer');
   for (const f of ['lib/html2canvas.min.js', 'lib/jszip.min.js', 'src/logic.js', 'src/report.js']) await page.addScriptTag({ path: path.join(EXT, f) });
   await page.addStyleTag({ path: path.join(EXT, 'src/panel.css') });
+  await page.addStyleTag({ content: 'body > *:not(#kvr-panel):not(.kvr-modal):not(.kvr-ann):not(.kvr-tip) { visibility: hidden !important; } body { background: #e9eeeb !important; }' });
   await page.addScriptTag({ path: path.join(EXT, 'src/content.js') });
   await page.waitForSelector('#kvr-panel');
   await page.evaluate(() => { const p = document.getElementById('kvr-panel'); p.style.top = '10px'; p.style.left = '10px'; });

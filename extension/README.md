@@ -86,6 +86,7 @@ Veiledningen bygges av `docs/manual/`: `manual.src.html` (tekst), `help.js` (for
 ```
 NODE_PATH=<global node_modules> node docs/manual/shots.js   # ta nye skjermbilder (valgfritt)
 node docs/manual/build.js                                  # bygg docs/brukerveiledning.html
+NODE_PATH=<global node_modules> node docs/manual/pdf.js     # lag docs/Kvitteringshenter-brukerveiledning.pdf (A4, innholdsfortegnelse med sidetall)
 node extension/test/docs.test.js                           # sjekker at alt i pluginen er dokumentert
 ```
 

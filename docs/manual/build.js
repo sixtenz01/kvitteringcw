@@ -157,6 +157,21 @@ function page(artifact) {
   return `<!doctype html><html lang="nb"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>${title}</title><style>${css}</style></head><body>${inner}</body></html>`;
 }
 
+// ---- PDF-variant: forside, innholdsfortegnelse med sidetall, ett kapittel per side
+function pdfPage(pages) {
+  pages = pages || {};
+  const src = fs.readFileSync(path.join(__dirname, 'manual.src.html'), 'utf8');
+  const css = fs.readFileSync(path.join(__dirname, 'style.css'), 'utf8') + '\n' + fs.readFileSync(path.join(__dirname, 'pdf.css'), 'utf8');
+  let main = body(src).replace(/ loading="lazy"/g, '').replace(/<details class="faq">/g, '<details class="faq" open>');
+  const cut = main.indexOf('<h2 id="');
+  const hero = main.slice(0, cut), rest = main.slice(cut);
+  const toc = [];
+  src.replace(/<h2 id="([\w-]+)"><span class="n">(\d+)<\/span>([^<]+)<\/h2>/g, (m, id, n, t) => { toc.push([id, n, t]); return m; });
+  const subs = { 'kom-i-gang': 'Installere, oppdatere og første gang', panelet: 'Oversikt, arbeidsflyt og hva skanning er', faner: 'Hent, Filtrer, Skann, Analyse og Mer', analysen: 'Poeng, risikonivå, omfang og alle testene', rabatt: 'Rabattlinjer, årsaker og kuponger', revisjon: 'Lag, les og verifiser en revisjonsrapport', innstillinger: 'Alle innstillinger og poengvekter med standardverdier', verktoy: 'Egne regler, arbeidsoppgaver, notater og tastatur' };
+  const tocHtml = `<section class="pdf-toc"><h2>Innhold</h2><ol>${toc.map((t) => `<li><a href="#${t[0]}"><span class="n">${t[1]}</span><span class="t">${esc(t[2])}</span><span class="dots"></span><span class="p">${pages[t[0]] || '00'}</span></a>${subs[t[0]] ? `<p class="sub">${esc(subs[t[0]])}</p>` : ''}</li>`).join('')}</ol></section>`;
+  return `<!doctype html><html lang="nb"><head><meta charset="utf-8"><title>Kvitteringshenter brukerveiledning ${R.VERSION}</title><style>${css}</style></head><body class="pdf"><div class="cover"><div class="brandline"></div>${hero}<p class="coverdate">Laget ${new Date().toLocaleDateString('nb-NO', { day: 'numeric', month: 'long', year: 'numeric' })}</p></div>${tocHtml}<div class="wrap"><main>${rest}</main></div></body></html>`;
+}
+
 if (require.main === module) {
   const artifact = process.argv.indexOf('--artifact') !== -1;
   const out = artifact ? process.argv[process.argv.indexOf('--artifact') + 1] : path.join(__dirname, '..', 'brukerveiledning.html');
@@ -164,4 +179,4 @@ if (require.main === module) {
   fs.writeFileSync(out, html);
   console.log('skrev ' + out + ' (' + (html.length / 1048576).toFixed(1) + ' MB)');
 }
-module.exports = { page, IMG, LEGENDS };
+module.exports = { page, pdfPage, IMG, LEGENDS };
