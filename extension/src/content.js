@@ -6,9 +6,14 @@
   var L = window.KvLogic;
   var SAVED_KEY = 'kvr.saved.v1';
   var COLLAPSE_KEY = 'kvr.collapsed.v1';
+  var PANT_KEY = 'kvr.pant.v1';
+  var SCAN_TIMEOUT = 6000;
 
   var filters = L.defaultFilters();
   var selected = {};
+  var pantMap = store(PANT_KEY) || {};
+  var scanning = false;
+  var cancelScan = false;
   var recs = [];
   var grid = null;
   var ui = {};
@@ -105,7 +110,7 @@
     recs = collect();
     var items = recs.map(function (r) { return r.item; });
     var dup = L.findDuplicates(items);
-    var ctx = { dupIds: dup.ids };
+    var ctx = { dupIds: dup.ids, pant: pantMap };
     var visible = 0;
     recs.forEach(function (r) {
       var show = L.matches(r.item, filters, ctx);
@@ -136,8 +141,11 @@
     var chosen = Object.keys(selected).map(function (k) { return selected[k]; });
     var s = L.sumSelected(chosen);
     var dupGroups = ui.dup ? ui.dup.groups.length : 0;
+    var p = L.sumPant(chosen, pantMap);
     ui.summary.textContent = 'Viser ' + (ui.visible || 0) + ' av ' + recs.length +
-      ' · Valgt: ' + s.count + ' · Sum valgt: ' + fmt(s.sum) + ' kr · Duplikatgrupper: ' + dupGroups;
+      ' · Valgt: ' + s.count + ' · Sum valgt: ' + fmt(s.sum) + ' kr · Duplikatgrupper: ' + dupGroups +
+      ' · Pant valgte: salg ' + fmt(p.sale) + ', retur ' + fmt(p.ret) + ', netto ' + fmt(p.net) +
+      ' kr (' + p.scanned + ' av ' + p.total + ' skannet)';
     ui.active.textContent = L.activeCount(filters) ? L.activeCount(filters) + ' filter aktive' : 'Ingen filter';
   }
 
@@ -167,6 +175,7 @@
     filters.member = ui.member.value.trim();
     filters.onlyMember = ui.onlyMember.checked;
     filters.onlyDup = ui.onlyDup.checked;
+    filters.pant = ui.pant.value;
     filters.sort = ui.sort.value;
   }
 
@@ -176,6 +185,7 @@
     ui.onlyNegative.checked = filters.onlyNegative;
     ui.onlyMember.checked = filters.onlyMember;
     ui.onlyDup.checked = filters.onlyDup;
+    ui.pant.value = filters.pant;
     ui.sort.value = filters.sort;
   }
 
@@ -201,6 +211,70 @@
   function check(label) {
     var c = input('checkbox');
     return { box: c, node: el('label', { class: 'kv-c' }, [c, el('span', { text: label })]) };
+  }
+
+
+  function wait(ms) { return new Promise(function (res) { setTimeout(res, ms); }); }
+
+  function iframeDoc() {
+    var f = document.querySelector('iframe');
+    var d = null;
+    try { d = f && f.contentDocument; } catch (e) { d = null; }
+    return d && d.body ? d : null;
+  }
+
+  function readReceiptRows() {
+    var d = iframeDoc();
+    if (!d) return null;
+    return Array.prototype.map.call(d.querySelectorAll('tr'), function (tr) {
+      return Array.prototype.map.call(tr.children, function (c) { return c.textContent.replace(/\s+/g, ' ').trim(); });
+    });
+  }
+
+  async function loadReceipt(r) {
+    var sel = grid.select();
+    var already = sel && sel[0] === r.tr;
+    var d = iframeDoc();
+    if (!d) return null;
+    if (!already) { d.body.innerHTML = ''; grid.select(r.tr); }
+    var waited = 0;
+    while (waited < SCAN_TIMEOUT) {
+      d = iframeDoc();
+      if (d && d.body.innerHTML.length > 0 && (d.querySelector('tr') || d.querySelector('.no-details'))) {
+        await wait(150);
+        return readReceiptRows();
+      }
+      await wait(100);
+      waited += 100;
+    }
+    return null;
+  }
+
+  async function scanPant() {
+    if (scanning || !grid) return;
+    var todo = recs.filter(function (r) {
+      return r.show && r.item.receiptType === 1 && !pantMap[r.item.transactionId];
+    });
+    if (!todo.length) { ui.scanStatus.textContent = 'Ingenting å skanne (alt er skannet eller ingen synlige salg).'; return; }
+    scanning = true; cancelScan = false;
+    ui.scanBtn.disabled = true; ui.stopBtn.disabled = false;
+    var prev = grid.select();
+    var prevTr = prev && prev[0];
+    var done = 0, failed = 0;
+    for (var i = 0; i < todo.length && !cancelScan; i++) {
+      ui.scanStatus.textContent = 'Skanner ' + (i + 1) + ' av ' + todo.length + (failed ? ' · feilet: ' + failed : '');
+      var rows = await loadReceipt(todo[i]);
+      if (rows) {
+        pantMap[todo[i].item.transactionId] = L.parseReceipt(rows);
+        done++;
+      } else failed++;
+    }
+    store(PANT_KEY, pantMap);
+    if (prevTr) grid.select(prevTr); else if (typeof grid.clearSelection === 'function') grid.clearSelection();
+    scanning = false;
+    ui.scanBtn.disabled = false; ui.stopBtn.disabled = true;
+    ui.scanStatus.textContent = (cancelScan ? 'Stoppet. ' : 'Ferdig. ') + 'Skannet ' + done + (failed ? ', feilet ' + failed : '') + '.';
+    apply();
   }
 
   function renderSaved() {
@@ -258,6 +332,24 @@
     body.appendChild(field('Medlemssøk', ui.member));
     body.appendChild(mem.node);
     body.appendChild(dp.node);
+
+
+    ui.pant = el('select', {}, [
+      el('option', { value: '', text: 'Alle' }),
+      el('option', { value: 'any', text: 'Har pant eller panteretur' }),
+      el('option', { value: 'sale', text: 'Har pant (salg)' }),
+      el('option', { value: 'return', text: 'Har panteretur' })
+    ]);
+    ui.pant.addEventListener('change', onChange);
+    body.appendChild(field('Pant (krever skanning)', ui.pant));
+    ui.scanBtn = el('button', { type: 'button', class: 'kv-btn', text: 'Skann pant (synlige)', onclick: scanPant });
+    ui.stopBtn = el('button', { type: 'button', class: 'kv-btn', text: 'Stopp', disabled: 'disabled', onclick: function () { cancelScan = true; } });
+    body.appendChild(el('div', { class: 'kv-row' }, [ui.scanBtn, ui.stopBtn,
+      el('button', { type: 'button', class: 'kv-btn', text: 'Tøm pant-cache', onclick: function () {
+        pantMap = {}; store(PANT_KEY, pantMap); ui.scanStatus.textContent = 'Cache tømt.'; apply();
+      } })]));
+    ui.scanStatus = el('div', { class: 'kv-summary', text: '' });
+    body.appendChild(ui.scanStatus);
 
     ui.sort = el('select', {}, [
       el('option', { value: 'none', text: 'Standard' }),

@@ -13,13 +13,18 @@ const rows = [
 const html = `<!doctype html><html><body><table id="g" data-role="grid"><tbody>
 ${rows.map(r => `<tr data-id="${r.transactionId}"><td></td><td>${r.endDateTime}</td><td>${r.totalAmount}</td></tr>`).join('')}
 </tbody></table>
+<iframe id="rc"></iframe>
 <script>
 var rows=${JSON.stringify(rows)};
 var items=rows.map(function(r,i){var o=Object.assign({uid:'u'+i},r);o.toJSON=function(){var c=Object.assign({},o);delete c.toJSON;return c};return o});
 var bound=[];
 var grid={tbody:[document.querySelector('tbody')],dataSource:{view:function(){return items}},
  dataItem:function(tr){return items.filter(function(i){return i.transactionId===tr.getAttribute('data-id')})[0]},
- bind:function(n,f){bound.push(f)}};
+ bind:function(n,f){bound.push(f)},
+ select:function(tr){ if(!arguments.length) return cur?[cur]:[]; cur=tr; var id=tr.getAttribute('data-id'); setTimeout(function(){ document.getElementById('rc').contentDocument.body.innerHTML=receipts[id]||'<table><tr><td>X</td><td></td><td>1.00</td></tr></table>'; },300); },
+ clearSelection:function(){cur=null}};
+var cur=null;
+var receipts={'t-1':'<table><tr><td>RETUR VARE</td></tr><tr><td>399 PANTELAPP</td><td></td><td>-150.00</td></tr><tr><td>399 PANTELAPP</td><td></td><td>-106.00</td></tr></table>','t-3':'<table><tr><td>7044610877488 PEPSI</td><td></td><td>32.90</td></tr><tr><td>220 PANT</td><td></td><td>2.00</td></tr></table>'};
 window.jQuery=function(el){return {data:function(){return grid}}};
 </script></body></html>`;
 
@@ -50,7 +55,7 @@ window.jQuery=function(el){return {data:function(){return grid}}};
   assert.deepStrictEqual(await vis(), ['t-3']);
   await page.fill('input[placeholder=medlemsnr]', '');
 
-  await page.selectOption('.kv-f select:not([multiple])', 'sumDesc');
+  await page.selectOption('.kv-f:has-text("Sortering") select', 'sumDesc');
   const order = await page.$$eval('tbody tr', trs => trs.map(t => t.getAttribute('data-id')));
   assert.deepStrictEqual(order, ['t-3', 't-4', 't-5', 't-1', 't-2']);
 
@@ -59,6 +64,19 @@ window.jQuery=function(el){return {data:function(){return grid}}};
   await page.fill('input[placeholder="navn på filter"]', 'test');
   await page.click('text=Lagre');
   assert.ok(await page.evaluate(() => !!JSON.parse(localStorage.getItem('kvr.saved.v1')).test));
+
+  await page.click('text=Nullstill');
+  await page.click('text=Skann pant');
+  await page.waitForFunction(() => /Ferdig|Ingenting/.test(document.getElementById('kv-panel').innerText), null, { timeout: 15000 });
+  assert.match(await page.textContent('#kv-panel'), /Skannet 4/);
+  await page.selectOption('.kv-f:has-text("Pant (krever") select', 'return');
+  assert.deepStrictEqual(await vis(), ['t-1']);
+  await page.selectOption('.kv-f:has-text("Pant (krever") select', 'sale');
+  assert.deepStrictEqual(await vis(), ['t-3']);
+  await page.selectOption('.kv-f:has-text("Pant (krever") select', '');
+  await page.click('text=Velg synlige');
+  assert.match(await page.textContent('.kv-summary'), /salg 2,00, retur [-\u2212]256,00, netto [-\u2212]254,00 kr \(4 av 5 skannet\)/);
+  assert.ok(await page.evaluate(() => JSON.parse(localStorage.getItem('kvr.pant.v1'))['t-1'].ret === -256));
 
   assert.deepStrictEqual(errors, []);
   await browser.close();

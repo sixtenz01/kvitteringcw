@@ -28,6 +28,7 @@
       member: '',
       onlyMember: false,
       onlyDup: false,
+      pant: '',
       sort: 'none'
     };
   }
@@ -76,6 +77,13 @@
       if (String(item.memberNumber).toLowerCase().indexOf(String(f.member).toLowerCase()) === -1) return false;
     }
     if (f.onlyDup && !(ctx && ctx.dupIds && ctx.dupIds[item.transactionId])) return false;
+    if (f.pant) {
+      var info = ctx && ctx.pant && ctx.pant[item.transactionId];
+      if (!info) return false;
+      if (f.pant === 'any' && !(info.sale !== 0 || info.ret !== 0)) return false;
+      if (f.pant === 'sale' && !(info.sale > 0)) return false;
+      if (f.pant === 'return' && !(info.ret < 0)) return false;
+    }
     return true;
   }
 
@@ -117,6 +125,38 @@
     var sum = 0;
     items.forEach(function (it) { if (typeof it.totalAmount === 'number') sum += it.totalAmount; });
     return { count: items.length, sum: Math.round(sum * 100) / 100 };
+  }
+
+  function parseAmount(text) {
+    var t = String(text || '').replace(/[\s\u00a0]/g, '').replace(',', '.');
+    return /^-?\d+(\.\d+)?$/.test(t) ? Number(t) : null;
+  }
+
+  var PANT_LINE = /^\s*\d{1,4}\s+PANT(ELAPP)?\b/i;
+
+  function round2(n) { return Math.round(n * 100) / 100; }
+
+  function parseReceipt(rows) {
+    var sale = 0, ret = 0, saleLines = 0, retLines = 0;
+    (rows || []).forEach(function (cells) {
+      if (!cells || cells.length < 2) return;
+      if (!PANT_LINE.test(cells[0])) return;
+      var amount = null;
+      for (var i = cells.length - 1; i > 0 && amount === null; i--) amount = parseAmount(cells[i]);
+      if (amount === null) return;
+      if (amount < 0) { ret += amount; retLines++; } else { sale += amount; saleLines++; }
+    });
+    return { sale: round2(sale), ret: round2(ret), saleLines: saleLines, retLines: retLines };
+  }
+
+  function sumPant(items, pantMap) {
+    var sale = 0, ret = 0, scanned = 0;
+    items.forEach(function (it) {
+      var p = pantMap && pantMap[it.transactionId];
+      if (!p) return;
+      scanned++; sale += p.sale; ret += p.ret;
+    });
+    return { sale: round2(sale), ret: round2(ret), net: round2(sale + ret), scanned: scanned, total: items.length };
   }
 
   function pad(n) { return n < 10 ? '0' + n : String(n); }
@@ -166,6 +206,9 @@
     compare: compare,
     findDuplicates: findDuplicates,
     sumSelected: sumSelected,
+    parseReceipt: parseReceipt,
+    parseAmount: parseAmount,
+    sumPant: sumPant,
     quickRange: quickRange,
     sanitizeFilters: sanitizeFilters,
     activeCount: activeCount
