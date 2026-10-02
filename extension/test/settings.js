@@ -60,7 +60,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
     return r.fulfill({ contentType: 'text/html', body: html });
   });
   await page.goto('https://chainweb.coop.no/LindbakRetail_1/Journal/Viewer');
-  for (const f of ['lib/html2canvas.min.js', 'lib/jszip.min.js', 'src/logic.js']) await page.addScriptTag({ path: path.join(dir, f) });
+  for (const f of ['lib/html2canvas.min.js', 'lib/jszip.min.js', 'src/logic.js', 'src/report.js']) await page.addScriptTag({ path: path.join(dir, f) });
   await page.addStyleTag({ path: path.join(dir, 'src/panel.css') });
   await page.addScriptTag({ path: path.join(dir, 'src/content.js') });
   await page.waitForSelector('#kvr-panel');

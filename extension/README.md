@@ -77,6 +77,18 @@ Ikke verifisert: om kvitteringen skriver årsaken som nummer eller tekst (begge 
 - **Sammenlign bonger:** velg to bonger, trykk «Sammenlign» nederst. Linjer som ikke finnes på den andre markeres.
 - **Tastaturflyt:** ↑/↓ bytter bong, N notat, M velg/fjern, Esc lukker. Kan slås av.
 
+## Revisjonsrapport
+
+Mer → Eksport → **Lag revisjonsrapport…** (også som knapp i Sjekk først etter en analyse). Rapporten bygger på den siste analysen og lagres som én ZIP:
+
+- `rapport.html`: forside (referanse, utarbeidet av, tidspunkt, omfang), sammendrag, omfang og datagrunnlag, **dekningsgrad og begrensninger**, metode med alle terskler og poeng (endrede verdier er merket), funn per test, rangerte flaggede bonger med forklaring og notater/status, bevisbilder, kontrollsummer og forbehold. Kan skrives ut til PDF fra nettleseren.
+- `bevis/`: PNG av de høyest rangerte bongene (standard 30, 0 = ingen, maks 100). Bevisbildene har topptekst med butikk, kasse, kasserer, bongnr og tid, men aldri medlemsnummer.
+- `data/kvitteringer.csv`: alle kvitteringer i datagrunnlaget (også de tester på tvers av bonger brukte utenfor omfanget, merket «I omfang»). `data/innhold.json`: skannet bonginnhold. `data/funn.csv` og `data/flaggede_bonger.csv`.
+- `innstillinger.json`: terskler, poeng, egne regler, varegrupper og butikknavn slik de var i analysen. Kan leses inn under Mer → Innstillinger → Importer for å gjenta analysen.
+- `KONTROLLSUM.txt`: SHA-256 for alle filer, i formatet `sha256sum -c KONTROLLSUM.txt` forstår. Kontrollsummen for datasettet er SHA-256 av `data/kvitteringer.csv`, og for innholdet SHA-256 av `data/innhold.json` (sortert på bong-ID, uten skannetidspunkt), så den kan kontrolleres uavhengig av pluginen.
+
+Rapporten viser det som gjaldt da analysen ble kjørt (omfang, bonger, skanninnhold, terskler), også om listen eller innstillingene er endret etterpå; en merknad forteller om dette. Kontrollsummen for selve ZIP-filen vises i panelet og lagres i en logg («Tidligere rapporter», bare i denne nettleseren), for å kunne noteres i saken. Kontrollsummer viser at eksporten ikke er endret, ikke at dataene i Lindbak er riktige. Funn er indikasjoner, ikke bevis.
+
 ## Innstillinger og hjelp
 
 - **Mer → Innstillinger** (eller ⚙ øverst) samler alle terskler, avviksgrenser og poeng, gruppert per test: Avvik per bong, Mønstre, Falsk retur, Salg etter kassaoppgjør, Slettede bonger, Kassadifferanse over tid, Tallanalyse, Rabatt, Pant, Åpningstider, Kassererprofil og Egne regler. Hver gruppe viser forklaring, enhet, hvor mange verdier som er endret, og «Standard for denne gruppen».
@@ -130,6 +142,8 @@ node test/logic.test.js
 NODE_PATH=<global node_modules> node test/smoke.js   # Playwright, fiktivt grid
 NODE_PATH=<global node_modules> node test/audit.js   # revisjonstester og omfang, eget datasett
 NODE_PATH=<global node_modules> node test/settings.js # innstillinger, hjelp, bekreftelser, import/eksport, piltaster
+node test/report.test.js                              # SHA-256, kontrollsummer og rapportbygger (uten nettleser)
+NODE_PATH=<global node_modules> node test/rapport.js  # lager rapport i panelet, pakker ut ZIP og verifiserer alle kontrollsummer
 TOUR=<mappe> NODE_PATH=<global node_modules> node test/tour.js  # skjermbilder av alle faner (valgfritt)
 ```
 

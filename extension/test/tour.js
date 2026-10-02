@@ -60,7 +60,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
     return r.fulfill({ contentType: 'text/html', body: html });
   });
   await page.goto('https://chainweb.coop.no/LindbakRetail_1/Journal/Viewer');
-  for (const f of ['lib/html2canvas.min.js', 'lib/jszip.min.js', 'src/logic.js']) await page.addScriptTag({ path: path.join(dir, f) });
+  for (const f of ['lib/html2canvas.min.js', 'lib/jszip.min.js', 'src/logic.js', 'src/report.js']) await page.addScriptTag({ path: path.join(dir, f) });
   await page.addStyleTag({ path: path.join(dir, 'src/panel.css') });
   await page.addScriptTag({ path: path.join(dir, 'src/content.js') });
   await page.waitForSelector('#kvr-panel');
@@ -87,6 +87,9 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   await shot('2-Sjekk-etter');
   for (const s of ['Diagram', 'Rapport', 'Fokus', 'Detaljer']) { await go('Analyse', s); await shot('3-' + s); }
   await go('Mer'); await shot('4-Mer');
+  await page.click('[data-sec=auditrep] button:text-is("Lag revisjonsrapport…")');
+  if (out) await (await page.$('.kvr-dlg')).screenshot({ path: path.join(out, '4-Rapportdialog.png') });
+  await page.click('.kvr-modal button:text-is("Avbryt")');
   await page.click('.kvr-sub:text-is("Innstillinger")');
   await shot('5-Innstillinger');
   await page.click('[data-sec=set-bong] summary');

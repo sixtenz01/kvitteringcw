@@ -7,7 +7,7 @@
   var K = {
     saved: 'kvr.saved.v1', collapsed: 'kvr.collapsed.v1', scan: 'kvr.scan.v2', pos: 'kvr.pos.v1',
     size: 'kvr.size.v1', sec: 'kvr.sec.v1', rules: 'kvr.rules.v1', anom: 'kvr.anom.v1',
-    stores: 'kvr.stores.v1', fast: 'kvr.fast.v1', tab: 'kvr.tab.v1', layout: 'kvr.layout.v1', arules: 'kvr.arules.v1', notes: 'kvr.notes.v1', tasks: 'kvr.tasks.v1', ctl: 'kvr.ctl.v1', keynav: 'kvr.keynav.v1', wide: 'kvr.wide.v1', sub: 'kvr.sub.v1', weights: 'kvr.weights.v1', lastrun: 'kvr.lastrun.v1', scope: 'kvr.scope.v1', help: 'kvr.help.v1', sub2: 'kvr.sub2.v1'
+    stores: 'kvr.stores.v1', fast: 'kvr.fast.v1', tab: 'kvr.tab.v1', layout: 'kvr.layout.v1', arules: 'kvr.arules.v1', notes: 'kvr.notes.v1', tasks: 'kvr.tasks.v1', ctl: 'kvr.ctl.v1', keynav: 'kvr.keynav.v1', wide: 'kvr.wide.v1', sub: 'kvr.sub.v1', weights: 'kvr.weights.v1', lastrun: 'kvr.lastrun.v1', scope: 'kvr.scope.v1', help: 'kvr.help.v1', sub2: 'kvr.sub2.v1', reports: 'kvr.reports.v1', repopts: 'kvr.repopts.v1'
   };
   var sayTimer = null;
   var failedRecs = [];
@@ -1001,9 +1001,9 @@
 
   function esc(t) { return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
-  function pngHeader(it) {
+  function pngHeader(it, member) {
     var lines = ['Kasse ' + it.workstationNumber + ' · Kasserer ' + it.cashierNumber, 'Bongnr: ' + it.bongnr, it.endDateTime];
-    if (ui.pngMember.checked && it.memberNumber) lines.push('Medlem: ' + it.memberNumber);
+    if (member && it.memberNumber) lines.push('Medlem: ' + it.memberNumber);
     return '<div class="kvr-h"><strong>' + esc(sLabel(it.storeNumber)) + '</strong>' + lines.map(esc).join('<br>') + '</div>';
   }
 
@@ -1050,6 +1050,17 @@
     return rows && d ? d.body.innerHTML : null;
   }
 
+  // Tegner én kvittering som PNG. o: { layout, header, member }
+  async function renderPngFor(rec, o) {
+    var html = await receiptHtml(rec);
+    if (!html) throw new Error('ingen kvittering');
+    var clean = html.replace(/xmlns[^=]*="[^"]*"/g, '').replace(/<link[^>]*>/gi, '').replace(/<script[\s\S]*?<\/script>/gi, '').replace(/<style[\s\S]*?<\/style>/gi, '');
+    var lay = PNG_LAYOUTS[o.layout] || PNG_LAYOUTS.bong;
+    var full = '<!DOCTYPE html><html><head><meta charset="UTF-8"><style>' + PNG_CSS + '</style></head><body><div class="kvr-page' + lay.cls + '"><div class="kvr-sheet" style="width:' + lay.sheet + 'px">' +
+      (o.header ? pngHeader(rec.item, o.member) : '') + clean + '</div></div></body></html>';
+    return htmlToPng(full, lay.w, lay.scale);
+  }
+
   async function exportPng(list) {
     if (scanning) return;
     if (!window.html2canvas || !window.JSZip) { say('Biblioteker (html2canvas/JSZip) er ikke lastet.'); return; }
@@ -1062,13 +1073,7 @@
     for (var i = 0; i < list.length && !cancelScan; i++) {
       progress(i, list.length, t0, 'PNG', failed.length);
       try {
-        var html = await receiptHtml(list[i]);
-        if (!html) throw new Error('ingen kvittering');
-        var clean = html.replace(/xmlns[^=]*="[^"]*"/g, '').replace(/<link[^>]*>/gi, '').replace(/<script[\s\S]*?<\/script>/gi, '').replace(/<style[\s\S]*?<\/style>/gi, '');
-        var lay = PNG_LAYOUTS[ui.pngLayout.value] || PNG_LAYOUTS.bong;
-        var full = '<!DOCTYPE html><html><head><meta charset="UTF-8"><style>' + PNG_CSS + '</style></head><body><div class="kvr-page' + lay.cls + '"><div class="kvr-sheet" style="width:' + lay.sheet + 'px">' +
-          (ui.pngHeaderOn.checked ? pngHeader(list[i].item) : '') + clean + '</div></div></body></html>';
-        var blob = await htmlToPng(full, lay.w, lay.scale);
+        var blob = await renderPngFor(list[i], { layout: ui.pngLayout.value, header: ui.pngHeaderOn.checked, member: ui.pngMember.checked });
         var it = list[i].item;
         files.push({ name: it.endDateTime.replace(/[^0-9]/g, '') + '_' + String(it.bongnr).replace(/[^A-Za-z0-9_-]/g, '-') + '.png', blob: blob });
       } catch (e) { failed.push(list[i]); }
@@ -1251,6 +1256,28 @@
 
   function hintEl(t) { return el('div', { class: 'kvr-hint', text: t }); }
 
+  // Øyeblikksbilde av det analysen brukte, slik at rapporten viser det som faktisk ble analysert,
+  // også om listen, innstillinger eller skanninger endres etterpå.
+  function analysisSnapshot(res, mode, items, pop) {
+    var scanSnap = {}, anomSnap = {}, labels = {}, ids = {};
+    items.concat(pop).forEach(function (it) {
+      var id = it.transactionId;
+      if (scanMap[id]) scanSnap[id] = scanMap[id];
+      labels[it.storeNumber] = sLabel(it.storeNumber);
+    });
+    items.forEach(function (it) { ids[it.transactionId] = true; if (anomMap[it.transactionId]) anomSnap[it.transactionId] = anomMap[it.transactionId].slice(); });
+    var per = function (a, b) { return (a || '…') + ' → ' + (b || '…'); };
+    return {
+      at: res.at.getTime(), mode: mode, items: items, pop: pop, scan: scanSnap, anom: anomSnap, storeLabels: labels,
+      ctl: JSON.parse(JSON.stringify(ctlCfg)), anomCfg: JSON.parse(JSON.stringify(anomCfg)),
+      scopeText: mode === 'scope' ? scopeSummary() : 'synlige kvitteringer i listen',
+      scopeObj: mode === 'scope' ? JSON.parse(JSON.stringify(scope)) : null,
+      compare: mode === 'scope' && scope.compare.on ? { a: per(scope.dateFrom, scope.dateTo), b: per(scope.compare.from, scope.compare.to) } : null,
+      filters: mode === 'visible' ? chipDefs().filter(function (c) { return !c.state; }).map(function (c) { return c.label; }) : [],
+      coverageText: mode === 'scope' && scopeCoverage().missing ? scopeCoverage().text : ''
+    };
+  }
+
   async function runChecks(mode) {
     mode = mode === 'visible' ? 'visible' : 'scope';
     if (scanning || !grid) return;
@@ -1289,6 +1316,7 @@
         e.notes.push(f.title.toLowerCase());
       }
     });
+    res.snap = analysisSnapshot(res, mode, items, pop);
     ctlRes = res;
     apply();
     renderControl();
@@ -2027,6 +2055,7 @@
       hintEl('Skannet ' + done + ' av ' + base.length + (checkState.at ? ' · sist kjørt ' + new Date(checkState.at).toLocaleTimeString('nb-NO') : '')),
       btn('Kjør analyse', runAnalysis, 'kvr-primary')
     ];
+    if (checkState.at && ctlRes && ctlRes.snap) top.push(btn('Lag revisjonsrapport…', openReportDialog));
     if (settingsStale && checkState.at) top.push(el('div', { class: 'kvr-notice', role: 'status' }, [el('span', { text: 'Innstillingene er endret siden sist. Kjør analysen på nytt for å bruke dem.' }), btn('Innstillinger', function () { openSettings(); }, 'kvr-sm')]));
     if (vis.length) top.push(el('div', { class: 'kvr-ctlsum', text: vis.length + ' å sjekke · ' + high + ' høy risiko' + (nNew ? ' · ' + nNew + ' nye siden sist' : '') }));
     else if (checkState.at) top.push(el('div', { class: 'kvr-ctlsum', text: all.length ? 'Alt er sjekket.' : 'Ingen avvik funnet i dette utvalget.' }));
@@ -2445,6 +2474,7 @@
     if (ui.firstRun) ui.firstRun.style.display = 'none';
     var li = function (t) { return el('li', { text: t }); };
     var body = el('div', { class: 'kvr-secbody kvr-help' }, [
+      el('div', { class: 'kvr-hint', text: 'Kvitteringshenter versjon ' + KvReport.VERSION }),
       el('b', { class: 'kvr-subh', text: 'Slik går du frem' }),
       el('ol', {}, [
         li('Hent: søk i hele journalen (CW) etter dato, butikk, medlem, vare eller bong.'),
@@ -2644,6 +2674,136 @@
     if (groupId) {
       var d = ui.setBody && ui.setBody.querySelector('[data-sec=set-' + groupId + ']');
       if (d) { d.open = true; d.scrollIntoView({ block: 'start' }); }
+    }
+  }
+
+  // ---- revisjonsrapport ---------------------------------------------------------------------
+  var KvReport = window.KvReport;
+
+  function reportLog() { var l = store(K.reports); return Array.isArray(l) ? l : []; }
+
+  function renderReportLog() {
+    if (!ui.repLog) return;
+    var list = reportLog();
+    ui.repLog.innerHTML = '';
+    if (!list.length) { ui.repLog.appendChild(hintEl('Ingen rapporter laget ennå.')); return; }
+    ui.repLog.appendChild(tbl(['Laget', 'Referanse', 'Flagget', 'Bevis', 'ZIP-kontrollsum'], list.slice().reverse().map(function (r) {
+      return [r.at.slice(0, 16).replace('T', ' '), r.ref || '–', r.flagged + ' av ' + r.n, r.evidence, { node: btn(r.hash.slice(0, 12) + '…', function () { copyText(r.hash); }, 'kvr-ent') }];
+    })));
+    ui.repLog.appendChild(hintEl('Klikk en kontrollsum for å kopiere hele verdien. Loggen ligger bare i denne nettleseren.'));
+  }
+
+  function openReportDialog() {
+    var R = ctlRes && ctlRes.snap;
+    if (!R) {
+      openModal('Revisjonsrapport', el('div', { class: 'kvr-secbody' }, [hintEl('Rapporten bygger på en kjørt analyse. Kjør analysen først (Analyse → Sjekk først).')]),
+        [btn('Lukk', closeModal), btn('Kjør analyse', function () { closeModal(); ui.go('check'); runAnalysis(); }, 'kvr-primary')]);
+      return;
+    }
+    var o = store(K.repopts) || {};
+    var ref = el('input', { type: 'text', placeholder: 'f.eks. saksnr eller kontrolldato' });
+    var who = el('input', { type: 'text', placeholder: 'navn' }); who.value = o.author || '';
+    var ev = el('input', { type: 'number', min: '0', max: '100', step: '1' }); ev.value = o.evidence === undefined ? 30 : o.evidence;
+    var nt = check('Ta med notater og status', function () {}); nt.box.checked = o.notes !== false;
+    var ranked = L.rankReceipts(R.items, R.anom, weights);
+    var kids = [
+      hintEl('Omfang: ' + R.scopeText + ' · ' + R.items.length + ' bonger · ' + ranked.length + ' flaggede · analyse kjørt ' + new Date(R.at).toLocaleString('nb-NO') + '.'),
+      field('Referanse / saksnr', ref), field('Utarbeidet av', who),
+      field('Bevis-PNG for de høyest rangerte bongene (0 = ingen)', ev), nt.node
+    ];
+    if (settingsStale) kids.push(el('div', { class: 'kvr-notice' }, [el('span', { text: 'Innstillingene er endret etter analysen. Rapporten bruker verdiene fra analysen.' })]));
+    kids.push(hintEl('Pakken er en ZIP med rapport.html, datafiler, innstillinger.json, bevisbilder og KONTROLLSUM.txt (SHA-256). Hvert bevisbilde tar ca. 1 sekund.'));
+    openModal('Revisjonsrapport', el('div', { class: 'kvr-secbody' }, kids), [btn('Avbryt', closeModal), btn('Lag rapport (ZIP)', function () {
+      var opts = { reference: ref.value.trim(), author: who.value.trim(), evidence: Math.max(0, Math.min(100, parseInt(ev.value, 10) || 0)), notes: nt.box.checked };
+      store(K.repopts, { author: opts.author, evidence: opts.evidence, notes: opts.notes });
+      closeModal();
+      generateReport(opts);
+    }, 'kvr-primary')]);
+  }
+
+  function compareForReport(R) {
+    var sc = R.scopeObj;
+    if (!sc || !sc.compare.on) return null;
+    var iA = R.items.filter(function (it) { return inRange(it, sc.dateFrom, sc.dateTo); });
+    var iB = R.items.filter(function (it) { return inRange(it, sc.compare.from, sc.compare.to); });
+    var c = L.comparePeriods(iA, iB, R.scan, R.anom, weights, R.ctl);
+    var row = function (label, r, flags) {
+      return { label: label, nA: r.A.count, nB: r.B.count, ret: pct(r.A.retShare) + ' → ' + pct(r.B.retShare), avg: fmt(r.A.avg) + ' → ' + fmt(r.B.avg), score: r.A.score + ' → ' + r.B.score, flags: flags };
+    };
+    return [row('Alle', { A: c.total.A, B: c.total.B }, '')].concat(c.rows.map(function (r) { return row('Kasserer ' + r.id, r, r.flags.join(', ')); }));
+  }
+
+  async function generateReport(opts) {
+    var C = ctlRes, R = C && C.snap;
+    if (!R || scanning) return;
+    if (!window.JSZip || (opts.evidence > 0 && !window.html2canvas)) { say('Biblioteker (html2canvas/JSZip) er ikke lastet.'); return; }
+    scanning = true; cancelScan = false;
+    ui.scanBtn.disabled = true; ui.anomBtn.disabled = true; ui.stopBtn.disabled = false; ui.stopTop.style.display = ''; ui.retryBtn.disabled = true; if (ui.retryBtn2) ui.retryBtn2.disabled = true;
+    var prev = grid.select(), prevTr = prev && prev[0];
+    try {
+      var ranked = L.rankReceipts(R.items, R.anom, weights);
+      var pick = ranked.slice(0, opts.evidence), files = [], missing = [], t0 = Date.now();
+      for (var i = 0; i < pick.length && !cancelScan; i++) {
+        progress(i, pick.length, t0, 'Bevis-PNG', missing.length);
+        var rec = recById(pick[i].id);
+        try {
+          if (!rec) throw new Error('ikke i listen');
+          var blob = await renderPngFor(rec, { layout: 'bong', header: true, member: false });
+          var bytes = new Uint8Array(await blob.arrayBuffer());
+          files.push({ id: pick[i].id, path: 'bevis/' + String(i + 1).padStart(2, '0') + '_' + String(rec.item.bongnr).replace(/[^A-Za-z0-9_-]/g, '-') + '.png', hash: KvReport.sha256Bytes(bytes), blob: blob });
+        } catch (e) { missing.push(pick[i].id); }
+        if (fastScan) await wait(120);
+      }
+      if (cancelScan) { say('Rapporten er avbrutt.'); return; }
+      progress(pick.length ? pick.length - 1 : 0, Math.max(pick.length, 1), t0, 'Pakker rapport', 0);
+      var byId = {}, explain = {}, noteSub = {};
+      files.forEach(function (f) { byId[f.id] = { path: f.path }; });
+      ranked.forEach(function (rk) {
+        explain[rk.id] = rk.reasons.map(function (r) { return L.explainReason(r, { id: rk.id, cfg: R.anomCfg, ctl: R.ctl, findings: C.findings, rules: customRules }); });
+        var n = notes[rk.id];
+        if (opts.notes && n && (n.status || n.note)) noteSub[rk.id] = { status: n.status || '', note: n.note || '' };
+      });
+      var model = {
+        version: KvReport.VERSION, generatedAt: new Date().toISOString(), generatedLocal: new Date().toLocaleString('nb-NO'), analysedAt: new Date(R.at).toISOString(), analysedLocal: new Date(R.at).toLocaleString('nb-NO'),
+        reference: opts.reference, author: opts.author,
+        scope: { text: R.scopeText, mode: R.mode, filters: R.filters, coverageText: R.coverageText, compare: R.compare },
+        items: R.items, pop: R.pop, scan: R.scan, storeLabels: R.storeLabels,
+        settings: { ctl: R.ctl, anom: R.anomCfg, weights: weights, currentDiffers: KvReport.stable([R.ctl, R.anomCfg]) !== KvReport.stable([ctlCfg, anomCfg]) },
+        checks: { falseRet: { coverage: C.falseRet.coverage, lineCheck: C.falseRet.lineCheck }, skippedGaps: C.seq.skippedGaps || 0, numbers: C.numbers },
+        findings: C.findings, ranked: ranked, explain: explain, notes: noteSub,
+        cashiers: L.rankCashiers(R.items, R.anom, weights, C.profile, C.cashierExtra).slice(0, 10),
+        compare: compareForReport(R), failedScans: failedRecs.length,
+        evidence: { files: files.map(function (f) { return { id: f.id, path: f.path, hash: f.hash }; }), byId: byId, missing: missing, requested: pick.length, cappedFrom: ranked.length },
+        settingsJson: JSON.stringify({ app: 'kvitteringshenter', v: 1, ctl: R.ctl, anom: R.anomCfg, weights: weights, customRules: customRules, groups: rules, stores: manualStores, keynav: keyNav }, null, 2) + '\n'
+      };
+      var built = KvReport.build(model);
+      var zip = new window.JSZip();
+      built.files.forEach(function (f) { zip.file(f.path, f.text, { compression: 'DEFLATE' }); });
+      files.forEach(function (f) { zip.file(f.path, f.blob, { compression: 'STORE' }); });
+      var zb = await zip.generateAsync({ type: 'blob' });
+      var zhash = KvReport.sha256Bytes(new Uint8Array(await zb.arrayBuffer()));
+      var now = new Date().toISOString();
+      var name = 'revisjonsrapport_' + now.slice(0, 10).replace(/-/g, '') + '_' + now.slice(11, 16).replace(':', '') + '.zip';
+      download(zb, name);
+      var log = reportLog().concat([{ at: now, ref: opts.reference, author: opts.author, scope: R.scopeText, n: R.items.length, flagged: ranked.length, evidence: files.length, hash: zhash, name: name, version: KvReport.VERSION }]).slice(-30);
+      store(K.reports, log);
+      renderReportLog();
+      var out = el('input', { type: 'text', readonly: 'readonly' }); out.value = zhash;
+      out.addEventListener('focus', function () { out.select(); });
+      openModal('Rapport laget', el('div', { class: 'kvr-secbody' }, [
+        hintEl(name + ' er lastet ned: ' + (built.files.length + files.length) + ' filer, ' + files.length + ' bevis-PNG' + (missing.length ? ' (' + missing.length + ' mangler)' : '') + '.'),
+        field('Kontrollsum for ZIP-filen (SHA-256)', out),
+        hintEl('Noter kontrollsummen i saken. Den kan ikke ligge i selve filen. Innholdet verifiseres med KONTROLLSUM.txt i pakken.')
+      ]), [btn('Kopier kontrollsum', function () { copyText(zhash); }), btn('Lukk', closeModal, 'kvr-primary')]);
+      say('Revisjonsrapport laget: ' + name);
+    } catch (e) {
+      say('Rapporten feilet: ' + (e && e.message ? e.message : e));
+    } finally {
+      if (!fastScan) { if (prevTr) grid.select(prevTr); else if (typeof grid.clearSelection === 'function') grid.clearSelection(); }
+      setProgress(0);
+      scanning = false;
+      ui.scanBtn.disabled = false; ui.anomBtn.disabled = false; ui.stopBtn.disabled = true;
+      syncRetry();
     }
   }
 
@@ -3073,6 +3233,13 @@
     ]);
     ui.setBody = el('div', { class: 'kvr-pane' });
 
+    ui.repLog = el('div', {});
+    var secAudit = section('auditrep', 'Revisjonsrapport', [
+      hintEl('Én ZIP med omfang, terskler, funn, dekningsgrad, bevis-PNG og kontrollsummer (SHA-256). Bygger på siste analyse.'),
+      btn('Lag revisjonsrapport…', openReportDialog, 'kvr-primary'),
+      el('b', { class: 'kvr-subh', text: 'Tidligere rapporter' }), ui.repLog
+    ]);
+
     ui.focusBody = el('div', { class: 'kvr-pane' });
 
     // --- Omfang for analysen
@@ -3146,7 +3313,7 @@
       subHost.appendChild(ui.subPanes[t[0]]);
     });
 
-    var moreDefs = [['export', 'Eksport', [secExport]], ['settings', 'Innstillinger', [ui.setBody]]];
+    var moreDefs = [['export', 'Eksport', [secAudit, secExport]], ['settings', 'Innstillinger', [ui.setBody]]];
     ui.moreBtns = {}; ui.morePanes = {};
     var moreNav = el('div', { class: 'kvr-subnav', role: 'tablist', 'aria-label': 'Mer' });
     var moreHost = el('div', {});
@@ -3275,6 +3442,7 @@
     renderTasks();
     renderControl();
     renderNotes();
+    renderReportLog();
     installKeys();
   }
 

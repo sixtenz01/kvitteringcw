@@ -69,6 +69,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
     await page.addScriptTag({ path: path.join(dir, 'lib/html2canvas.min.js') });
     await page.addScriptTag({ path: path.join(dir, 'lib/jszip.min.js') });
     await page.addScriptTag({ path: path.join(dir, 'src/logic.js') });
+    await page.addScriptTag({ path: path.join(dir, 'src/report.js') });
     await page.addStyleTag({ path: path.join(dir, 'src/panel.css') });
     await page.addScriptTag({ path: path.join(dir, 'src/content.js') });
     await page.waitForSelector('#kvr-panel');
@@ -535,6 +536,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
     await page.evaluate(() => localStorage.removeItem('kvr.pos.v1'));
     await page.reload();
     await page.addScriptTag({ path: path.join(dir, 'src/logic.js') });
+    await page.addScriptTag({ path: path.join(dir, 'src/report.js') });
     await page.addStyleTag({ path: path.join(dir, 'src/panel.css') });
     await page.addScriptTag({ path: path.join(dir, 'src/content.js') });
     await page.waitForSelector('#kvr-panel');
