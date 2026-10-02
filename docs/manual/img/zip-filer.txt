@@ -1,0 +1,11 @@
+KONTROLLSUM.txt
+bevis/01_1001-2-2062.png
+bevis/02_1001-2-2049.png
+bevis/03_1001-2-2048.png
+bevis/04_1001-2-2074.png
+data/flaggede_bonger.csv
+data/funn.csv
+data/innhold.json
+data/kvitteringer.csv
+innstillinger.json
+rapport.html

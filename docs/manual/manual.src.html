@@ -1,0 +1,426 @@
+<header class="hero">
+  <h1>Kvitteringshenter</h1>
+  <p class="sub">Brukerveiledning · versjon {{version}}</p>
+  <p class="lead">Kvitteringshenter er et Chrome-tillegg som legger et panel over Kvitteringsjournalen i Lindbak Chain Web. Du bruker det til å finne kvitteringer, se hva som ble solgt, få en prioritert liste over bonger som bør sjekkes, og lage dokumentasjon som kan etterprøves.</p>
+  <nav class="paths" aria-label="Hva vil du gjøre?">
+    <a href="#faner"><b>Finne bonger</b><span>Pant, varer, medlem, rabatt, butikk og tid</span></a>
+    <a href="#analysen"><b>Sjekke for avvik</b><span>Falsk retur, kassadifferanse, rabatt og mer</span></a>
+    <a href="#revisjon"><b>Dokumentere funn</b><span>Revisjonsrapport med bevis og kontrollsummer</span></a>
+    <a href="#innstillinger"><b>Justere hva som flagges</b><span>Alle innstillinger forklart</span></a>
+  </nav>
+  <div class="callout warn"><b>Les dette først</b>
+    <p>Funn i Kvitteringshenter er <strong>indikasjoner</strong> som må vurderes og forklares. De er ikke bevis for misligheter. Alle skjermbilder i veiledningen er laget med oppdiktede data: butikkene, kasserene og bongene finnes ikke.</p>
+  </div>
+</header>
+
+<h2 id="kom-i-gang"><span class="n">1</span>Kom i gang</h2>
+<h3>Dette trenger du</h3>
+<ul>
+  <li>Google Chrome versjon 111 eller nyere.</li>
+  <li>Tilgang til Kvitteringsjournal i Lindbak Chain Web (<code>chainweb.coop.no</code>).</li>
+</ul>
+<h3>Installere</h3>
+<ol class="steps">
+  <li>Pakk ut zip-filen til en fast mappe, for eksempel <code>Dokumenter\Kvitteringshenter</code>. Mappen må bli liggende: Chrome leser filene derfra hver gang.</li>
+  <li>Skriv <code>chrome://extensions</code> i adressefeltet og trykk Enter.</li>
+  <li>Slå på <strong>Utviklermodus</strong> øverst til høyre.</li>
+  <li>Klikk <strong>Last inn upakket</strong> og velg mappen som inneholder filen <code>manifest.json</code>.</li>
+  <li>Åpne Kvitteringsjournal og trykk <kbd>F5</kbd>. Panelet vises øverst til høyre.</li>
+</ol>
+<div class="callout warn"><b>Feilen «Manifestfilen mangler»</b>
+  <p>Du har valgt en undermappe (for eksempel <code>src</code>). Velg mappen som inneholder <code>manifest.json</code>, <code>src</code> og <code>lib</code> sammen.</p>
+</div>
+<div class="callout"><b>Har du den gamle pluginen?</b>
+  <p>Slå den av under <code>chrome://extensions</code> mens du bruker denne. Begge legger til en avkrysningskolonne i listen og kommer i veien for hverandre.</p>
+</div>
+<h3>Oppdatere til ny versjon</h3>
+<p>Legg de nye filene i samme mappe, åpne <code>chrome://extensions</code>, klikk det runde pilsymbolet (↻) på Kvitteringshenter og last journalsiden på nytt. Innstillinger, lagrede filtre, notater og skannet innhold beholdes.</p>
+<h3>Første gang</h3>
+<p>Panelet har en gul melding første gang du åpner det. Klikk <strong>Åpne</strong> for en kort veiledning med tegnforklaring, eller <strong>✕</strong> for å skjule den. Hjelpen finner du alltid igjen under <strong>?</strong> øverst i panelet.</p>
+<ul>
+  <li><strong>Flytt panelet</strong> ved å dra i den grønne toppen. Dobbeltklikk toppen for å sette det tilbake.</li>
+  <li><strong>Skjul og vis</strong> med <strong>–</strong> eller <kbd>Alt</kbd>+<kbd>K</kbd>.</li>
+  <li><strong>Gjør det bredere</strong> med <strong>⤢</strong>. Tabellene i Analyse har mange kolonner og trenger ofte plassen.</li>
+</ul>
+{{shotm:hjelp}}
+
+<h2 id="panelet"><span class="n">2</span>Panelet på to minutter</h2>
+<h3>Oversikt</h3>
+{{annotated:oversikt}}
+<h3>Slik jobber du</h3>
+{{dia:flow}}
+<p>Et vanlig forløp: søk fram de bongene du vil se (Hent), snevre inn listen (Filtrer), la pluginen lese innholdet (Skann), kjør analysen og gå gjennom «Sjekk først», og lag til slutt en rapport om du må dokumentere funn.</p>
+<h3>Hva er skanning?</h3>
+<p>Listen i Lindbak viser bare dato, kasserer, kasse, bongnummer og sum. For å vite hva som ble solgt, om det var pant eller rabatt, og hvordan det ble betalt, må selve kvitteringen åpnes. Det kaller vi <strong>skanning</strong>: pluginen åpner hver bong, leser teksten og lagrer det den finner lokalt.</p>
+{{dia:scan}}
+<ul>
+  <li>Skanning tar ca. ett sekund per bong. Du ser fremdrift, resterende tid og kan stoppe når som helst.</li>
+  <li>Det som er skannet huskes, så du skanner hver bong bare én gang (opptil 2000 bonger lagres).</li>
+  <li>Alternativet <strong>Rask skanning</strong> henter bongene direkte fra Lindbak uten å åpne dem i visningen. Det går mye raskere, men er av som standard.</li>
+</ul>
+<h3>Listen i Lindbak</h3>
+<p>Pluginen legger en avkrysningskolonne først i listen. Kryss av bonger for å eksportere dem, sammenligne to eller samle dem i en rapport. Raden får <span class="sw edge">rød kant</span> til venstre når bongen er flagget i analysen, og du får en forklaring når du holder musen over raden. <kbd>Alt</kbd>+klikk på KASSERER eller KASSE i listen åpner alt om kassereren eller kassen (se Fokus).</p>
+
+<h2 id="faner"><span class="n">3</span>Fane for fane</h2>
+<h3 id="hent">Hent</h3>
+{{shot:hent}}
+<p>Her søker du i hele journalen, ikke bare i det som allerede er listet. Pluginen fyller ut Lindbaks eget filter og trykker <strong>Oppdater</strong> for deg. Det du hadde i Lindbaks filter fra før overskrives.</p>
+<div class="tw"><table>
+  <thead><tr><th>Felt</th><th>Hva det gjør</th></tr></thead>
+  <tbody>
+    <tr><td>Dato fra / Dato til</td><td>Tidsrommet som hentes. Trykker du Dato fra, settes Dato til til samme dag hvis den er tom.</td></tr>
+    <tr><td>Butikker</td><td>Søkbar liste med butikkens navn, slik de heter i Lindbak. Velg butikkene du vil søke i.</td></tr>
+    <tr><td>Medlemsnr, Lojalitets-ID</td><td>Ett eller flere nummer, adskilt med komma.</td></tr>
+    <tr><td>Vare (EAN/navn)</td><td>Fritekstsøk i Lindbak, for eksempel et strekkodenummer.</td></tr>
+    <tr><td>Bongnr</td><td>Hele eller deler av bongnummeret.</td></tr>
+    <tr><td>Søk i CW / Nullstill CW</td><td>Starter søket, eller tømmer Lindbaks filter og alt du har skrevet her.</td></tr>
+  </tbody></table></div>
+
+<h3 id="filtrer">Filtrer</h3>
+{{shots:filtrer-a,filtrer-b}}
+<p>Filtrene virker på bongene som allerede er listet. Ingenting hentes på nytt. Alle valg du gjør vises som piller under tallene øverst. Klikk <strong>✕</strong> på en pille for å fjerne den, eller <strong>Nullstill alt</strong> for å tømme alt, også valg og markeringer.</p>
+<div class="tw"><table>
+  <thead><tr><th>Kort</th><th>Innhold</th></tr></thead>
+  <tbody>
+    <tr><td>Butikk</td><td>Søkbar liste med navn og antall bonger. «Velg viste» krysser av alle i søket, «Fjern butikkvalg» tømmer.</td></tr>
+    <tr><td>Dato og tid</td><td>Hurtigknapper (I dag, I går, Siste 24 t, Natt 00–06, Dag 06–18, Kveld 18–24) og fritt valg av dato og klokkeslett. Tidsrom over midnatt fungerer (for eksempel 22:00 til 02:00).</td></tr>
+    <tr><td>Kasse, kasserer og type</td><td>Piller du slår av og på. Type er 1 Salg og 2 Kassaoppgjør.</td></tr>
+    <tr><td>Sum, medlem, bong og vare</td><td>Sum fra og til, bare negative summer (retur/panteretur), medlemssøk, bare med medlem, bare mulige duplikater (samme beløp, butikk, kasse og tid), bongnummer, vare (krever skanning) og notat/status.</td></tr>
+    <tr><td>Sortering</td><td>Standard, sum høyest eller lavest først, nyeste eller eldste først.</td></tr>
+    <tr><td>Lagrede filtre</td><td>Gi filteret et navn og trykk Lagre. Last eller slett fra rullegardinen.</td></tr>
+  </tbody></table></div>
+
+<h3 id="skann">Skann</h3>
+{{shots:skann-for,skanner}}
+{{shots:skann-etter,skann-grupper}}
+<div class="tw"><table>
+  <thead><tr><th>Valg</th><th>Hva det gjør</th></tr></thead>
+  <tbody>
+    <tr><td>Skann innhold (synlige)</td><td>Skanner alle bonger som passerer filtrene dine. Pluginen skanner også de som pant- og rabattfilteret ellers ville skjult, så ingen faller utenfor.</td></tr>
+    <tr><td>Stopp</td><td>Avbryter skanningen. Det som er ferdig beholdes.</td></tr>
+    <tr><td>Prøv feilede på nytt</td><td>Kjører bare de bongene som feilet sist.</td></tr>
+    <tr><td>Tøm cache</td><td>Sletter alt skannet innhold og alle avviksmarkeringer. Innstillinger og notater beholdes.</td></tr>
+    <tr><td>Rask skanning</td><td>Henter bongene direkte fra Lindbak i stedet for å åpne dem i visningen. Raskere, men bruker Lindbaks eget kall til å hente bonger.</td></tr>
+    <tr><td>Pant</td><td>Filter: har pant eller panteretur, har pant (salg), har panteretur. Krever skanning.</td></tr>
+    <tr><td>Rabatt</td><td>Filter: har rabatt, uten årsak, med årsak, har kupong, eller én bestemt årsak. Krever skanning.</td></tr>
+    <tr><td>Varegrupper</td><td>Gruppér varer med nøkkelord (se under).</td></tr>
+  </tbody></table></div>
+<div class="callout"><b>Den gule stripen</b>
+  <p>Hvis du bruker et filter som krever skanning (pant, rabatt, vare eller varegruppe) og noen bonger ikke er skannet, vises en gul stripe med antallet som er skjult. <strong>Skann nå</strong> løser det. Statuslinjen øverst viser alltid «Skannet X av Y».</p>
+</div>
+<h4>Varegrupper</h4>
+<p>Pluginen har en startpakke med grupper (Pant, Tobakk, Brus, Energidrikk, Frukt, Grønt, Bakeri, Meieri, Kjøtt og pålegg, Ferdigmat, Snacks og godteri, Kaffe og te). Grupperingen bygger på nøkkelord i varenavnet og skjer bare i pluginen, siden Lindbak ikke har varegrupper på kvitteringen.</p>
+<ul>
+  <li>Klikk en gruppe for å filtrere på den, og se summen per gruppe for de valgte bongene.</li>
+  <li><strong>Varer uten gruppe</strong> viser mest solgte varer som ikke passer noen gruppe. Velg gruppe og trykk <strong>Legg til</strong> for å lære pluginen et nytt nøkkelord.</li>
+  <li><strong>Regelsett</strong> lar deg endre rekkefølge (øverst vinner), legge til grupper og nøkkelord, eksportere og importere. Nøkkelord skrevet med <code>*</code> foran treffer hvor som helst i navnet, <code>#</code> foran matcher varenummer.</li>
+</ul>
+
+<h3 id="analyse">Analyse</h3>
+<p>Analyse har fem delfaner. Du bruker mest <strong>Sjekk først</strong>.</p>
+<h4>Sjekk først</h4>
+<p>Her kjører du analysen og får en prioritert liste. Øverst står <strong>Analyse</strong>-kortet med omfanget og knappen <strong>Kjør analyse</strong>. Analysen skanner det som mangler, kjører alle testene og rangerer bongene etter risikoscore.</p>
+{{shots:sjekk-for,sjekk-etter}}
+<p>Under <strong>Velg omfang</strong> avgjør du hva som analyseres. Omfanget er uavhengig av filtrene i listen, med mindre du huker av for å bruke dem også.</p>
+{{shotw:sjekk-omfang}}
+<div class="tw"><table>
+  <thead><tr><th>Valg</th><th>Hva det gjør</th></tr></thead>
+  <tbody>
+    <tr><td>Hurtigvalg</td><td>Hele listen, I går, Siste 7 dager, Forrige uke, Denne måneden, Forrige måned.</td></tr>
+    <tr><td>Periode fra / til</td><td>Fritt tidsrom. Med «Sammenlign» på heter de Periode A.</td></tr>
+    <tr><td>Sammenlign med en annen periode</td><td>Periode A mot periode B: returandel, snittbeløp og risikoscore per kasserer, med endringer markert rødt.</td></tr>
+    <tr><td>Butikk, Kasserer, Kasse</td><td>Tom = alle. Du kan kombinere, for eksempel én kasserer i én butikk.</td></tr>
+    <tr><td>Bruk også filtrene i listen</td><td>Analyserer bare bonger som også passerer filtrene dine.</td></tr>
+    <tr><td>Nullstill omfang</td><td>Tilbake til hele listen.</td></tr>
+  </tbody></table></div>
+<p>Går omfanget utenfor det du har hentet fra Lindbak, vises en gul advarsel og analysen henter det som mangler. Husk at dette overskriver datoer og butikker i Lindbaks eget filter.</p>
+<p>Hver flaggede bong er et kort. Klikk på det for å åpne det.</p>
+{{annotated:sjekk-kort}}
+<h4>Diagram</h4>
+<p>Diagrammene viser omfanget ditt og er klikkbare: klikk en søyle eller rute for å filtrere listen på den timen, dagen eller kassen. Knappen <strong>Tabell</strong> viser tallene bak diagrammet.</p>
+<div class="shots">{{fig:ch-hours}}{{fig:ch-days}}</div>
+<div class="shots">{{fig:ch-cash}}{{fig:ch-heat}}</div>
+<div class="shots">{{fig:ch-benford}}{{fig:ch-pant}}</div>
+<ul>
+  <li><strong>Salg per time</strong> og <strong>Salg per dag</strong>: antall og sum. Topp merkes.</li>
+  <li><strong>Returandel per kasserer</strong>: andel salg med negativ sum, med butikksnittet som tynn strek. Oransje trekant markerer minst 1,5 ganger snittet.</li>
+  <li><strong>Når skjer det? Kasse × time</strong>: antall salg per kasse og klokketime. Mørkere = flere.</li>
+  <li><strong>Benford</strong>: første siffer i totalbeløp mot forventet fordeling (se «Tallanalyse»).</li>
+  <li><strong>Pant per dag</strong>: pantesalg mot utbetalt panteretur.</li>
+</ul>
+<h4>Rapport</h4>
+{{shot:rapport}}
+<p>Dagsrapport for de synlige bongene, per kasse eller per kasserer, eventuelt delt opp per dag. Kolonnene er <strong>Ant</strong> (antall salg), <strong>Sum</strong>, <strong>Retur</strong> (salg med negativ sum, antall og kr), <strong>Pant +</strong> (pantesalg), <strong>Pant −</strong> (utbetalt panteretur), <strong>Avvik</strong> (flaggede bonger) og <strong>Diff</strong> (kassadifferanse fra oppgjør). Pant og avvik teller bare skannede bonger. Rapporten kan eksporteres til CSV. Under ligger en liste over kassaoppgjørene med telt kontant, differanse, pose-nummer og sendt bank.</p>
+<h4>Fokus</h4>
+<p>Vil du se alt om én kasserer eller én kasse? Velg fra listen i Fokus, klikk et navn i en rapport eller liste, eller <kbd>Alt</kbd>+klikk KASSERER eller KASSE i selve journallisten.</p>
+{{shots:fokus-start,fokus-a}}
+<p>Fokus viser nøkkeltall, kassene eller kassererne vedkommende har brukt, sammenligning mot butikksnittet (rødt = avvik), pant og betaling, rabatter, varegrupper, flaggede bonger, aktivitet per time og kassaoppgjør. Knappene lar deg velge alle bongene, eksportere dem eller fjerne fokus.</p>
+<h4>Detaljer</h4>
+<p>Detaljer samler resultatene fra kontrollene. Kortene kan foldes sammen med et klikk på tittelen, og valget huskes. Knappen <strong>Åpne alle</strong> åpner alt, og <strong>⤢ Bredere</strong> gir tabellene mer plass.</p>
+{{shot:detaljer-topp}}
+<div class="tw"><table>
+  <thead><tr><th>Kort</th><th>Hva det viser</th></tr></thead>
+  <tbody>
+    <tr><td>Resultat</td><td>Sammendrag av kjøringen, og snarveier til kortene under.</td></tr>
+    <tr><td>Kontroller</td><td>«Kjør alle kontroller (synlige)» kjører testene på bongene du ser i listen. Det samme gjør «Kjør analyse» på valgt omfang.</td></tr>
+    <tr><td>Kassererprofil mot butikksnitt</td><td>Salg, returandel, snittbeløp, pantelapper per salg og korrigeringer per salg for hver kasserer, mot butikkens snitt.</td></tr>
+    <tr><td>Mønstre og funn</td><td>Funn på tvers av bonger, med lenker til kasserer og kasse og knapp for å velge bongene.</td></tr>
+    <tr><td>Pantelapp-sjekk: balanse per dag</td><td>Pantesalg mot utbetalt panteretur per dag og butikk.</td></tr>
+    <tr><td>Dagsavstemming per kasse</td><td>Forventet kontant (kontant minus kontant tilbake) mot telt kontant i kassaoppgjøret. Stjerne = ikke alle salg er skannet.</td></tr>
+    <tr><td>Kassadifferanse over tid</td><td>Antall oppgjør, minus og pluss per kasserer og kasse.</td></tr>
+    <tr><td>Tallanalyse: Benford og runde beløp</td><td>Benford og andel hele kroner per kasserer.</td></tr>
+    <tr><td>Rabatter og kuponger</td><td>Se kapittel 5.</td></tr>
+    <tr><td>Avvik per bong</td><td>Kjører bare avviksjekken (uten kontroller på tvers).</td></tr>
+    <tr><td>Egne avviksregler</td><td>Dine egne regler, se kapittel 8.</td></tr>
+    <tr><td>Arbeidsoppgaver, Oppfølging og tastatur</td><td>Se kapittel 8.</td></tr>
+  </tbody></table></div>
+<div class="shots">{{fig:d-profile}}{{fig:d-findings}}</div>
+<div class="shots">{{fig:d-pantbal}}{{fig:d-recon}}</div>
+<div class="shots">{{fig:d-diff}}{{fig:d-numbers}}</div>
+
+<h3 id="mer">Mer</h3>
+<p><strong>Mer</strong> har to delfaner: Eksport og Innstillinger.</p>
+{{shots:eksport,eksport-revisjon}}
+<div class="tw"><table>
+  <thead><tr><th>Valg</th><th>Hva det gjør</th></tr></thead>
+  <tbody>
+    <tr><td>CSV: synlige / valgte</td><td>Semikolonseparert fil som åpnes direkte i Excel. Har varegrupper, pant og avvik for skannede bonger.</td></tr>
+    <tr><td>PNG: valgte (ZIP)</td><td>Bilde av hele kvitteringen. Flere bonger pakkes i én ZIP. Bildet er tegnet fra kvitteringsteksten, ikke et skjermbilde.</td></tr>
+    <tr><td>PNG-format</td><td>«Bong» (smal, som papirkvittering) eller «A4-ark med bongen i midten».</td></tr>
+    <tr><td>Topptekst, medlemsnr</td><td>Topptekst med butikk, kasse, kasserer, bongnr og tid kan slås av. Medlemsnummer er bare med hvis du krysser av.</td></tr>
+    <tr><td>Revisjonsrapport</td><td>Se kapittel 6.</td></tr>
+    <tr><td>Innstillinger</td><td>Se kapittel 7.</td></tr>
+  </tbody></table></div>
+<p>Nederst i panelet ligger snarveiene <strong>Velg alle</strong>, <strong>Fjern valg</strong>, <strong>Sammenlign</strong> (vises når nøyaktig to bonger er valgt), <strong>CSV</strong> og <strong>PNG</strong>. De virker på det du har valgt.</p>
+
+<h2 id="analysen"><span class="n">4</span>Slik virker analysen</h2>
+<h3>Fra bong til funn</h3>
+<p>Analysen går gjennom bongene i omfanget i fire trinn. Først skannes bongene som mangler innhold. Deretter kjøres testene (kapittel 4.4), og hver test peker ut bonger eller kasserere. Hver treff gir poeng, og summen per bong blir risikoscoren. «Sjekk først» viser bongene med høyest score øverst, og forklarer hver enkelt: <em>Hvorfor flagget?</em></p>
+<h3>Poeng og risikonivå</h3>
+{{dia:scoring}}
+<ul>
+  <li>Hver test har et antall poeng som du kan endre (kapittel 7).</li>
+  <li>Poengene summeres per bong til <strong>risikoscore</strong>. <span class="sw hi">Høy</span> er 8 poeng eller mer, <span class="sw mid">middels</span> er 4 til 7 og <span class="sw lo">lav</span> er under 4.</li>
+  <li>Noen funn gjelder en <strong>kasserer</strong> og ikke en bestemt bong (Benford, runde beløp, mange rabatter, avvik i kassererprofilen). De gir poeng til kassereren, og kassererne med høyest sum vises i «Kasserere å se nærmere på».</li>
+  <li><span class="sw new">Ny</span> merker bonger som ikke var flagget forrige gang du kjørte analysen.</li>
+</ul>
+<h3>Omfang, datagrunnlag og filter</h3>
+{{dia:scope}}
+<h3 id="testene">Testene</h3>
+<p>Her er alle testene. Hver test har en egen gruppe under Innstillinger der du kan justere grenser og poeng (kapittel 7). «Krever skanning» betyr at bongene må være skannet for at testen skal se innholdet.</p>
+{{tests}}
+<h3>Tegnforklaring</h3>
+<div class="chips">
+  <span class="sw edge">Rød kant</span><span class="sw yellow">Gul stripe</span><span class="sw hi">Høy 10</span><span class="sw mid">Middels 5</span><span class="sw lo">Lav 3</span><span class="sw new">Ny</span><span class="sw link">Kasserer 4103</span>
+</div>
+<dl class="gl">
+  <dt>Rød kant</dt><dd>Bongen er flagget i analysen. Gjelder både radene i journallisten og kortene i Sjekk først.</dd>
+  <dt>Gul stripe</dt><dd>Noe mangler (skanning eller data), eller innstillingene er endret etter siste analyse. Knappen ved siden av løser det.</dd>
+  <dt>Høy, Middels, Lav</dt><dd>Risikonivå etter poengsum.</dd>
+  <dt>Ny</dt><dd>Flagget siden forrige analyse.</dd>
+  <dt>Understreket grønn lenke</dt><dd>Klikk for å se alt om kassereren eller kassen (Fokus).</dd>
+  <dt>Rødt tall i tabell</dt><dd>Verdien er over grensen eller avviker fra snittet.</dd>
+  <dt>Stiplet pille</dt><dd>Markering som ikke er et filter, for eksempel «Avvik markert». ✕ fjerner den.</dd>
+</dl>
+
+<h2 id="rabatt"><span class="n">5</span>Rabatt og kuponger</h2>
+<p>Pluginen leser tre ting fra kvitteringene som handler om rabatt:</p>
+{{dia:tDisc}}
+<ul>
+  <li><strong>Rabattlinje:</strong> <code>Rabatt: Kr 4.36 (50.0%)</code> står under varen den gjelder. Varebeløpet på kvitteringen er allerede etter rabatt.</li>
+  <li><strong>Rabattårsak:</strong> <code>Rabatt årsak:</code> er tom hvis ingen årsak ble valgt. Ellers står årsaken her.</li>
+  <li><strong>Kupong:</strong> <code>Kupong (id - navn)</code> viser en kampanje knyttet til bongen. Beløpet er ofte 0,00.</li>
+</ul>
+<h3>Rabattårsaker</h3>
+<p>Lindbak har seks årsaker. Pluginen kjenner igjen både tallet og teksten på kvitteringen.</p>
+<div class="tw"><table>
+  <thead><tr><th>Tekstnr</th><th>Årsak</th><th>Overvåkes som standard</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td>Datovare</td><td>Nei</td></tr>
+    <tr><td>2</td><td>Feil pris</td><td>Ja</td></tr>
+    <tr><td>3</td><td>Prisløfte</td><td>Nei</td></tr>
+    <tr><td>4</td><td>Reserveløsning kupong</td><td>Ja</td></tr>
+    <tr><td>5</td><td>Annen rabattårsak</td><td>Ja</td></tr>
+    <tr><td>6</td><td>Best før</td><td>Nei</td></tr>
+  </tbody></table></div>
+<p>Årsak 2, 4 og 5 overvåkes fordi de er mest skjønnsmessige: kassereren velger selv. Du endrer listen under Innstillinger → Rabatt.</p>
+<h3>Hvor du finner rabatt</h3>
+<ul>
+  <li><strong>Filter:</strong> Skann → Rabatt (krever skanning).</li>
+  <li><strong>Analyse → Detaljer → Rabatter og kuponger:</strong> tabell per kasserer, tabellen «Rabatt per årsak» (klikk en årsak for å filtrere listen), matrisen «Kasserer × årsak» og de vanligste kampanjene.</li>
+  <li><strong>Egne regler og Fokus:</strong> rabatt, prosent, årsak og kuponger finnes som felt.</li>
+</ul>
+{{shotw:d-disc}}
+<div class="callout"><b>Ikke bekreftet</b>
+  <p>Vi har ikke sett en ekte kvittering med utfylt rabattårsak, og vet derfor ikke sikkert om årsaken skrives som tall eller tekst (begge håndteres). Vi vet heller ikke hvordan lokale kampanjer ser ut, så pluginen kan ikke skille dem fra rabatter butikken har gitt selv. Eldre skanninger fra før versjon 3 mangler rabattdata og må skannes på nytt.</p>
+</div>
+
+<h2 id="revisjon"><span class="n">6</span>Revisjonsrapport</h2>
+<p>Når du må dokumentere funn, lager du en revisjonsrapport. Den er én ZIP-fil med alt som trengs for å forstå, etterprøve og gjenta kontrollen.</p>
+<h3>Slik lager du den</h3>
+<ol class="steps">
+  <li>Kjør analysen (Analyse → Sjekk først → Kjør analyse).</li>
+  <li>Klikk <strong>Lag revisjonsrapport…</strong> i Sjekk først, eller under Mer → Eksport.</li>
+  <li>Skriv referanse (for eksempel saksnummer) og hvem som har utarbeidet rapporten, og velg hvor mange bevisbilder du vil ha. Standard er 30 av de høyest rangerte, 0 gir ingen.</li>
+  <li>Klikk <strong>Lag rapport (ZIP)</strong>. Hvert bevisbilde tar ca. ett sekund.</li>
+  <li><strong>Noter kontrollsummen for ZIP-filen</strong> som vises, for eksempel i saken. Den lagres også i loggen «Tidligere rapporter» under Mer → Eksport.</li>
+</ol>
+{{shotm:revisjon-dialog}}
+{{shotm:revisjon-ferdig}}
+<h3>Hva som er i pakken</h3>
+{{dia:zip}}
+<div class="tw"><table>
+  <thead><tr><th>Fil</th><th>Innhold</th></tr></thead>
+  <tbody>
+    <tr><td><code>rapport.html</code></td><td>Rapporten med forside, sammendrag, omfang, dekningsgrad, metode, funn, flaggede bonger, bevis, kontrollsummer og forbehold. Åpnes i nettleseren og kan skrives ut til PDF.</td></tr>
+    <tr><td><code>bevis/</code></td><td>Bilde av de høyest rangerte bongene, med topptekst. Medlemsnummer er aldri med.</td></tr>
+    <tr><td><code>data/kvitteringer.csv</code></td><td>Alle kvitteringer i datagrunnlaget, merket om de er i omfang. Medlemsnummer er bare «ja» eller «nei».</td></tr>
+    <tr><td><code>data/innhold.json</code></td><td>Skannet bonginnhold, sortert, uten skannetidspunkt, slik at samme data gir samme kontrollsum.</td></tr>
+    <tr><td><code>data/funn.csv</code>, <code>data/flaggede_bonger.csv</code></td><td>Alle funn og alle flaggede bonger med score, årsaker, status og notat.</td></tr>
+    <tr><td><code>innstillinger.json</code></td><td>Terskler, poeng, egne regler, varegrupper og butikknavn som ble brukt. Kan leses inn igjen under Mer → Innstillinger → Importer.</td></tr>
+    <tr><td><code>KONTROLLSUM.txt</code></td><td>SHA-256 for hver fil i pakken.</td></tr>
+  </tbody></table></div>
+<h3>Slik leser du rapporten</h3>
+{{shotw:rapport-forside}}
+<ul>
+  <li><strong>Dekningsgrad og begrensninger</strong> forteller hvor mye av grunnlaget testene faktisk så, og hvilke tester som ikke ble vurdert. Les denne før du leser funnene.</li>
+  <li><strong>Metode</strong> viser alle terskler og poeng som ble brukt, med endringer fra standard merket gult.</li>
+  <li><strong>Funn</strong> er gruppert per test. <strong>Flaggede kvitteringer</strong> er rangert etter risiko, med forklaring, status og notat, og lenke til bevisbildet.</li>
+</ul>
+{{shotw:rapport-dekning}}
+{{shotw:rapport-funn}}
+<div class="shots">{{fig:bevis}}<div><p>Bevisbildene er tegnet fra kvitteringsteksten i Lindbak med topptekst for butikk, kasse, kasserer, bongnummer og tid. De er laget ved eksport, og kontrollsummen står under hvert bilde.</p><p>Bonger som ikke lenger finnes i listen får ikke bevisbilde. Det står i dekningsdelen.</p></div></div>
+{{shotw:rapport-bevis}}
+<h3>Verifisere kontrollsummene</h3>
+<p>Pakk ut ZIP-filen i en mappe og kjør kommandoen for ditt system. Alle filer skal gi <code>OK</code>.</p>
+<div class="tw"><table>
+  <thead><tr><th>System</th><th>Kommando i mappen</th></tr></thead>
+  <tbody>
+    <tr><td>Windows (PowerShell)</td><td><code>Get-FileHash rapport.html -Algorithm SHA256</code> og sammenlign med linjen i <code>KONTROLLSUM.txt</code></td></tr>
+    <tr><td>macOS</td><td><code>shasum -a 256 -c KONTROLLSUM.txt</code></td></tr>
+    <tr><td>Linux</td><td><code>sha256sum -c KONTROLLSUM.txt</code></td></tr>
+  </tbody></table></div>
+<p>Kontrollsummen for selve ZIP-filen sjekker du med samme verktøy på ZIP-filen, og sammenligner med den du noterte.</p>
+<h3>Gjenta analysen</h3>
+<p>Les inn <code>innstillinger.json</code>, hent samme omfang i Lindbak, skann og kjør analysen. Samme data gir samme <code>kvitteringer.csv</code> og samme funn.</p>
+<div class="callout"><b>Hva kontrollsummene betyr</b>
+  <p>De viser at innholdet i eksporten ikke er endret etter at den ble laget. De sier ikke at dataene i Lindbak er riktige. Rapporten viser det som gjaldt da analysen ble kjørt, også om innstillinger eller listen er endret etterpå, og sier fra om det.</p>
+</div>
+
+<h2 id="innstillinger"><span class="n">7</span>Innstillinger</h2>
+<p>Alle terskler, avviksgrenser og poeng ligger samlet under <strong>Mer → Innstillinger</strong>, eller tannhjulet <strong>⚙</strong> øverst i panelet. Hver test har sin egen gruppe.</p>
+<h3>Slik virker innstillingssiden</h3>
+{{shots:innstillinger-lukket}}
+{{annotated:innstillinger-rad}}
+{{dia:settingsFlow}}
+<ul>
+  <li>Alt lagres med en gang. Det finnes ingen «Lagre»-knapp.</li>
+  <li>Verdier du har endret får <span class="sw yellow">gul kant</span>, og gruppen viser hvor mange verdier som er endret.</li>
+  <li>Tester som kan slås av har en <strong>På</strong>-bryter. Avskrudd betyr at testen ikke kjøres. Skriver du tomt i et slikt felt, slås testen av.</li>
+  <li><strong>Standard for denne gruppen</strong> setter gruppen tilbake. <strong>Alt til standard</strong> under Generelt setter alt tilbake etter en bekreftelse.</li>
+  <li>I «Sjekk først» står <strong>Juster</strong> ved siden av hver forklaring. Den åpner riktig gruppe.</li>
+</ul>
+<h3>Generelt</h3>
+{{shot:innstillinger-generelt}}
+<div class="tw"><table>
+  <thead><tr><th>Valg</th><th>Hva det gjør</th></tr></thead>
+  <tbody>
+    <tr><td>Egne butikknavn</td><td>Hvis Lindbak ikke leverer butikklisten, kan du skrive <code>1001=Navn</code>, ett per linje.</td></tr>
+    <tr><td>Tastaturflyt</td><td>Slår på <kbd>↑</kbd> <kbd>↓</kbd> for å bytte bong, <kbd>N</kbd> for notat og <kbd>M</kbd> for å velge eller fjerne valg. Virker ikke mens du skriver i et felt.</td></tr>
+    <tr><td>Eksporter / Importer innstillinger</td><td>Lagrer og leser inn terskler, poeng, egne regler, varegrupper og butikknavn som en fil. Praktisk for å dele samme oppsett mellom butikker. Skannet innhold og notater tas ikke med.</td></tr>
+    <tr><td>Tilbakestill plassering</td><td>Setter panelets plass og størrelse tilbake.</td></tr>
+    <tr><td>Alt til standard</td><td>Tilbake til standardverdier for alle terskler og poeng. Egne regler, varegrupper og butikknavn beholdes.</td></tr>
+  </tbody></table></div>
+<h3>Alle innstillingene</h3>
+<p>Under står hver innstilling, hva den gjør, standardverdien og hvordan du kan bruke den. Bruk søkefeltet for å finne en bestemt.</p>
+<div class="q"><input id="q" type="search" placeholder="Søk i innstillinger, for eksempel «pant» eller «rabatt»" aria-label="Søk i innstillinger"><span id="qn"></span></div>
+{{settings}}
+<h3>Slik justerer du</h3>
+<div class="tw"><table>
+  <thead><tr><th>Hvis du ser…</th><th>Prøv dette</th></tr></thead>
+  <tbody>
+    <tr><td>For mange flaggede bonger</td><td>Øk grensene i testen som flagger mest (se hvilke i «Resultat»). Eller senk poengene for testen, så den havner lavere i rangeringen uten å forsvinne.</td></tr>
+    <tr><td>Treff du vet er uskyldige, igjen og igjen</td><td>Øk grensen, eller slå testen av med På-bryteren. Notér hvorfor, så det er spor etter valget.</td></tr>
+    <tr><td>Du savner treff du vet finnes</td><td>Senk grensen. Sjekk dekningsgraden: mange tester ser bare skannede bonger.</td></tr>
+    <tr><td>Samme kasserer øverst hver gang</td><td>Se Kassererprofil. En kasserer på pantekassen eller i kveldsskiftet kan ha helt andre tall enn snittet. Sammenlign med omfang per kasse eller periode mot periode.</td></tr>
+    <tr><td>Falske hull i bongnummer</td><td>Listen er sannsynligvis filtrert på type, kasse eller tid. Fjern filtrene, eller sett «Størst hull» lavere.</td></tr>
+    <tr><td>Salg etter oppgjør rett etter midnatt</td><td>Sett riktig åpningstid. Oppgjør før åpningstid regnes som forrige dag.</td></tr>
+  </tbody></table></div>
+
+<h2 id="verktoy"><span class="n">8</span>Andre verktøy</h2>
+<h3>Egne avviksregler</h3>
+<p>Under Analyse → Detaljer kan du bygge egne regler. Alle vilkår i en regel må stemme (OG). Trykk <strong>Ny regel</strong> eller <strong>Eksempel</strong>, velg felt, sammenligning og verdi. Felt merket * krever skannet bong, og reglene kjøres når du trykker «Kjør avviksjekk» eller «Kjør analyse». Treff gir poengene for «Egne regler» og vises som «Regel: navn». Klokkeslett skrives TT:MM, og tomt medlemsnummer skrives <code>Medlemsnr = (tomt)</code>.</p>
+{{rulefields}}
+{{shotw:d-custom}}
+<h3>Arbeidsoppgaver og morgenkontroll</h3>
+<p>En arbeidsoppgave husker filter, datovalg, skanning og kontroller, og kjøres med én knapp. <strong>Morgenkontroll (i går)</strong> er innebygd: den henter gårsdagen fra Lindbak, skanner, kjører alle kontrollene og viser et sammendrag som kan kopieres som tekst. Du kan lage egne med et navn og et relativt tidsrom (Behold datoer, I går, I dag, Siste 7 dager, Forrige uke).</p>
+{{shotw:d-tasks}}
+<h3>Notater og oppfølging</h3>
+<p>Hver bong kan få status <strong>Til oppfølging</strong> eller <strong>Sjekket</strong> og et fritt notat, fra «Sjekk først» eller med <kbd>N</kbd>. Sjekkede bonger skjules fra listen (du kan vise dem igjen), og notatene tas med i revisjonsrapporten. Under Detaljer kan du eksportere notatene eller fjerne alle «sjekket».</p>
+{{shotw:d-notes}}
+<h3>Sammenlign to bonger</h3>
+<p>Kryss av nøyaktig to bonger, og knappen <strong>Sammenlign</strong> vises nederst. Bongene skannes først hvis de ikke er det. Du får dem side om side, med antall like linjer og antall som bare finnes på den ene. Linjer som ikke finnes på den andre bongen er markert.</p>
+<h3>Tastatur</h3>
+<div class="tw"><table>
+  <thead><tr><th>Tast</th><th>Gjør</th></tr></thead>
+  <tbody>
+    <tr><td><kbd>Alt</kbd>+<kbd>K</kbd></td><td>Skjul og vis panelet.</td></tr>
+    <tr><td><kbd>Alt</kbd>+klikk på KASSERER eller KASSE</td><td>Åpner Fokus for den kassereren eller kassen.</td></tr>
+    <tr><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>Bytter bong i listen (tastaturflyt, utenfor tekstfelt).</td></tr>
+    <tr><td><kbd>N</kbd></td><td>Notat på valgt bong.</td></tr>
+    <tr><td><kbd>M</kbd></td><td>Velg eller fjern valg på bongen.</td></tr>
+    <tr><td><kbd>←</kbd> <kbd>→</kbd> <kbd>Home</kbd> <kbd>End</kbd></td><td>Bytter fane når en fane har fokus.</td></tr>
+    <tr><td><kbd>Esc</kbd></td><td>Lukker dialoger.</td></tr>
+  </tbody></table></div>
+
+<h2 id="lagring"><span class="n">9</span>Lagring og personvern</h2>
+{{dia:storage}}
+<ul>
+  <li><strong>Egen database.</strong> Alt pluginen husker (innstillinger, lagrede filtre, regler, notater, skannet innhold, rapportlogg) ligger i en egen database i nettleseren. Pluginen skriver aldri til Lindbaks egen lagring.</li>
+  <li><strong>Hardt tak.</strong> Skannet innhold begrenses til 2000 bonger, de eldste fjernes først. Under Skann → Tøm cache sletter du alt skannet innhold.</li>
+  <li><strong>Ingenting sendes bort.</strong> Dataene blir på maskinen din. Pluginen kaller ikke eksterne tjenester. Med Rask skanning bruker den Lindbaks eget kall for å hente bonger innenfor din pålogging.</li>
+  <li><strong>Persondata.</strong> Bevisbilder har ikke medlemsnummer. Rapporten har kasserernumre og bilder av kvitteringer. Behandle ZIP-filen som annen intern dokumentasjon.</li>
+</ul>
+
+<h2 id="feilsoking"><span class="n">10</span>Feilsøking</h2>
+<details class="faq"><summary>Panelet vises ikke</summary><p>Sjekk at du står i Kvitteringsjournal (adressen slutter på <code>/Journal/Viewer</code>) og at tillegget er slått på under <code>chrome://extensions</code>. Trykk <kbd>F5</kbd>. Panelet kan være skjult: prøv <kbd>Alt</kbd>+<kbd>K</kbd> eller dobbeltklikk der toppen skulle vært. Krever Chrome 111 eller nyere.</p></details>
+<details class="faq"><summary>«Skannet 0 av N» og ingenting skjer</summary><p>Klikk <strong>Skann nå</strong> eller gå til Skann og velg Skann innhold. Vent til visningsfeltet i Lindbak får innhold for hver bong. Hvis det går tregt, prøv Rask skanning.</p></details>
+<details class="faq"><summary>Filteret viser færre bonger enn forventet</summary><p>Filtre som krever skanning (pant, rabatt, vare, varegruppe) skjuler uskannede bonger. En gul stripe viser hvor mange. Skann for å se dem.</p></details>
+<details class="faq"><summary>Rabattfilteret finner ingenting selv om jeg har skannet</summary><p>Skanninger fra før versjon 3 har ikke rabattdata. «Skann synlige» tar dem på nytt, og statuslinjen viser «uten rabattdata».</p></details>
+<details class="faq"><summary>Testen «Retur uten salg» gir ingen treff</summary><p>Den vurderes bare når minst 80 % av salgene i datagrunnlaget er skannet. Rapporten sier fra hvis den ikke ble vurdert.</p></details>
+<details class="faq"><summary>Mange falske «hull i bongnummer»</summary><p>Testen forutsetter at listen ikke er filtrert på type, kasse eller tid. Fjern filtrene i Lindbak og i pluginen og kjør på nytt. Hull større enn grensen hoppes over.</p></details>
+<details class="faq"><summary>«Salg etter kassaoppgjør» rett etter midnatt</summary><p>Sett åpningstid riktig under Innstillinger → Åpningstider. Oppgjør før åpningstid regnes som forrige dags avslutning.</p></details>
+<details class="faq"><summary>Analysen overskrev datoene i Lindbak</summary><p>Når omfanget går utenfor det du har hentet, henter analysen det som mangler og setter Lindbaks dato og butikker. Det tømmer også medlems-, vare- og bongsøk i Lindbak.</p></details>
+<details class="faq"><summary>Jeg endret en terskel, men ingenting skjedde</summary><p>Terskler gjelder fra neste analyse. Trykk Kjør analyse. Poeng gjelder med en gang.</p></details>
+<details class="faq"><summary>Bevisbildene mangler for noen bonger</summary><p>Bonger som ikke lenger er i listen, eller der tegningen feilet, får ikke bilde. Det står i rapportens dekningsdel. Hent bongene på nytt og lag rapporten igjen.</p></details>
+<details class="faq"><summary>Noe virker galt i Lindbak etter at jeg installerte tillegget</summary><p>Slå tillegget av under <code>chrome://extensions</code> og last siden på nytt. Pluginen skriver ikke til Lindbaks lagring, men kan skjule eller flytte rader med filtre. Fjern filtrene med «Nullstill alt».</p></details>
+
+<h2 id="ordliste"><span class="n">11</span>Ordliste</h2>
+<dl class="gl">
+  <dt>Bong</dt><dd>En kvittering. Bongnummer har formen butikk-kasse-løpenummer, for eksempel 1001-2-2371.</dd>
+  <dt>Kassaoppgjør</dt><dd>Kvittering av type 2: telt kontant, differanse, pose og valører når kassen gjøres opp.</dd>
+  <dt>Skanning</dt><dd>At pluginen åpner en bong og leser innholdet (varelinjer, pant, betaling, rabatt, kupong).</dd>
+  <dt>Omfang</dt><dd>Perioden, butikkene, kassererne og kassene du velger at analysen skal gjelde.</dd>
+  <dt>Datagrunnlag</dt><dd>Alle innlastede bonger i valgte butikker. Tester som må se hele bildet bruker det.</dd>
+  <dt>Terskel</dt><dd>Grensen en test bruker for å avgjøre om noe flagges.</dd>
+  <dt>Poeng</dt><dd>Hvor mye en test teller i risikoscoren.</dd>
+  <dt>Risikoscore</dt><dd>Summen av poeng på en bong. Høy fra 8, middels fra 4.</dd>
+  <dt>Panteretur / pantelapp</dt><dd>Utbetaling av pant mot pantelapp (varelinjen «399 PANTELAPP»). Pant på salg er linjen «220 PANT».</dd>
+  <dt>Dekningsgrad</dt><dd>Hvor stor andel av grunnlaget testene faktisk har sett (skannet innhold, rabattdata, leste oppgjør).</dd>
+  <dt>Benfords lov</dt><dd>Fordelingen av første siffer i naturlige tall. Tall som er konstruert avviker ofte. Avviket måles som MAD.</dd>
+  <dt>MAD</dt><dd>Gjennomsnittlig absolutt avvik fra Benford. Over 0,015 regnes som avvikende.</dd>
+  <dt>Kontrollsum (SHA-256)</dt><dd>Et fingeravtrykk av en fil. Endres filen, endres kontrollsummen.</dd>
+  <dt>CW</dt><dd>Lindbak Chain Web, systemet pluginen legger seg oppå.</dd>
+</dl>
+
+<h2 id="begrensninger"><span class="n">12</span>Kjente begrensninger</h2>
+<p>Veiledningen og pluginen er laget og testet mot oppdiktede data i en etterlikning av Lindbak. Disse punktene er ikke bekreftet i ekte data:</p>
+<ul>
+  <li>At alle kvitteringstyper deler nummerserie per kasse (grunnlaget for «hull i bongnummer»).</li>
+  <li>Hvordan rabattårsak skrives på kvitteringen, og hva en Kupong-linje betyr (innløst eller bare knyttet til bongen).</li>
+  <li>Hvordan annullerte bonger, manuell pris, bonger på vent og «spør pris» ser ut. Pluginen leter ikke etter dem ennå.</li>
+  <li>At listen i Lindbak alltid har de feltnavnene pluginen forventer (kasserer og kasse for Alt+klikk, og alle bonger ved mange sider).</li>
+</ul>
+<p>Kontroller derfor funn mot Lindbak før du handler på dem, og meld fra om noe ser feil ut.</p>
+
+<footer class="foot">Kvitteringshenter {{version}} · Veiledningen er laget {{date}}. Alle skjermbilder viser oppdiktede butikker, kasserere og bonger.</footer>

@@ -77,6 +77,20 @@ Ikke verifisert: om kvitteringen skriver årsaken som nummer eller tekst (begge 
 - **Sammenlign bonger:** velg to bonger, trykk «Sammenlign» nederst. Linjer som ikke finnes på den andre markeres.
 - **Tastaturflyt:** ↑/↓ bytter bong, N notat, M velg/fjern, Esc lukker. Kan slås av.
 
+## Brukerveiledning
+
+`docs/brukerveiledning.html` er en frittstående brukerveiledning (norsk, med skjermbilder og diagrammer, søk i innstillingene og mørk drakt). Den forklarer panelet fane for fane, hvordan analysen og poengene virker, alle testene med eksempler, rabatt og kuponger, revisjonsrapporten og verifisering av kontrollsummer, og hver innstilling med standardverdi og tips.
+
+Veiledningen bygges av `docs/manual/`: `manual.src.html` (tekst), `help.js` (forklaring av hver innstilling, test og poengvekt), `diagrams.js` (SVG), `style.css`, `shots.js` (skjermbilder fra pluginen mot oppdiktede data i `fixture.js`) og `build.js`.
+
+```
+NODE_PATH=<global node_modules> node docs/manual/shots.js   # ta nye skjermbilder (valgfritt)
+node docs/manual/build.js                                  # bygg docs/brukerveiledning.html
+node extension/test/docs.test.js                           # sjekker at alt i pluginen er dokumentert
+```
+
+Testen feiler hvis en innstilling, poengvekt, test, fane eller kort mangler i veiledningen, så den holdes à jour når pluginen endres.
+
 ## Revisjonsrapport
 
 Mer → Eksport → **Lag revisjonsrapport…** (også som knapp i Sjekk først etter en analyse). Rapporten bygger på den siste analysen og lagres som én ZIP:
@@ -144,6 +158,7 @@ NODE_PATH=<global node_modules> node test/audit.js   # revisjonstester og omfang
 NODE_PATH=<global node_modules> node test/settings.js # innstillinger, hjelp, bekreftelser, import/eksport, piltaster
 node test/report.test.js                              # SHA-256, kontrollsummer og rapportbygger (uten nettleser)
 NODE_PATH=<global node_modules> node test/rapport.js  # lager rapport i panelet, pakker ut ZIP og verifiserer alle kontrollsummer
+node test/docs.test.js                               # dekning av innstillinger, vekter, faner og kort i brukerveiledningen
 TOUR=<mappe> NODE_PATH=<global node_modules> node test/tour.js  # skjermbilder av alle faner (valgfritt)
 ```
 

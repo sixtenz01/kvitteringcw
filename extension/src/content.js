@@ -2966,7 +2966,7 @@
     ], true);
 
     ui.stores = storeBox(); ui.workstations = pills(); ui.cashiers = pills(); ui.types = pills();
-    var storeNames = el('textarea', { rows: '3', placeholder: '1005=Coop Mega Kolbotn', title: 'Egne butikknavn (nr=navn per linje). Brukes hvis CW-listen ikke finnes.' });
+    var storeNames = el('textarea', { rows: '3', placeholder: '1001=Butikknavn', title: 'Egne butikknavn (nr=navn per linje). Brukes hvis CW-listen ikke finnes.' });
     storeNames.value = manualStores;
     storeNames.addEventListener('change', function () { manualStores = storeNames.value; store(K.stores, manualStores); optsKey = ''; apply(); });
     var secStore = section('store', 'Butikk', [ui.stores]);
