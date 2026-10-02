@@ -210,8 +210,21 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   assert.strictEqual(zipBuf.slice(0, 2).toString(), 'PK');
   assert.ok(zipBuf.includes(Buffer.from('\x89PNG', 'latin1')), 'PNG-data i zip');
   assert.strictEqual((zipBuf.toString('latin1').match(/\.png/g) || []).length >= 4, true);
+  const pngW = buf => { const i = buf.indexOf(Buffer.from('\x89PNG', 'latin1')); return { w: buf.readUInt32BE(i + 16), h: buf.readUInt32BE(i + 20), i }; };
+  const dim1 = pngW(zipBuf);
+  assert.strictEqual(dim1.w, 450 * 3, 'bong-bredde');
+  if (process.env.PNGOUT) fs.writeFileSync(process.env.PNGOUT, zipBuf.slice(dim1.i, zipBuf.indexOf(Buffer.from('IEND', 'latin1'), dim1.i) + 8));
   await page.waitForFunction(() => /Ferdig\. 4 PNG, feilet 1/.test(document.getElementById('kvr-panel').innerText));
   assert.match(await page.textContent('button:has-text("Prøv feilede på nytt (1)") >> nth=0'), /\(1\)/);
+
+  // A4-format
+  await tab('Eksport');
+  await page.selectOption('.kvr-f:has-text("PNG-format") select', 'a4');
+  const [pd2] = await Promise.all([page.waitForEvent('download', { timeout: 60000 }), page.click('.kvr-foot button:has-text("PNG")')]);
+  const dimA4 = pngW(fs.readFileSync(await pd2.path()));
+  assert.strictEqual(dimA4.w, 794 * 2, 'a4-bredde');
+  assert.ok(dimA4.h >= 1123 * 2, 'a4-høyde');
+  await page.waitForFunction(() => /Ferdig\. 4 PNG/.test(document.getElementById('kvr-panel').innerText));
 
   // lagring: kun IndexedDB, aldri localStorage; overlever omlasting
   await load();

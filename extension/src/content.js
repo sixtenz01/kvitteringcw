@@ -7,7 +7,7 @@
   var K = {
     saved: 'kvr.saved.v1', collapsed: 'kvr.collapsed.v1', scan: 'kvr.scan.v2', pos: 'kvr.pos.v1',
     size: 'kvr.size.v1', sec: 'kvr.sec.v1', rules: 'kvr.rules.v1', anom: 'kvr.anom.v1',
-    stores: 'kvr.stores.v1', fast: 'kvr.fast.v1', tab: 'kvr.tab.v1'
+    stores: 'kvr.stores.v1', fast: 'kvr.fast.v1', tab: 'kvr.tab.v1', layout: 'kvr.layout.v1'
   };
   var sayTimer = null;
   var failedRecs = [];
@@ -707,25 +707,39 @@
 
 
   // ---- PNG av hel kvittering --------------------------------------------------
-  var PNG_CSS = 'body{font-family:Verdana,Arial,sans-serif;margin:12px;width:480px;background:#fff;color:#000;}' +
-    'table{width:100%;border-collapse:collapse;}.ReceiptTable{background:#e8e8e8;}' +
-    '.ReceiptTable td,.ReceiptTable th{padding:3px 6px;font-size:11px;}.Subtotal{font-size:13px;font-weight:bold;background:#ccc;}' +
-    '.Report,.report{white-space:pre;font-family:Courier,monospace;font-size:10px;}div[align="center"]{text-align:center;}' +
-    '.kvr-h{font-size:12px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid #999;}';
+  var PNG_CSS = '*{box-sizing:border-box}html,body{margin:0;background:#fff}' +
+    'body{font-family:"Segoe UI",Arial,Helvetica,sans-serif;color:#111}' +
+    '.kvr-page{background:#eceeed;padding:24px}' +
+    '.kvr-page.a4{background:#fff;padding:56px 0;min-height:1123px}' +
+    '.kvr-sheet{background:#fff;margin:0 auto;padding:22px 24px 26px;border:1px solid #d5d9d7;box-shadow:0 1px 4px rgba(0,0,0,.12)}' +
+    '.kvr-page.a4 .kvr-sheet{box-shadow:none;border:1px solid #cfd4d1}' +
+    'table{width:100%;border-collapse:collapse;margin:6px 0}' +
+    '.ReceiptTable{background:transparent}' +
+    'td,th{padding:5px 4px;font-size:13px;line-height:1.35;vertical-align:top;text-align:left;border-bottom:1px dotted #c8cdca;word-break:break-word}' +
+    'th{font-size:11px;color:#555;text-transform:uppercase;letter-spacing:.03em;border-bottom:1px solid #999}' +
+    'td:last-child,th:last-child,td:nth-last-child(2),th:nth-last-child(2){text-align:right;white-space:nowrap}' +
+    'td:first-child,th:first-child{text-align:left;white-space:normal}' +
+    '.Subtotal{font-size:17px;font-weight:700;padding:9px 4px;border-top:2px solid #111;border-bottom:2px solid #111;background:#f6f8f7}' +
+    '.Report,.report{white-space:pre;font-family:Consolas,Courier,monospace;font-size:12px}' +
+    'div[align="center"]{text-align:center}p{margin:6px 0}' +
+    '.kvr-h{margin-bottom:12px;padding-bottom:10px;border-bottom:2px dashed #888;font-size:12px;color:#444;line-height:1.55}' +
+    '.kvr-h strong{display:block;font-size:16px;color:#111;margin-bottom:2px}';
+
+  var PNG_LAYOUTS = { bong: { w: 450, sheet: 402, scale: 3, cls: '' }, a4: { w: 794, sheet: 470, scale: 2, cls: ' a4' } };
 
   function esc(t) { return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
   function pngHeader(it) {
-    var lines = ['Butikk: ' + sLabel(it.storeNumber), 'Kasse ' + it.workstationNumber + ' · Kasserer ' + it.cashierNumber, 'Bongnr: ' + it.bongnr, it.endDateTime];
+    var lines = ['Kasse ' + it.workstationNumber + ' · Kasserer ' + it.cashierNumber, 'Bongnr: ' + it.bongnr, it.endDateTime];
     if (ui.pngMember.checked && it.memberNumber) lines.push('Medlem: ' + it.memberNumber);
-    return '<div class="kvr-h">' + lines.map(esc).join('<br>') + '</div>';
+    return '<div class="kvr-h"><strong>' + esc(sLabel(it.storeNumber)) + '</strong>' + lines.map(esc).join('<br>') + '</div>';
   }
 
-  function htmlToPng(full) {
+  function htmlToPng(full, W, scale) {
     return new Promise(function (resolve, reject) {
       var f = document.createElement('iframe');
       f.setAttribute('sandbox', 'allow-same-origin');
-      f.style.cssText = 'position:fixed;top:-10000px;left:-10000px;width:510px;height:2000px;border:none;visibility:hidden;';
+      f.style.cssText = 'position:fixed;top:-10000px;left:-10000px;width:' + W + 'px;height:2000px;border:none;visibility:hidden;';
       var fail = function (e) { f.remove(); reject(e); };
       f.onload = function () {
         setTimeout(function () {
@@ -733,7 +747,7 @@
             var b = f.contentDocument.body;
             var h = b.scrollHeight || 800;
             f.style.height = (h + 40) + 'px';
-            window.html2canvas(b, { scale: 2, logging: false, allowTaint: true, useCORS: false, backgroundColor: '#ffffff', width: 510, height: h, windowWidth: 510, windowHeight: h })
+            window.html2canvas(b, { scale: scale, logging: false, allowTaint: true, useCORS: false, backgroundColor: '#ffffff', width: W, height: h, windowWidth: W, windowHeight: h })
               .then(function (c) { f.remove(); c.toBlob(function (bl) { if (bl) resolve(bl); else reject(new Error('toBlob')); }, 'image/png'); })
               .catch(fail);
           } catch (e) { fail(e); }
@@ -778,10 +792,11 @@
       try {
         var html = await receiptHtml(list[i]);
         if (!html) throw new Error('ingen kvittering');
-        var clean = html.replace(/xmlns[^=]*="[^"]*"/g, '').replace(/<link[^>]*>/gi, '').replace(/<script[\s\S]*?<\/script>/gi, '');
-        var full = '<!DOCTYPE html><html><head><meta charset="UTF-8"><style>' + PNG_CSS + '</style></head><body>' +
-          (ui.pngHeaderOn.checked ? pngHeader(list[i].item) : '') + clean + '</body></html>';
-        var blob = await htmlToPng(full);
+        var clean = html.replace(/xmlns[^=]*="[^"]*"/g, '').replace(/<link[^>]*>/gi, '').replace(/<script[\s\S]*?<\/script>/gi, '').replace(/<style[\s\S]*?<\/style>/gi, '');
+        var lay = PNG_LAYOUTS[ui.pngLayout.value] || PNG_LAYOUTS.bong;
+        var full = '<!DOCTYPE html><html><head><meta charset="UTF-8"><style>' + PNG_CSS + '</style></head><body><div class="kvr-page' + lay.cls + '"><div class="kvr-sheet" style="width:' + lay.sheet + 'px">' +
+          (ui.pngHeaderOn.checked ? pngHeader(list[i].item) : '') + clean + '</div></div></body></html>';
+        var blob = await htmlToPng(full, lay.w, lay.scale);
         var it = list[i].item;
         files.push({ name: it.endDateTime.replace(/[^0-9]/g, '') + '_' + String(it.bongnr).replace(/[^A-Za-z0-9_-]/g, '-') + '.png', blob: blob });
       } catch (e) { failed.push(list[i]); }
@@ -1195,11 +1210,14 @@
     // --- Eksport
     var pH = check('PNG: legg på topptekst (butikk, kasse, kasserer, bongnr, tid)', function () {}); ui.pngHeaderOn = pH.box; pH.box.checked = true;
     var pM = check('PNG: ta med medlemsnr i topptekst', function () {}); ui.pngMember = pM.box;
+    ui.pngLayout = el('select', {}, [el('option', { value: 'bong', text: 'Bong (smal, som papirkvittering)' }), el('option', { value: 'a4', text: 'A4-ark med bongen i midten' })]);
+    ui.pngLayout.value = store(K.layout) || 'bong';
+    ui.pngLayout.addEventListener('change', function () { store(K.layout, ui.pngLayout.value); });
     ui.exportStatus = el('div', { class: 'kvr-note', text: '' });
     var secExport = section('export', 'Eksport', [
       el('div', { class: 'kvr-row' }, [btn('CSV: synlige', function () { exportCsv(false); }), btn('CSV: valgte', function () { exportCsv(true); })]),
       el('div', { class: 'kvr-row' }, [btn('PNG: valgte (ZIP)', function () { exportPng(selectedRecs()); }), ui.retryBtn2 = btn('Prøv feilede på nytt', function () { if (lastRetry) lastRetry(); })]),
-      pH.node, pM.node,
+      field('PNG-format', ui.pngLayout), pH.node, pM.node,
       el('div', { class: 'kvr-hint', text: 'Semikolon-separert, åpnes direkte i Excel. Varegrupper og pant tas med for skannede kvitteringer.' }),
       ui.exportStatus
     ], false);
