@@ -15,7 +15,7 @@ Chrome MV3-utvidelse for Lindbak Chain Web → Kvitteringsjournal. Leser kun gri
 
 - **Søk i CW** (hele journalen): dato, butikker (med navn fra CW), medlem, lojalitets-ID, vare/EAN, bongnr. Fyller CW sine egne felt og trykker OPPDATER.
 - **Butikknavn** hentes fra CW sin butikkliste og vises i alle filtre og i CSV.
-- **Skanning:** leser varelinjer, betaling og pant fra kvitteringene. Standard åpner hver kvittering i visningsfeltet; «Rask skanning» henter direkte via `GetReceiptDetails` (samme kall som gamle pluginen).
+- **Skanning:** leser varelinjer, betaling og pant fra kvitteringene. Hver kvittering åpnes i CWs visningsfelt og leses derfra (ca. 1 s per bong). Pluginen sender aldri egne kall mot CWs API; `test/noapi.test.js` feiler hvis kildekoden inneholder `fetch`, `XMLHttpRequest`, `$http` eller `/Api/`.
 - **Varegrupper** med nøkkelord (`ord` = starten av ord, `*ord` = inneholder, `#kode` = varenr/EAN). Ekskluder-ord treffer hvor som helst. Regelsettet bygges opp fra «Varer uten gruppe», og kan eksporteres/importeres.
 - **Avvik** (kun på knapp): stor panteretur, mange pantelapper, kontant tilbake uten salg, rundt beløp.
 - **Eksport:** CSV (semikolon, UTF-8 med BOM) for synlige eller valgte kvitteringer.

@@ -56,7 +56,7 @@
 <ul>
   <li>Skanning tar ca. ett sekund per bong. Du ser fremdrift, resterende tid og kan stoppe når som helst.</li>
   <li>Det som er skannet huskes, så du skanner hver bong bare én gang (opptil 2000 bonger lagres).</li>
-  <li>Alternativet <strong>Rask skanning</strong> henter bongene direkte fra Lindbak uten å åpne dem i visningen. Det går mye raskere, men er av som standard.</li>
+  <li>Skanningen åpner hver bong i Lindbaks visningsfelt, slik du selv ville gjort. Pluginen sender aldri egne kall mot Lindbaks API.</li>
 </ul>
 <h3>Listen i Lindbak</h3>
 <p>Pluginen legger en avkrysningskolonne først i listen. Kryss av bonger for å eksportere dem, sammenligne to eller samle dem i en rapport. Raden får <span class="sw edge">rød kant</span> til venstre når bongen er flagget i analysen, og du får en forklaring når du holder musen over raden. <kbd>Alt</kbd>+klikk på KASSERER eller KASSE i listen åpner alt om kassereren eller kassen (se Fokus).</p>
@@ -100,7 +100,6 @@
     <tr><td>Stopp</td><td>Avbryter skanningen. Det som er ferdig beholdes.</td></tr>
     <tr><td>Prøv feilede på nytt</td><td>Kjører bare de bongene som feilet sist.</td></tr>
     <tr><td>Tøm cache</td><td>Sletter alt skannet innhold og alle avviksmarkeringer. Innstillinger og notater beholdes.</td></tr>
-    <tr><td>Rask skanning</td><td>Henter bongene direkte fra Lindbak i stedet for å åpne dem i visningen. Raskere, men bruker Lindbaks eget kall til å hente bonger.</td></tr>
     <tr><td>Pant</td><td>Filter: har pant eller panteretur, har pant (salg), har panteretur. Krever skanning.</td></tr>
     <tr><td>Rabatt</td><td>Filter: har rabatt, uten årsak, med årsak, har kupong, eller én bestemt årsak. Krever skanning.</td></tr>
     <tr><td>Varegrupper</td><td>Gruppér varer med nøkkelord (se under).</td></tr>
@@ -378,13 +377,13 @@
 <ul>
   <li><strong>Egen database.</strong> Alt pluginen husker (innstillinger, lagrede filtre, regler, notater, skannet innhold, rapportlogg) ligger i en egen database i nettleseren. Pluginen skriver aldri til Lindbaks egen lagring.</li>
   <li><strong>Hardt tak.</strong> Skannet innhold begrenses til 2000 bonger, de eldste fjernes først. Under Skann → Tøm cache sletter du alt skannet innhold.</li>
-  <li><strong>Ingenting sendes bort.</strong> Dataene blir på maskinen din. Pluginen kaller ikke eksterne tjenester. Med Rask skanning bruker den Lindbaks eget kall for å hente bonger innenfor din pålogging.</li>
+  <li><strong>Ingenting sendes bort.</strong> Dataene blir på maskinen din. Pluginen kaller ikke eksterne tjenester og sender ingen egne kall mot Lindbaks API. Den leser bare det Lindbaks egen side allerede viser.</li>
   <li><strong>Persondata.</strong> Bevisbilder har ikke medlemsnummer. Rapporten har kasserernumre og bilder av kvitteringer. Behandle ZIP-filen som annen intern dokumentasjon.</li>
 </ul>
 
 <h2 id="feilsoking"><span class="n">10</span>Feilsøking</h2>
 <details class="faq"><summary>Panelet vises ikke</summary><p>Sjekk at du står i Kvitteringsjournal (adressen slutter på <code>/Journal/Viewer</code>) og at tillegget er slått på under <code>chrome://extensions</code>. Trykk <kbd>F5</kbd>. Panelet kan være skjult: prøv <kbd>Alt</kbd>+<kbd>K</kbd> eller dobbeltklikk der toppen skulle vært. Krever Chrome 111 eller nyere.</p></details>
-<details class="faq"><summary>«Skannet 0 av N» og ingenting skjer</summary><p>Klikk <strong>Skann nå</strong> eller gå til Skann og velg Skann innhold. Vent til visningsfeltet i Lindbak får innhold for hver bong. Hvis det går tregt, prøv Rask skanning.</p></details>
+<details class="faq"><summary>«Skannet 0 av N» og ingenting skjer</summary><p>Klikk <strong>Skann nå</strong> eller gå til Skann og velg Skann innhold. Vent til visningsfeltet i Lindbak får innhold for hver bong. Skanning tar ca. ett sekund per bong; avgrens listen først hvis den er lang.</p></details>
 <details class="faq"><summary>Filteret viser færre bonger enn forventet</summary><p>Filtre som krever skanning (pant, rabatt, vare, varegruppe) skjuler uskannede bonger. En gul stripe viser hvor mange. Skann for å se dem.</p></details>
 <details class="faq"><summary>Rabattfilteret finner ingenting selv om jeg har skannet</summary><p>Skanninger fra før versjon 3 har ikke rabattdata. «Skann synlige» tar dem på nytt, og statuslinjen viser «uten rabattdata».</p></details>
 <details class="faq"><summary>Testen «Retur uten salg» gir ingen treff</summary><p>Den vurderes bare når minst 80 % av salgene i datagrunnlaget er skannet. Rapporten sier fra hvis den ikke ble vurdert.</p></details>

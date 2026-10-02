@@ -38,7 +38,7 @@ var cur=null;
 var grid={tbody:[document.querySelector('tbody')],dataSource:{view:function(){return items}},
  dataItem:function(tr){return items.filter(function(i){return i.transactionId===tr.getAttribute('data-id')})[0]},
  bind:function(n,f){ (window.__bound=window.__bound||[]).push(f) },
- select:function(tr){ if(!arguments.length) return cur?[cur]:[]; cur=tr; var id=tr.getAttribute('data-id'); setTimeout(function(){ document.getElementById('rc').contentDocument.body.innerHTML=receipts[id]||'<table><tr><td>X</td><td></td><td>1.00</td></tr></table>'; },200); },
+ select:function(tr){ if(!arguments.length) return cur?[cur]:[]; cur=tr; var id=tr.getAttribute('data-id'); if((window.__failIds||[]).indexOf(id)>-1) return; setTimeout(function(){ document.getElementById('rc').contentDocument.body.innerHTML=receipts[id]||'<table><tr><td>X</td><td></td><td>1.00</td></tr></table>'; },5); },
  clearSelection:function(){cur=null}};
 var ms={dataSource:{data:function(){return [{get:function(k){return {number:1005,text:'Coop Mega Kolbotn'}[k]}},{get:function(k){return {number:1010,text:'Extra Testby'}[k]}}]}},value:function(v){window.__storesSet=v},trigger:function(){}};
 function mk(list){return {each:function(fn){list.forEach(function(e,i){fn.call(e,i,e)})},eq:function(i){return mk([list[i]])},data:function(n){var e=list[0];if(!e)return undefined;if(e.getAttribute('data-w'))return n==='kendoMultiSelect'?ms:null;return n==='kendoGrid'?grid:null}}}
@@ -53,16 +53,12 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   const errors = [];
   page.on('pageerror', e => { errors.push(e.message); console.error('PAGEERROR', e.message); });
   page.on('dialog', d => d.accept('Bakeri'));
-  const failIds = new Set();
+  const apiCalls = [];
+  await context.addInitScript(() => { window.__kvrScan = { settle: 0, poll: 10 }; });
   await page.route('https://chainweb.coop.no/**', async r => {
     const u = r.request().url();
-    if (u.endsWith('/Api/GetReceiptDetails')) {
-      const body = JSON.parse(r.request().postData());
-      const id = 't-' + body.sequenceNum;
-      if (failIds.has(id)) return r.fulfill({ contentType: 'application/json', body: '""' });
-      return r.fulfill({ contentType: 'application/json', body: JSON.stringify(RECEIPTS[id] || '') });
-    }
-    return r.fulfill({ contentType: 'text/html', body: html });
+    if (u.indexOf('/Api/') !== -1) { apiCalls.push(u); return r.fulfill({ status: 404, body: '' }); }
+    return r.fulfill({ contentType: 'text/html; charset=utf-8', body: html });
   });
   const load = async () => {
     await page.goto('https://chainweb.coop.no/LindbakRetail_1/Journal/Viewer');
@@ -262,10 +258,9 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   assert.strictEqual(await page.inputValue('#fromDatePicker'), '01.10.2026');
   assert.deepStrictEqual(await page.evaluate(() => window.__storesSet), [1005]);
 
-  // rask skanning via API
+  // skanning via visningsfeltet
   await tab('Innhold');
   await page.click('text=Tøm cache');
-  await page.click('text=Rask skanning');
   // skanne-fella: filter som krever skanning før noe er skannet skjuler alt, men viser hva som mangler
   await page.selectOption('.kvr-f:has-text("Pant (krever") select', 'sale');
   assert.deepStrictEqual(await vis(), []);
@@ -481,8 +476,8 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   await page.waitForTimeout(300);
   assert.ok(!!(await idbGet('kv', 'kvr.saved.v1')).test);
 
-  // PNG-eksport (rask modus er på: t-5 feiler med vilje)
-  failIds.add('t-5');
+  // PNG-eksport (t-5 feiler med vilje)
+  await page.evaluate(() => { window.__failIds = ['t-5']; });
   await page.click('button:text-is("Velg alle")');
   const [pd] = await Promise.all([page.waitForEvent('download', { timeout: 60000 }), page.click('.kvr-foot button:has-text("PNG")')]);
   const zipBuf = fs.readFileSync(await pd.path());
@@ -548,6 +543,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   }
 
   assert.deepStrictEqual(errors, []);
+  assert.deepStrictEqual(apiCalls, [], 'pluginen skal aldri kalle CWs API');
   await browser.close();
   console.log('smoke: ok');
 })().catch(e => { console.error(e); process.exit(1); });

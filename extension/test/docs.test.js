@@ -59,7 +59,7 @@ const cards = [];
 content.replace(/fold\(section\('([\w-]+)', '([^']+)'/g, (m, id, t) => { cards.push(t); return m; });
 assert.ok(cards.length >= 9, 'fant kortene i Detaljer');
 cards.forEach((t) => has(t.replace('Avvik', 'Avvik')));
-['Velg omfang', 'Kjør analyse', 'Lag revisjonsrapport', 'Tøm cache', 'Rask skanning', 'Nullstill alt', 'Standard for denne gruppen', 'Alt til standard', 'Morgenkontroll', 'Skann nå', 'Kasserere å se nærmere på'].forEach(has);
+['Velg omfang', 'Kjør analyse', 'Lag revisjonsrapport', 'Tøm cache', 'Nullstill alt', 'Standard for denne gruppen', 'Alt til standard', 'Morgenkontroll', 'Skann nå', 'Kasserere å se nærmere på'].forEach(has);
 Object.keys(L.RULE_FIELDS).forEach((k) => has(L.RULE_FIELDS[k].label));
 L.DISC_REASONS.forEach((r, i) => has(r));
 // tast og snarveier som pluginen faktisk har

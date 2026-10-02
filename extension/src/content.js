@@ -7,12 +7,11 @@
   var K = {
     saved: 'kvr.saved.v1', collapsed: 'kvr.collapsed.v1', scan: 'kvr.scan.v2', pos: 'kvr.pos.v1',
     size: 'kvr.size.v1', sec: 'kvr.sec.v1', rules: 'kvr.rules.v1', anom: 'kvr.anom.v1',
-    stores: 'kvr.stores.v1', fast: 'kvr.fast.v1', tab: 'kvr.tab.v1', layout: 'kvr.layout.v1', arules: 'kvr.arules.v1', notes: 'kvr.notes.v1', tasks: 'kvr.tasks.v1', ctl: 'kvr.ctl.v1', keynav: 'kvr.keynav.v1', wide: 'kvr.wide.v1', sub: 'kvr.sub.v1', weights: 'kvr.weights.v1', lastrun: 'kvr.lastrun.v1', scope: 'kvr.scope.v1', help: 'kvr.help.v1', sub2: 'kvr.sub2.v1', reports: 'kvr.reports.v1', repopts: 'kvr.repopts.v1'
+    stores: 'kvr.stores.v1', tab: 'kvr.tab.v1', layout: 'kvr.layout.v1', arules: 'kvr.arules.v1', notes: 'kvr.notes.v1', tasks: 'kvr.tasks.v1', ctl: 'kvr.ctl.v1', keynav: 'kvr.keynav.v1', wide: 'kvr.wide.v1', sub: 'kvr.sub.v1', weights: 'kvr.weights.v1', lastrun: 'kvr.lastrun.v1', scope: 'kvr.scope.v1', help: 'kvr.help.v1', sub2: 'kvr.sub2.v1', reports: 'kvr.reports.v1', repopts: 'kvr.repopts.v1'
   };
   var sayTimer = null;
   var failedRecs = [];
   var lastRetry = null;
-  var API_ROOT = '/LindbakRetail_1/Journal/Viewer/Api/';
   var SCAN_TIMEOUT = 6000;
   var SCAN_LIMIT = 2000;
 
@@ -36,7 +35,7 @@
   var scanMap = {};
   var dirty = {};
   var db = null;
-  var rules, anomCfg, manualStores, fastScan, customRules = [];
+  var rules, anomCfg, manualStores, customRules = [];
   var scope = null, lastMode = 'scope', fetched = null;
   var weights = null, checkState = { newIds: {}, at: null, shown: 15, showChecked: false }, expanded = {};
   var notes = {}, ctlRes = null, ctlCfg = null, tasksCustom = [], boundCount = 0, keyNav = true, settingsStale = false;
@@ -270,33 +269,18 @@
     var d = iframeDoc();
     if (!d) return null;
     if (!already) { d.body.innerHTML = ''; grid.select(r.tr); }
+    var pace = window.__kvrScan || {}, settle = pace.settle >= 0 ? pace.settle : 150, poll = pace.poll > 0 ? pace.poll : 100;
     var waited = 0;
     while (waited < SCAN_TIMEOUT) {
       d = iframeDoc();
       if (d && d.body.innerHTML.length > 0 && (d.querySelector('tr') || d.querySelector('.no-details'))) {
-        await wait(150);
+        await wait(settle);
         return rowsFrom(iframeDoc());
       }
-      await wait(100);
-      waited += 100;
+      await wait(poll);
+      waited += poll;
     }
     return null;
-  }
-
-  async function loadViaApi(r) {
-    var tokenEl = document.querySelector('input[name="__RequestVerificationToken"]');
-    var it = r.item;
-    var resp = await fetch(API_ROOT + 'GetReceiptDetails', {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', '__RequestVerificationToken': tokenEl ? tokenEl.value : '' },
-      body: JSON.stringify({ endDateTime: it.endDateTime, journalSourceName: it.journalSourceName || 'main', retailStoreNum: it.storeNumber, sequenceNum: seqOf(it.transactionId), workstationNum: it.workstationNumber })
-    });
-    if (!resp.ok) return null;
-    var text = await resp.text();
-    try { text = JSON.parse(text); } catch (e) { /* allerede HTML */ }
-    if (typeof text !== 'string') return null;
-    return rowsFrom(new DOMParser().parseFromString(text, 'text/html'));
   }
 
   async function scanList(todo) {
@@ -310,7 +294,7 @@
     for (var i = 0; i < todo.length && !cancelScan; i++) {
       progress(i, todo.length, t0, 'Skanner', failed);
       var rows = null;
-      try { rows = fastScan ? await loadViaApi(todo[i]) : await loadViaDom(todo[i]); } catch (e) { rows = null; }
+      try { rows = await loadViaDom(todo[i]); } catch (e) { rows = null; }
       if (rows) {
         var id = todo[i].item.transactionId;
         scanMap[id] = todo[i].item.receiptType === 2 ? L.parseSettlement(rows) : L.parseReceipt(rows);
@@ -318,16 +302,13 @@
         dirty[id] = true;
         done++;
       } else { failed++; failedRecs.push(todo[i]); }
-      if (fastScan) await wait(120);
     }
     saveScan();
     setProgress(0);
     lastRetry = failedRecs.length ? retryScan : null;
     syncRetry();
     gcache = {};
-    if (!fastScan) {
-      if (prevTr) grid.select(prevTr); else if (typeof grid.clearSelection === 'function') grid.clearSelection();
-    }
+    if (prevTr) grid.select(prevTr); else if (typeof grid.clearSelection === 'function') grid.clearSelection();
     scanning = false;
     ui.scanBtn.disabled = false; ui.anomBtn.disabled = false; ui.stopBtn.disabled = true;
     say((cancelScan ? 'Stoppet. ' : 'Ferdig. ') + 'Skannet ' + done + (failed ? ', feilet ' + failed : '') + '.');
@@ -890,7 +871,7 @@
   function jumpTo(r) {
     r.tr.style.display = '';
     r.tr.scrollIntoView({ block: 'center' });
-    if (grid && !fastScan) grid.select(r.tr);
+    if (grid) grid.select(r.tr);
   }
 
   function renderDerived() {
@@ -1039,19 +1020,6 @@
   }
 
   async function receiptHtml(r) {
-    if (fastScan) {
-      var tokenEl = document.querySelector('input[name="__RequestVerificationToken"]');
-      var it = r.item;
-      var resp = await fetch(API_ROOT + 'GetReceiptDetails', {
-        method: 'POST', credentials: 'include',
-        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', '__RequestVerificationToken': tokenEl ? tokenEl.value : '' },
-        body: JSON.stringify({ endDateTime: it.endDateTime, journalSourceName: it.journalSourceName || 'main', retailStoreNum: it.storeNumber, sequenceNum: seqOf(it.transactionId), workstationNum: it.workstationNumber })
-      });
-      if (!resp.ok) return null;
-      var text = await resp.text();
-      try { text = JSON.parse(text); } catch (e) { /* allerede HTML */ }
-      return typeof text === 'string' && text ? text : null;
-    }
     if (!r.tr) return null;
     var rows = await loadViaDom(r);
     var d = iframeDoc();
@@ -1085,11 +1053,8 @@
         var it = list[i].item;
         files.push({ name: it.endDateTime.replace(/[^0-9]/g, '') + '_' + String(it.bongnr).replace(/[^A-Za-z0-9_-]/g, '-') + '.png', blob: blob });
       } catch (e) { failed.push(list[i]); }
-      if (fastScan) await wait(120);
     }
-    if (!fastScan) {
-      if (prevTr) grid.select(prevTr); else if (typeof grid.clearSelection === 'function') grid.clearSelection();
-    }
+    if (prevTr) grid.select(prevTr); else if (typeof grid.clearSelection === 'function') grid.clearSelection();
     setProgress(0);
     if (files.length === 1) download(files[0].blob, files[0].name);
     else if (files.length > 1) {
@@ -2760,8 +2725,7 @@
           var bytes = new Uint8Array(await blob.arrayBuffer());
           files.push({ id: pick[i].id, path: 'bevis/' + String(i + 1).padStart(2, '0') + '_' + String(rec.item.bongnr).replace(/[^A-Za-z0-9_-]/g, '-') + '.png', hash: KvReport.sha256Bytes(bytes), blob: blob });
         } catch (e) { missing.push(pick[i].id); }
-        if (fastScan) await wait(120);
-      }
+        }
       if (cancelScan) { say('Rapporten er avbrutt.'); return; }
       progress(pick.length ? pick.length - 1 : 0, Math.max(pick.length, 1), t0, 'Pakker rapport', 0);
       var byId = {}, explain = {}, noteSub = {};
@@ -2807,7 +2771,7 @@
     } catch (e) {
       say('Rapporten feilet: ' + (e && e.message ? e.message : e));
     } finally {
-      if (!fastScan) { if (prevTr) grid.select(prevTr); else if (typeof grid.clearSelection === 'function') grid.clearSelection(); }
+      if (prevTr) grid.select(prevTr); else if (typeof grid.clearSelection === 'function') grid.clearSelection();
       setProgress(0);
       scanning = false;
       ui.scanBtn.disabled = false; ui.anomBtn.disabled = false; ui.stopBtn.disabled = true;
@@ -3019,8 +2983,6 @@
     ui.stopBtn.disabled = true;
     ui.retryBtn = btn('Prøv feilede på nytt', function () { if (lastRetry) lastRetry(); });
     ui.retryBtn.disabled = true;
-    var fast = check('Rask skanning (henter direkte fra CW)', function () { fastScan = fast.box.checked; store(K.fast, fastScan); });
-    fast.box.checked = fastScan;
     var secScan = section('scan', 'Skanning og pant', [
       field('Pant (krever skanning)', ui.pant),
       field('Rabatt (krever skanning)', ui.disc),
@@ -3028,8 +2990,7 @@
       el('div', { class: 'kvr-row' }, [ui.retryBtn, btn('Tøm cache', function () {
         clearScan(); anomMap = {}; failedRecs = []; lastRetry = null; syncRetry(); say('Cache tømt.'); apply();
       })]),
-      fast.node,
-      el('div', { class: 'kvr-hint', text: 'Standard åpner hver kvittering i visningsfeltet (ca. 1 s). Rask skanning henter kvitteringene direkte fra CW.' })
+      el('div', { class: 'kvr-hint', text: 'Hver kvittering åpnes i CWs visningsfelt (ca. 1 s) og leses derfra. Pluginen sender aldri egne kall mot CWs API.' })
     ], true);
 
     // --- Varegrupper
@@ -3483,7 +3444,6 @@
     rules = L.sanitizeRules(store(K.rules));
     anomCfg = L.sanitizeAnom(store(K.anom));
     manualStores = store(K.stores) || '';
-    fastScan = !!store(K.fast);
     customRules = L.sanitizeCustom(store(K.arules));
     notes = store(K.notes) || {};
     tasksCustom = Array.isArray(store(K.tasks)) ? store(K.tasks) : [];

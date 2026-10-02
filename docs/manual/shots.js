@@ -18,15 +18,15 @@ const html = pageHtml(data.rows);
 async function openSession(width, height) {
   const browser = await chromium.launch();
   const ctx = await browser.newContext({ locale: 'nb-NO', viewport: { width, height }, deviceScaleFactor: 1.5 });
+  await ctx.addInitScript(() => { window.__kvrScan = { settle: 0, poll: 10 }; });
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', (e) => { errors.push(e.message); console.error('PAGEERROR', e.message); });
   await page.route('https://chainweb.coop.no/**', async (r) => {
-    if (r.request().url().endsWith('/Api/GetReceiptDetails')) {
-      const b = JSON.parse(r.request().postData());
-      return r.fulfill({ contentType: 'application/json', body: JSON.stringify(data.receipts[`${b.retailStoreNum}-${b.workstationNum}-${b.sequenceNum}`] || '') });
-    }
-    return r.fulfill({ contentType: 'text/html', body: html });
+    const u = r.request().url();
+    if (u.indexOf('/__receipt/') !== -1) return r.fulfill({ contentType: 'text/html; charset=utf-8', body: data.receipts[decodeURIComponent(u.split('/__receipt/')[1])] || '<table><tr><td>X</td><td></td><td>1.00</td></tr></table>' });
+    if (u.indexOf('/Api/') !== -1) return r.fulfill({ status: 404, body: '' });
+    return r.fulfill({ contentType: 'text/html; charset=utf-8', body: html });
   });
   await page.goto('https://chainweb.coop.no/LindbakRetail_1/Journal/Viewer');
   for (const f of ['lib/html2canvas.min.js', 'lib/jszip.min.js', 'src/logic.js', 'src/report.js']) await page.addScriptTag({ path: path.join(EXT, f) });
@@ -131,9 +131,8 @@ async function main() {
     await page.selectOption('.kvr-f:has-text("Pant (krever") select', '');
   }
 
-  // ---- skanning (rask skanning, for tempoets skyld)
+  // ---- skanning
   await go('Skann');
-  await page.click('text=Rask skanning');
   await page.click('text=Skann innhold (synlige)');
   await page.waitForTimeout(2500);
   if (want('skanner')) { await view(520); await save('skanner'); }

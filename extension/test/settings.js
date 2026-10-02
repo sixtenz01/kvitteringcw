@@ -21,6 +21,8 @@ const ROWS = [
 const rows = ROWS.map(r => ({ transactionId: `x-${r.seq}`, endDateTime: `${r.day} ${r.time}`, storeNumber: r.store, workstationNumber: r.ws, cashierNumber: r.cashier, totalAmount: r.total, receiptType: r.type, memberNumber: null, journalSourceName: 'main' }));
 const RECEIPTS = {};
 ROWS.forEach(r => { RECEIPTS[`${r.store}-${r.ws}-${r.seq}`] = '<table>' + r.lines.join('') + '</table>'; });
+const BYID = {};
+rows.forEach(r => { BYID[r.transactionId] = RECEIPTS[`${r.storeNumber}-${r.workstationNumber}-${r.transactionId.slice(r.transactionId.lastIndexOf('-') + 1)}`] || '<table><tr><td>X</td><td></td><td>1.00</td></tr></table>'; });
 
 const html = `<!doctype html><html><body>
 <input id="fromDatePicker"><input id="toDatePicker"><input id="freetextSearchInput"><input id="receiptNumber">
@@ -34,12 +36,13 @@ ${rows.map(r => `<tr data-id="${r.transactionId}"><td></td><td>${r.endDateTime}<
 <div data-w="1"></div><iframe id="rc"></iframe>
 <script>
 var rows=${JSON.stringify(rows)};
+var receipts=${JSON.stringify(BYID)};
 var items=rows.map(function(r,i){var o=Object.assign({uid:'u'+i},r);o.toJSON=function(){var c=Object.assign({},o);delete c.toJSON;return c};return o});
 var cur=null;
 var grid={tbody:[document.querySelector('tbody')],dataSource:{view:function(){return items}},
  dataItem:function(tr){return items.filter(function(i){return i.transactionId===tr.getAttribute('data-id')})[0]},
  bind:function(n,f){(window.__bound=window.__bound||[]).push(f)},
- select:function(tr){if(!arguments.length)return cur?[cur]:[];cur=tr;},clearSelection:function(){cur=null}};
+ select:function(tr){if(!arguments.length)return cur?[cur]:[];cur=tr;var id=tr.getAttribute('data-id');setTimeout(function(){document.getElementById('rc').contentDocument.body.innerHTML=receipts[id];},5);},clearSelection:function(){cur=null}};
 var ms={dataSource:{data:function(){return [{get:function(k){return {number:1005,text:'Coop Mega Kolbotn'}[k]}},{get:function(k){return {number:1010,text:'Extra Testby'}[k]}}]}},value:function(v){window.__storesSet=v},trigger:function(){}};
 function mk(list){return {each:function(fn){list.forEach(function(e,i){fn.call(e,i,e)})},eq:function(i){return mk([list[i]])},data:function(n){var e=list[0];if(!e)return undefined;if(e.getAttribute('data-w'))return n==='kendoMultiSelect'?ms:null;return n==='kendoGrid'?grid:null}}}
 window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrapper')===0?mk([].slice.call(document.querySelectorAll('[data-w]'))):mk([]); return mk([a]); };
@@ -51,13 +54,12 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   const page = await (await browser.newContext({ locale: 'nb-NO' })).newPage();
   const errors = [];
   page.on('pageerror', e => { errors.push(e.message); console.error('PAGEERROR', e.message); });
+  const apiCalls = [];
+  await page.addInitScript(() => { window.__kvrScan = { settle: 0, poll: 10 }; });
   await page.route('https://chainweb.coop.no/**', async r => {
     const u = r.request().url();
-    if (u.endsWith('/Api/GetReceiptDetails')) {
-      const b = JSON.parse(r.request().postData());
-      return r.fulfill({ contentType: 'application/json', body: JSON.stringify(RECEIPTS[`${b.retailStoreNum}-${b.workstationNum}-${b.sequenceNum}`] || '') });
-    }
-    return r.fulfill({ contentType: 'text/html', body: html });
+    if (u.indexOf('/Api/') !== -1) { apiCalls.push(u); return r.fulfill({ status: 404, body: '' }); }
+    return r.fulfill({ contentType: 'text/html; charset=utf-8', body: html });
   });
   await page.goto('https://chainweb.coop.no/LindbakRetail_1/Journal/Viewer');
   for (const f of ['lib/html2canvas.min.js', 'lib/jszip.min.js', 'src/logic.js', 'src/report.js']) await page.addScriptTag({ path: path.join(dir, f) });
@@ -110,7 +112,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   assert.match(await page.innerText('.kvr-stats'), /«Avvik per bong» er satt tilbake til standard/);
 
   // terskler gjelder fra neste analyse: melding i Sjekk først
-  await go('Skann'); await page.click('text=Rask skanning');
+  await go('Skann');
   await go('Analyse', 'Sjekk først');
   await page.click('[data-sec=chk-top] button:text-is("Kjør analyse")');
   await page.waitForFunction(() => /Kontroller ferdig/.test(document.getElementById('kvr-panel').innerText), null, { timeout: 40000 });
@@ -205,6 +207,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   assert.match(await page.innerText('.kvr-ftiles'), /Kvitteringer/);
 
   assert.deepStrictEqual(errors, []);
+  assert.deepStrictEqual(apiCalls, [], 'pluginen skal aldri kalle CWs API');
   await browser.close();
   console.log('settings: ok');
 })().catch(e => { console.error(e); process.exit(1); });

@@ -168,7 +168,7 @@ var cur=null;
 var grid={tbody:[document.querySelector('tbody')],dataSource:{view:function(){return items}},
  dataItem:function(tr){return items.filter(function(i){return i.transactionId===tr.getAttribute('data-id')})[0]},
  bind:function(n,f){(window.__bound=window.__bound||[]).push(f)},
- select:function(tr){if(!arguments.length)return cur?[cur]:[];cur=tr;},clearSelection:function(){cur=null}};
+ select:function(tr){if(!arguments.length)return cur?[cur]:[];cur=tr;var id=tr.getAttribute('data-id');fetch('/__receipt/'+encodeURIComponent(id)).then(function(r){return r.text()}).then(function(t){if(cur===tr)document.getElementById('rc').contentDocument.body.innerHTML=t});},clearSelection:function(){cur=null}};
 var ms={dataSource:{data:function(){return ${JSON.stringify(storeData)}.map(function(s){return {get:function(k){return s[k]}}})}},value:function(v){window.__storesSet=v},trigger:function(){}};
 function mk(list){return {each:function(fn){list.forEach(function(e,i){fn.call(e,i,e)})},eq:function(i){return mk([list[i]])},data:function(n){var e=list[0];if(!e)return undefined;if(e.getAttribute('data-w'))return n==='kendoMultiSelect'?ms:null;return n==='kendoGrid'?grid:null}}}
 window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrapper')===0?mk([].slice.call(document.querySelectorAll('[data-w]'))):mk([]); return mk([a]); };

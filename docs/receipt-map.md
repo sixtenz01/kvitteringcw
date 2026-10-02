@@ -112,7 +112,7 @@ TransId: DK7TVRW5F2PC5
 
 ## Ikke i bruk: API-endepunkt
 
-Beslutning: pluginen kaller ikke Lindbaks API. Kun gridets data og iframens DOM leses. Endepunktene er dokumentert for referanse (`JournalUrls.journalApiRoot` + …).
+Beslutning (absolutt): pluginen sender ingen egne kall mot Lindbaks API, heller ikke som valgfri «rask skanning». Kun gridets data og iframens DOM leses. Det håndheves av `extension/test/noapi.test.js` og av at alle ende-til-ende-tester feiler ved kall mot `/Api/`. Endepunktene er dokumentert for referanse (`JournalUrls.journalApiRoot` + …).
 
 `journalApiRoot` er ikke verifisert; finn den med `$http.post`-hook (se under).
 
