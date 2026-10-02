@@ -49,22 +49,6 @@ Komponent: Angular-komponent med `selectedRow` og `loadReceiptDetails` (bundle `
 
 Valgt rad → 500 ms debounce → `journalApi.getReceiptDetails(receiptIdentifier)`. Svar `{requestSucceeded, data}`, der `data` er rendret HTML som skrives til iframen. Cache: 100 kvitteringer (`detailsCache`, nøkkel = `JSON.stringify(receiptIdentifier)`). Signaturer hentes separat (`fetchSignaturesIfPossible`, `signaturesCache`).
 
-## Endepunkt (`JournalUrls.journalApiRoot` + …)
-
-`journalApiRoot` er ikke verifisert; finn den med `$http.post`-hook (se under).
-
-| metode | sti | merknad |
-|---|---|---|
-| POST | `GetReceiptDetails` | body = `receiptIdentifier`; returnerer HTML |
-| POST | `GetReceiptXml` | body = `receiptIdentifier`; strukturert XML, ikke testet |
-| POST | `GetReceiptPdf?receiptIdentifierString=…` | svar med `content` / `fileContents` (base64) |
-| GET | `GetPDFMode` | |
-| POST | `GetReceiptsHeaders/{n}` | liste |
-| POST | `GetNextPrevReceiptHeaders/{n}` | navigering |
-| GET | `GetStores` | |
-| POST | `GetCashiers` | |
-| ? | `getPosUnits` (kasser) | |
-
 ## Kvitterings-HTML (iframe)
 
 Elementer: `STYLE`, `DIV.search-ignore`, `BR`, `TABLE.ReceiptTable`, `TR/TH/TD`, `TD.Subtotal`, `NEWLINE` (egendefinert), `P`.
@@ -80,21 +64,32 @@ Rader observert:
 - MVA-tabell: `MVA-grunnlag | MVA-% | MVA | Sum`
 - Toppteksten (butikk, kasse, kasserer, bongnr) ligger utenfor `<tr>` og er ikke kartlagt.
 
+## Ikke i bruk: API-endepunkt
+
+Beslutning: pluginen kaller ikke Lindbaks API. Kun gridets data og iframens DOM leses. Endepunktene er dokumentert for referanse (`JournalUrls.journalApiRoot` + …).
+
+`journalApiRoot` er ikke verifisert; finn den med `$http.post`-hook (se under).
+
+| metode | sti | merknad |
+|---|---|---|
+| POST | `GetReceiptDetails` | body = `receiptIdentifier`; returnerer HTML |
+| POST | `GetReceiptXml` | body = `receiptIdentifier`; strukturert XML, ikke testet |
+| POST | `GetReceiptPdf?receiptIdentifierString=…` | svar med `content` / `fileContents` (base64) |
+| GET | `GetPDFMode` | |
+| POST | `GetReceiptsHeaders/{n}` | liste |
+| POST | `GetNextPrevReceiptHeaders/{n}` | navigering |
+| GET | `GetStores` | |
+| POST | `GetCashiers` | |
+| ? | `getPosUnits` (kasser) | |
+
 ## Ukjent / neste steg
 
-1. `journalApiRoot` – hook `$http.post`:
-   ```js
-   var h=angular.element(document.body).injector().get('$http'),p=h.post;window.__kvp=[];
-   h.post=function(u,d,c){window.__kvp.push({u:u,d:d});return p.apply(this,arguments)}
-   ```
-   Åpne en ikke-cachet kvittering, les `__kvp[0].u`.
-2. Test `GetReceiptXml` med `__kvh.post(root+'GetReceiptXml', id)`; kartlegg elementnavn.
-3. Kartlegg tom kolonne i varelinjer: bruk kvittering med flere varer, rabatt og retur.
-4. Kartlegg `saleChannel`- og `receiptType`-koder.
-5. Kartlegg toppteksten (butikk, kasse, kasserer, bongnr, medlemsnr).
+1. Kartlegg toppteksten (butikk, kasse, kasserer, bongnr, medlemsnr): `iframe.contentDocument.body.innerText`, første linjer.
+2. Kartlegg tom kolonne i varelinjer: bruk kvittering med flere varer, rabatt og retur.
+3. Kartlegg `saleChannel`- og `receiptType`-koder.
+4. Fastlegg robust parsing av iframen (rader, klasser `ReceiptTable`, `Subtotal`).
 
 ## Risiko
 
-- Intern API og DOM kan endres uten varsel.
-- Bulk-henting kan gi rate limiting; begrens samtidighet.
+- Lindbaks DOM og grid-datamodell kan endres uten varsel; isoler parsing i ett lag med tester.
 - Kvitteringer kan inneholde persondata; ingenting skal forlate enheten.
