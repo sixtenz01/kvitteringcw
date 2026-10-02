@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "Kvitteringshenter",
+  "version": "3.0.0",
+  "description": "Filter, søk, sortering og valg av kvitteringer i Lindbak Chain Web (Kvitteringsjournal).",
+  "minimum_chrome_version": "111",
+  "content_scripts": [
+    {
+      "matches": ["https://chainweb.coop.no/LindbakRetail_1/Journal/*"],
+      "js": ["src/logic.js", "src/content.js"],
+      "css": ["src/panel.css"],
+      "run_at": "document_idle",
+      "world": "MAIN"
+    }
+  ]
+}

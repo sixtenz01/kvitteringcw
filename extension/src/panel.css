@@ -1,0 +1,19 @@
+#kv-panel{position:fixed;top:60px;right:10px;width:300px;max-height:85vh;overflow:auto;z-index:99999;background:#fff;border:1px solid #888;border-radius:4px;box-shadow:0 2px 8px rgba(0,0,0,.3);font:12px/1.3 Verdana,sans-serif;color:#222}
+#kv-panel .kv-head{display:flex;align-items:center;gap:8px;padding:6px 8px;background:#e2e2e2;position:sticky;top:0}
+#kv-panel .kv-head strong{flex:1}
+#kv-panel .kv-badge{font-size:11px;color:#555}
+#kv-panel.kv-collapsed .kv-body{display:none}
+#kv-panel .kv-body{padding:8px}
+#kv-panel .kv-summary{margin-bottom:8px;padding:4px 6px;background:#f4f4f4;border-radius:3px}
+#kv-panel .kv-row{display:flex;gap:6px;margin-bottom:6px;align-items:flex-start}
+#kv-panel .kv-row>*{flex:1;min-width:0}
+#kv-panel .kv-f{display:block;margin-bottom:6px}
+#kv-panel .kv-row .kv-f{margin-bottom:0}
+#kv-panel .kv-f span{display:block;color:#555;margin-bottom:2px}
+#kv-panel .kv-f input,#kv-panel .kv-f select,#kv-panel .kv-row>input,#kv-panel .kv-row>select{width:100%;box-sizing:border-box}
+#kv-panel .kv-c{display:block;margin-bottom:4px}
+#kv-panel .kv-quick{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px}
+#kv-panel .kv-btn{cursor:pointer;padding:3px 6px;border:1px solid #999;background:#f9f9f9;border-radius:3px;font-size:11px}
+#kv-panel .kv-btn:hover{background:#e8e8e8}
+tr.kv-dup>td{background:#fff3cd !important}
+input.kv-cb{margin-right:4px;vertical-align:middle}
