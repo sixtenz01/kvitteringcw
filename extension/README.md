@@ -45,7 +45,14 @@ All lagring (innstillinger, lagrede filtre, regler, skannecache) ligger i en ege
 
 ## Oppbygging av panelet
 
-Faner: **Søk** (CW-søk), **Filter** (lagrede filtre, dato/tid, butikk/kasse/type, sum/medlem/bong/vare, sortering), **Innhold** (skanning, pant, varegrupper), **Rapport**, **Avvik** (innebygde og egne regler), **Eksport**. Aktive filtre vises som chips under tallene og fjernes med ett klikk. Faste knapper nederst: Velg alle, Fjern valg, CSV og PNG (viser antall valgte). Fremdrift og Stopp vises øverst uansett fane.
+Fem faner: **Hent** (søk i hele journalen via CW), **Filtrer** (lagrede filtre, dato/tid, butikk/kasse/kasserer/type som piller, sum, medlem, bong, vare, notat, sortering), **Skann** (skanning, pant, varegrupper), **Analyse** (Rapport, Avvik og Kontroll som delfaner) og **Mer** (eksport og innstillinger).
+
+- **Skannestatus** vises alltid under tallene («Skannet 4 av 5» med «Skann nå»). Filter som krever skanning (pant, vare, varegruppe) viser en gul stripe med hvor mange som mangler. Skanning dekker alle kvitteringer som passerer de andre filtrene, også de som pantfilteret ellers skjuler.
+- **Én statuslinje** øverst viser fremdrift og resultat, og forsvinner av seg selv.
+- **Aktive filtre** vises som chips som fjernes med ett klikk.
+- **⤢** gjør panelet bredt (for rapporter og tabeller). Tabeller har faste overskrifter med forklaring ved hover.
+- **Kontroll** viser et resultatkort først («2 funn · 4 flaggede bonger …») med hopplenker til profil, funn, pant og avstemming. Detaljene skjules til kontrollene er kjørt.
+- Faste knapper nederst: Velg alle, Fjern valg, Sammenlign (ved to valgte), CSV og PNG.
 
 ## Avkrysning, fremdrift og PNG
 
