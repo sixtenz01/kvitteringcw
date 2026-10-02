@@ -148,16 +148,21 @@
     var tbody = grid.tbody && grid.tbody[0];
     if (!tbody) return [];
     var view = grid.dataSource.view();
+    var pos = new Map(), byUid = {};
+    for (var i = 0; i < view.length; i++) {
+      if (!pos.has(view[i])) pos.set(view[i], i);
+      if (view[i] && view[i].uid && byUid[view[i].uid] === undefined) byUid[view[i].uid] = i;
+    }
     var out = [];
     Array.prototype.forEach.call(tbody.children, function (tr) {
       if (tr.tagName !== 'TR') return;
-      var di = grid.dataItem(tr);
+      var vi = byUid[tr.getAttribute('data-uid')];
+      var di = vi !== undefined ? view[vi] : grid.dataItem(tr);
       if (!di) return;
       var item = plain(di);
       var cell = tr.querySelector('td[data-field="receiptIdentifier"]');
       item.bongnr = cell && cell.textContent.trim() ? cell.textContent.trim() : [item.storeNumber, item.workstationNumber, seqOf(item.transactionId)].join('-');
-      var orig = 0;
-      for (var i = 0; i < view.length; i++) { if (view[i] === di || (view[i].uid && view[i].uid === di.uid)) { orig = i; break; } }
+      var orig = pos.has(di) ? pos.get(di) : (di.uid && byUid[di.uid] !== undefined ? byUid[di.uid] : 0);
       out.push({ tr: tr, item: item, orig: orig });
     });
     return out;
@@ -738,6 +743,9 @@
     var sorted = recs.slice().sort(function (a, b) {
       return L.compare(a.item, b.item, filters.sort) || a.orig - b.orig;
     });
+    var cur = tbody.children, same = cur.length === sorted.length;
+    for (var i = 0; same && i < sorted.length; i++) if (cur[i] !== sorted[i].tr) same = false;
+    if (same) return;
     sorted.forEach(function (r) { tbody.appendChild(r.tr); });
   }
 

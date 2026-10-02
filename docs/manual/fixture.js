@@ -32,7 +32,8 @@ const f2 = (n) => n.toFixed(2);
 const r2 = (n) => Math.round(n * 100) / 100;
 const hhmm = (m) => String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
 
-function build() {
+function build(scale) {
+  scale = scale || 1;
   const rnd = rng(20261002);
   const pick = (a) => a[Math.floor(rnd() * a.length)];
   const events = {}; // "store|ws|day" -> [ev]
@@ -74,7 +75,7 @@ function build() {
   const kt = (amt) => T('Kontant tilbake:', f2(amt));
 
   // normale salg
-  const perDay = { '1001|1': 15, '1001|2': 12, '1001|3': 9, '1002|1': 10, '1002|2': 8 };
+  const perDay = { '1001|1': 15 * scale, '1001|2': 12 * scale, '1001|3': 9 * scale, '1002|1': 10 * scale, '1002|2': 8 * scale };
   DAYS.forEach((day) => {
     Object.keys(perDay).forEach((k) => {
       const [store, ws] = k.split('|').map(Number);
@@ -157,7 +158,7 @@ function pageHtml(rows) {
 <button ng-click="vm.applyFilters()" onclick="window.__applied=(window.__applied||0)+1;(window.__bound||[]).forEach(function(f){f()})">Oppdater</button>
 <div class="k-grid-header"><table><colgroup><col><col><col><col><col></colgroup><thead><tr><th>DATO</th><th>KASSERER</th><th>KASSE</th><th>BONGNR</th><th>SUBTOTAL</th></tr></thead></table></div>
 <table id="g" data-role="grid"><colgroup><col><col><col><col><col></colgroup><tbody>
-${rows.map((r) => `<tr data-id="${r.transactionId}"><td></td><td>${r.endDateTime}</td><td data-field="cashierNumber">${r.cashierNumber}</td><td data-field="workstationNumber">${r.workstationNumber}</td><td>${r.transactionId}</td><td>${r.totalAmount === null ? '' : r.totalAmount}</td></tr>`).join('')}
+${rows.map((r, i) => `<tr data-uid="u${i}" data-id="${r.transactionId}"><td></td><td>${r.endDateTime}</td><td data-field="cashierNumber">${r.cashierNumber}</td><td data-field="workstationNumber">${r.workstationNumber}</td><td>${r.transactionId}</td><td>${r.totalAmount === null ? '' : r.totalAmount}</td></tr>`).join('')}
 </tbody></table>
 <div data-w="1"></div><iframe id="rc"></iframe>
 <script>
