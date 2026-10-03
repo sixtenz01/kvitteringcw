@@ -909,4 +909,64 @@ assert.strictEqual(L.groupForReason('Mange avvikende priser'), 'price');
   assert.strictEqual(L.sanitizeControl({}).profShrink, '10');
 }
 
+
+// ---- siste siffer, løpenummer mot tid, retur mot kassadifferanse ----
+{
+  // χ²-fordelingen og Spearman
+  const near = (a, b, e) => Math.abs(a - b) <= e;
+  assert.ok(near(L.chiSqP(16.919, 9), 0.05, 0.0005) && near(L.chiSqP(21.666, 9), 0.01, 0.0002) && near(L.chiSqP(27.877, 9), 0.001, 0.00002) && near(L.chiSqP(3.841, 1), 0.05, 0.0005) && L.chiSqP(0, 5) === 1);
+  assert.deepStrictEqual([L.spearman([1, 2, 3, 4, 5], [5, 4, 3, 2, 1]), L.spearman([1, 2, 3, 4, 5], [10, 20, 30, 40, 50]), L.spearman([1, 1, 1], [1, 2, 3]), L.spearman([1, 2], [1, 2])], [-1, 1, null, null]);
+  assert.ok(near(L.spearman([1, 2, 3, 4], [1, 3, 2, 4]), 0.8, 1e-9));
+  // siste siffer
+  const even = [10, 10, 10, 10, 10, 10, 10, 10, 10, 10];
+  assert.ok(L.lastDigitTest(even.map((x) => x / 2), even).p > 0.99, 'samme fordeling gir høy p');
+  assert.ok(L.lastDigitTest([60, 0, 0, 0, 0, 0, 0, 0, 0, 0], even.map((x) => x / 100)).p < 1e-10, 'andeler fungerer som grunnlag');
+  assert.ok(L.lastDigitTest([60, 0, 0, 0, 0, 0, 0, 0, 0, 0], [20, 20, 20, 20, 20, 20, 20, 20, 20, 20]).p < 1e-10);
+  assert.strictEqual(L.lastDigitTest([0, 0, 0, 0, 0, 0, 0, 0, 0, 0], even), null);
+  const mkN = (cashier, n, f) => { const o = []; for (let i = 0; i < n; i++) o.push({ transactionId: cashier + '-' + i, endDateTime: '2026-10-02 10:00', storeNumber: 1, workstationNumber: 1, cashierNumber: cashier, receiptType: 1, totalAmount: f(i) }); return o; };
+  const dItems = mkN('A', 60, (i) => 100 + i + 0.9 - 0.9 + 0.1 * 0).concat(mkN('B', 100, (i) => 100 + i + (i % 10) / 100), mkN('C', 100, (i) => 200 + i + ((i * 3) % 10) / 100));
+  const dn = L.numbers(dItems, {}, L.defaultControl());
+  const rowOf = (id) => dn.cashiers.find((c) => c.id === id);
+  assert.deepStrictEqual([rowOf('A').flagDigit, rowOf('B').flagDigit, rowOf('C').flagDigit], [true, false, false]);
+  assert.ok(rowOf('A').digitP < 1e-6 && rowOf('B').digitP > 0.001);
+  const dfind = dn.findings.filter((f) => f.code === 'digit');
+  assert.deepStrictEqual(dfind.map((f) => [f.cashier, f.flag, f.title]), [['A', false, 'Avvikende siste siffer']]);
+  assert.match(dfind[0].detail, /Kasserer A: siste siffer i totalbeløpet avviker fra de andre kassererne \(χ² [\d.]+, p < 0,0001, 60 bonger; vanligste siffer 0 hos 100 %\)/);
+  assert.strictEqual(L.numbers(dItems, {}, Object.assign(L.defaultControl(), { digitP: '' })).findings.filter((f) => f.code === 'digit').length, 0);
+  assert.strictEqual(L.numbers(dItems, {}, Object.assign(L.defaultControl(), { digitMin: '70' })).cashiers.find((c) => c.id === 'A').digitP, null);
+  // løpenummer mot tid
+  const mkQ = (n, t, day) => ({ transactionId: '1001-1-' + n, endDateTime: (day || '2026-10-02') + ' ' + t, storeNumber: 1001, workstationNumber: 1, cashierNumber: 'A', receiptType: 1, totalAmount: 10 });
+  const qs = [];
+  for (let i = 0; i < 12; i++) qs.push(mkQ(100 + i, i === 5 ? '09:03' : '14:' + String(i).padStart(2, '0')));
+  for (let i = 0; i < 7; i++) qs.push(mkQ(112 + i, '07:' + String(i).padStart(2, '0'), '2026-10-03'));
+  const dr = L.deletedReceipts(qs, L.defaultControl());
+  assert.deepStrictEqual(dr.findings.filter((f) => f.code === 'seqReg').map((f) => f.ids[0]), ['1001-1-105'], 'bare ett punkt ligger utenfor naboene; dagsskiftet gir ikke treff');
+  assert.match(dr.findings.find((f) => f.code === 'seqReg').detail, /Kasse 1: nr 105 kl 09:03 2026-10-02 ligger 299 min fra de nærmeste nabonumrene \(2026-10-02 14:02 – 2026-10-02 14:08\)/);
+  assert.ok(dr.findings.find((f) => f.code === 'seqReg').flag);
+  assert.strictEqual(L.deletedReceipts(qs, Object.assign(L.defaultControl(), { seqRegMin: '' })).findings.filter((f) => f.code === 'seqReg').length, 0);
+  assert.strictEqual(L.deletedReceipts(qs, Object.assign(L.defaultControl(), { seqRegMin: '400' })).findings.filter((f) => f.code === 'seqReg').length, 0);
+  assert.strictEqual(L.deletedReceipts(qs.slice(0, 4), L.defaultControl()).findings.filter((f) => f.code === 'seqReg').length, 0, 'for få naboer');
+  // retur mot kassadifferanse
+  const cItems = [], cScan = {};
+  const day = (d) => '2026-10-' + String(d + 1).padStart(2, '0');
+  for (let d = 0; d < 10; d++) {
+    ['X', 'Y', 'Z'].forEach((c) => {
+      for (let i = 0; i < 10; i++) {
+        const ret = c === 'X' ? d : c === 'Y' ? 1 : 0;
+        cItems.push({ transactionId: c + d + '-' + i, endDateTime: day(d) + ' 10:' + String(10 + i), storeNumber: 1, workstationNumber: 1, cashierNumber: c, receiptType: 1, totalAmount: i < ret ? -20 : 50 });
+      }
+      const sid = c + d + '-settle', diff = c === 'X' ? -10 * d - 5 : c === 'Y' ? (d % 2 ? -3 : 4) : 0;
+      cItems.push({ transactionId: sid, endDateTime: day(d) + ' 21:00', storeNumber: 1, workstationNumber: 1, cashierNumber: c, receiptType: 2, totalAmount: null });
+      cScan[sid] = { settle: { diff: { sum: diff } } };
+    });
+  }
+  const cr = L.retDiffCorr(cItems, cScan, L.defaultControl());
+  assert.deepStrictEqual(cr.findings.map((f) => [f.cashier, f.flag, f.title]), [['X', false, 'Retur og kassadifferanse henger sammen']]);
+  assert.match(cr.findings[0].detail, /Kasserer X: dager med mange returer har mer minus i kassen \(ρ -1,00 over 10 dager\), differanse totalt -500 kr, returandel 45 % mot butikkens 18 %/);
+  assert.deepStrictEqual(cr.rows.map((r) => [r.id, r.days, r.flag]), [['X', 10, true], ['Y', 10, false], ['Z', 10, false]]);
+  assert.strictEqual(L.retDiffCorr(cItems, cScan, Object.assign(L.defaultControl(), { corrRho: '' })).findings.length, 0);
+  assert.strictEqual(L.retDiffCorr(cItems, cScan, Object.assign(L.defaultControl(), { corrDays: '11' })).findings.length, 0, 'for få dager');
+  assert.strictEqual(L.retDiffCorr(cItems.filter((i) => i.receiptType !== 2), cScan, L.defaultControl()).rows.length, 0, 'uten oppgjør ingen punkter');
+}
+
 console.log('logic: ok');

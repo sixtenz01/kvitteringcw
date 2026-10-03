@@ -1315,13 +1315,14 @@
       price: L.priceDeviation(items, pop, scanMap, ctlCfg),
       ku: L.kuChecks(items, pop, scanMap, ctlCfg),
       ev: L.eventWords(items, scanMap, ctlCfg),
-      ledger: L.ledger(items, pop, scanMap, ctlCfg)
+      ledger: L.ledger(items, pop, scanMap, ctlCfg),
+      corr: L.retDiffCorr(items, scanMap, ctlCfg)
     };
     res.seq.findings = res.seq.findings.filter(function (f) { return f.code === 'hours'; });
     res.seq.skippedGaps = res.deleted.skippedGaps;
     res.findings = res.patterns.concat(res.pant.findings, res.seq.findings, res.falseRet.findings, res.after,
       res.deleted.findings.filter(keep), res.diff.findings.filter(keep), res.numbers.findings.filter(keep), res.disc.findings,
-      res.member.findings, res.price.findings, res.ku.findings, res.ev.findings, res.ledger.findings);
+      res.member.findings, res.price.findings, res.ku.findings, res.ev.findings, res.ledger.findings, res.corr.findings.filter(keep));
     res.cashierExtra = {};
     res.findings.forEach(function (f) {
       if (f.flag) f.ids.forEach(function (id) { if (scopeIds[id]) addFlag(id, f.title); });
@@ -1440,11 +1441,19 @@
       })));
       ui.ctlDiff.appendChild(hintEl('Rødt = minst ' + ctlCfg.diffRepeatN + ' oppgjør med minus fordelt på flere dager, eller minus totalt over ' + ctlCfg.diffTotal + ' kr. Differanser under ' + ctlCfg.diffMin + ' kr telles ikke.'));
     }
+    if (R.corr && R.corr.rows.length) {
+      ui.ctlDiff.appendChild(el('b', { class: 'kvr-subh', text: 'Retur mot kassadifferanse per kasserer' }));
+      ui.ctlDiff.appendChild(tbl(['Kasserer', 'Dager', 'ρ', 'Differanse', 'Returandel'], R.corr.rows.map(function (r) {
+        return [{ node: entLink('kasserer', r.id) }, r.days, { t: r.rho === null ? '–' : r.rho.toFixed(2).replace('.', ','), bad: r.flag }, { t: fmt(r.diff), bad: r.flag }, pct(r.retShare)];
+      })));
+      ui.ctlDiff.appendChild(hintEl('ρ = Spearman-korrelasjon over dager (minst ' + ctlCfg.corrDays + ', med minst 5 salg og et kassaoppgjør) mellom returandel og kassadifferanse. Negativ ρ betyr at dager med flere returer har mer minus. Rødt = ρ under −' + (ctlCfg.corrRho || '–') + ', samlet minus og returandel over butikkens.'));
+    }
     var N = R.numbers, o = N.overall;
     ui.ctlNum.appendChild(hintEl('Benford (første siffer i totalbeløp): ' + o.n + ' bonger · MAD ' + o.mad.toFixed(3) + ' · ' + o.verdict + (o.enough ? '' : ' (for få bonger til en sikker konklusjon; minst ' + ctlCfg.benfordMin + ')') + '. Hele kroner: ' + Math.round(N.storeRound * 100) + ' % av totalene.'));
     if (N.cashiers.length) {
-      ui.ctlNum.appendChild(tbl(['Kasserer', 'Bonger', 'MAD', 'Vurdering', 'Hele kroner'], N.cashiers.map(function (c) {
-        return [{ node: entLink('kasserer', c.id) }, c.n, { t: c.mad.toFixed(3), bad: c.flagBenford }, c.verdict, { t: pct(c.roundShare), bad: c.flagRound }];
+      ui.ctlNum.appendChild(tbl(['Kasserer', 'Bonger', 'MAD', 'Vurdering', 'Hele kroner', 'Siste siffer (p)'], N.cashiers.map(function (c) {
+        return [{ node: entLink('kasserer', c.id) }, c.n, { t: c.mad.toFixed(3), bad: c.flagBenford }, c.verdict, { t: pct(c.roundShare), bad: c.flagRound },
+          { t: c.digitP === null ? '–' : (c.digitP < 0.0001 ? '< 0,0001' : c.digitP.toFixed(4).replace('.', ',')), bad: c.flagDigit }];
       })));
     }
     renderDiscCard(R.disc);

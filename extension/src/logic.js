@@ -837,7 +837,10 @@
     ['evOn', 'Hendelsesord på bong (tom = av)', '1'],
     ['lineTol', 'Linjer mot Totalt: toleranse kr (tom = av)', '0.10'], ['payTol', 'Betaling mot Totalt: toleranse kr (tom = av)', '0.10'],
     ['vatOn', 'MVA-kontroll (tom = av)', '1'], ['vatTol', 'MVA: toleranse kr', '0.10'], ['vatRates', 'Gyldige MVA-satser % (komma)', '0,12,15,25'],
-    ['refDup', 'Samme betalingsreferanse på flere bonger (tom = av)', '1']
+    ['refDup', 'Samme betalingsreferanse på flere bonger (tom = av)', '1'],
+    ['digitMin', 'Siste siffer: minst antall bonger per kasserer', '50'], ['digitP', 'Siste siffer: p under (tom = av)', '0.001'],
+    ['seqRegMin', 'Løpenummer: avvik fra naboene i minutter (tom = av)', '90'],
+    ['corrRho', 'Retur og kassadiff.: ρ under − (tom = av)', '0.5'], ['corrDays', 'Retur og kassadiff.: minst antall dager', '8']
   ];
 
   // Innstillinger gruppert per test (brukes av Innstillinger-siden).
@@ -871,19 +874,24 @@
     ], weights: ['Salg etter kassaoppgjør'] },
     { id: 'deleted', title: 'Slettede bonger (bongnummer)', text: 'Hull, dobbelte og feil rekkefølge i bongnummer. Gjelder bare hvis CW-listen ikke er filtrert på type, kasse eller tid.', fields: [
       sf('maxGap', 'ctl', 'num', 'Størst hull som regnes som slettede bonger', 'stk', 'Større hull hoppes over, de skyldes oftest filtrering.', true)
-    ], weights: ['Hull i bongnummer', 'Bongnummer og tid stemmer ikke', 'Dobbelt bongnummer'] },
+      ,sf('seqRegMin', 'ctl', 'num', 'Løpenummer: avvik fra naboene', 'min', 'Tidspunktet ligger så langt utenfor tidene til de tre nabonumrene på hver side.', true)
+    ], weights: ['Hull i bongnummer', 'Bongnummer og tid stemmer ikke', 'Dobbelt bongnummer', 'Løpenummer avviker fra tid'] },
     { id: 'diff', title: 'Kassadifferanse over tid', text: 'Gjentatte minusdifferanser per kasserer og kasse.', fields: [
       sf('diffMin', 'ctl', 'num', 'Differanser telles fra', 'kr'),
       sf('diffRepeatN', 'ctl', 'num', 'Minus i minst', 'oppgjør', 'Fordelt på minst to dager.', true),
-      sf('diffTotal', 'ctl', 'num', 'Eller minus totalt over', 'kr', '', true)
-    ], weights: ['Gjentatte kassadifferanser'] },
+      sf('diffTotal', 'ctl', 'num', 'Eller minus totalt over', 'kr', '', true),
+      sf('corrRho', 'ctl', 'num', 'Retur og kassadifferanse: ρ under −', '', 'Spearman-korrelasjon over dager mellom kassererens returandel og kassadifferanse. Negativ = flere returer og mer minus.', true),
+      sf('corrDays', 'ctl', 'num', 'Retur og kassadifferanse: minst antall dager', 'dager', 'Dager med minst 5 salg og et kassaoppgjør.')
+    ], weights: ['Gjentatte kassadifferanser', 'Retur og kassadifferanse henger sammen'] },
     { id: 'numbers', title: 'Tallanalyse', text: 'Benford (første siffer i totalbeløp) og andel hele kroner. Indikasjon, ikke bevis.', fields: [
       sf('benfordMin', 'ctl', 'num', 'Benford: minst antall bonger', 'stk'),
       sf('benfordCashMin', 'ctl', 'num', 'Benford: minst per kasserer', 'stk'),
       sf('benfordMad', 'ctl', 'num', 'Benford: avvik (MAD) over', '', 'Nigrini: over 0,015 er avvikende.'),
       sf('roundShare', 'ctl', 'num', 'Hele kroner: andel over', '%', '', true),
-      sf('roundMinN', 'ctl', 'num', 'Hele kroner: minst antall bonger', 'stk')
-    ], weights: ['Avvikende sifferfordeling', 'Mange runde beløp'] },
+      sf('roundMinN', 'ctl', 'num', 'Hele kroner: minst antall bonger', 'stk'),
+      sf('digitMin', 'ctl', 'num', 'Siste siffer: minst antall bonger per kasserer', 'stk', 'Siste siffer i totalbeløpet (ører) sammenlignes med de andre kassererne.'),
+      sf('digitP', 'ctl', 'num', 'Siste siffer: p under', '', 'Signifikansgrense for χ²-testen. 0,001 gir sjelden falsk alarm.', true)
+    ], weights: ['Avvikende sifferfordeling', 'Mange runde beløp', 'Avvikende siste siffer'] },
     { id: 'disc', title: 'Rabatt', text: 'Rabatt uten årsak, overvåkede årsaker (tekstnr 1 Datovare, 2 Feil pris, 3 Prisløfte, 4 Reserveløsning kupong, 5 Annen rabattårsak, 6 Best før) og sammenligning av kasserere.', fields: [
       sf('discPct', 'ctl', 'num', 'Rabatt uten årsak fra', '%', 'Flagger bongen når en rabattlinje uten årsak er minst dette.', true),
       sf('discCash', 'ctl', 'flag', 'Sammenlign kasserere (rabatt uten årsak)', '', 'Markerer kasserere som ligger over butikksnittet (se Kassererprofil).'),
@@ -1235,7 +1243,8 @@
     'Medlem i flere butikker samtidig': 4, 'Medlemsnr flere ganger samme dag': 2, 'Medlemsnr brukt svært mye': 2, 'Medlemsnr nesten bare hos én kasserer': 3,
     'Ansatt-medlemsnr brukt': 2, 'Kasserer bruker eget medlemsnr': 5, 'Avvikende pris på vare': 3, 'Mange avvikende priser': 3,
     'Medlem uten kjøpeutbytte': 2, 'Kjøpeutbytte avviker fra varesum': 2, 'Hendelsesord på bong': 2,
-    'Linjer stemmer ikke med totalen': 4, 'Betaling stemmer ikke med totalen': 4, 'MVA stemmer ikke': 3, 'Ugyldig MVA-sats': 4, 'Samme betalingsreferanse på flere bonger': 4
+    'Linjer stemmer ikke med totalen': 4, 'Betaling stemmer ikke med totalen': 4, 'MVA stemmer ikke': 3, 'Ugyldig MVA-sats': 4, 'Samme betalingsreferanse på flere bonger': 4,
+    'Avvikende siste siffer': 2, 'Løpenummer avviker fra tid': 3, 'Retur og kassadifferanse henger sammen': 4
   };
 
   function sanitizeWeights(raw) {
@@ -1511,6 +1520,26 @@
           ids: [a.it.transactionId, b.it.transactionId], missing: gap });
       }
     });
+    var regMin = cnum(cfg.seqRegMin, null);
+    if (regMin !== null) {
+      Object.keys(byK).forEach(function (k) {
+        var kasse = k.split('|')[1], seenN = {}, u = [];
+        byK[k].slice().sort(function (a, b) { return a.n - b.n; }).forEach(function (x) { if (!seenN[x.n]) { seenN[x.n] = true; u.push(x); } });
+        for (var i = 0; i < u.length; i++) {
+          var win = [];
+          for (var j = Math.max(0, i - 3); j <= Math.min(u.length - 1, i + 3); j++) if (j !== i) { var t = tsMin(u[j].it); if (t !== null) win.push(t); }
+          var ti = tsMin(u[i].it);
+          if (ti === null || win.length < 4) continue;
+          var lo = Math.min.apply(null, win), hi = Math.max.apply(null, win);
+          if (ti < lo - regMin || ti > hi + regMin) {
+            var off = Math.round(ti < lo ? lo - ti : ti - hi), iso = function (m) { return new Date(m * 60000).toISOString().slice(0, 16).replace('T', ' '); };
+            findings.push({ kind: 'Slettede bonger', code: 'seqReg', title: 'Løpenummer avviker fra tid', flag: true,
+              detail: 'Kasse ' + kasse + ': nr ' + u[i].n + ' kl ' + parseDT(u[i].it.endDateTime).time + ' ' + parseDT(u[i].it.endDateTime).date + ' ligger ' + off + ' min fra de nærmeste nabonumrene (' + iso(lo) + ' – ' + iso(hi) + ')',
+              ids: [u[i].it.transactionId] });
+          }
+        }
+      });
+    }
     return { findings: findings, skippedGaps: skipped };
   }
 
@@ -1545,6 +1574,36 @@
     return { rows: rows, findings: findings };
   }
 
+  // Retur og kassadifferanse: henger kassererens returandel per dag sammen med differansen i kassaoppgjøret?
+  function retDiffCorr(items, scanMap, cfg) {
+    var rho = cnum(cfg.corrRho, null), minDays = cnum(cfg.corrDays, 8), days = {}, sales = 0, rets = 0;
+    var res = { findings: [], rows: [] };
+    items.forEach(function (it) {
+      var d = dayOf(it);
+      if (!d) return;
+      var c = String(it.cashierNumber), e = (days[c] = days[c] || {})[d] = days[c][d] || { n: 0, ret: 0, diff: null };
+      if (isSale(it)) { e.n++; sales++; if (it.totalAmount < 0) { e.ret++; rets++; } }
+      else if (it.receiptType === 2) {
+        var sc = scanMap && scanMap[it.transactionId];
+        if (sc && sc.settle) e.diff = (e.diff || 0) + (sc.settle.diff.sum || 0);
+      }
+    });
+    var storeShare = sales ? rets / sales : 0;
+    Object.keys(days).sort(numCmp).forEach(function (c) {
+      var pts = Object.keys(days[c]).map(function (d) { return days[c][d]; }).filter(function (e) { return e.n >= 5 && e.diff !== null; });
+      var n = pts.reduce(function (a, e) { return a + e.n; }, 0), r = pts.reduce(function (a, e) { return a + e.ret; }, 0), diff = round2(pts.reduce(function (a, e) { return a + e.diff; }, 0));
+      var row = { id: c, days: pts.length, rho: null, diff: diff, retShare: n ? r / n : 0, flag: false };
+      if (pts.length >= minDays) row.rho = spearman(pts.map(function (e) { return e.ret / e.n; }), pts.map(function (e) { return e.diff; }));
+      if (rho !== null && row.rho !== null && row.rho <= -rho && diff < 0 && row.retShare >= storeShare) {
+        row.flag = true;
+        res.findings.push({ kind: 'Kassadifferanse', code: 'retDiff', title: 'Retur og kassadifferanse henger sammen', flag: false, cashier: c, ids: [],
+          detail: 'Kasserer ' + c + ': dager med mange returer har mer minus i kassen (ρ ' + row.rho.toFixed(2).replace('.', ',') + ' over ' + pts.length + ' dager), differanse totalt ' + diff + ' kr, returandel ' + Math.round(row.retShare * 100) + ' % mot butikkens ' + Math.round(storeShare * 100) + ' %' });
+      }
+      if (pts.length) res.rows.push(row);
+    });
+    return res;
+  }
+
   // Benford (første siffer) og runde beløp.
   function firstDigit(x) {
     var t = Math.abs(x).toFixed(2).replace('.', '').replace(/^0+/, '');
@@ -1561,6 +1620,72 @@
     return { n: n, counts: counts, actual: actual, expected: expected, mad: mad, verdict: verdict };
   }
 
+  // ---- små statistikkfunksjoner -------------------------------------------------------------
+  function lgamma(x) {
+    var c = [0.99999999999980993, 676.5203681218851, -1259.1392167224028, 771.32342877765313, -176.61502916214059, 12.507343278686905, -0.13857109526572012, 9.9843695780195716e-6, 1.5056327351493116e-7];
+    x -= 1;
+    var a = c[0], t = x + 7.5;
+    for (var i = 1; i < 9; i++) a += c[i] / (x + i);
+    return 0.5 * Math.log(2 * Math.PI) + (x + 0.5) * Math.log(t) - t + Math.log(a);
+  }
+
+  // Øvre regularisert ufullstendig gamma Q(a, x).
+  function gammaQ(a, x) {
+    if (x <= 0) return 1;
+    var gln = lgamma(a), i;
+    if (x < a + 1) {
+      var ap = a, sum = 1 / a, del = sum;
+      for (i = 0; i < 300; i++) { ap++; del *= x / ap; sum += del; if (Math.abs(del) < Math.abs(sum) * 1e-13) break; }
+      return 1 - sum * Math.exp(-x + a * Math.log(x) - gln);
+    }
+    var b = x + 1 - a, c = 1 / 1e-30, d = 1 / b, h = d;
+    for (i = 1; i <= 300; i++) {
+      var an = -i * (i - a);
+      b += 2; d = an * d + b; if (Math.abs(d) < 1e-30) d = 1e-30;
+      c = b + an / c; if (Math.abs(c) < 1e-30) c = 1e-30;
+      d = 1 / d;
+      var dl = d * c; h *= dl;
+      if (Math.abs(dl - 1) < 1e-13) break;
+    }
+    return Math.exp(-x + a * Math.log(x) - gln) * h;
+  }
+
+  // p-verdi for χ² med df frihetsgrader.
+  function chiSqP(x, df) { return df > 0 ? Math.max(0, Math.min(1, gammaQ(df / 2, x / 2))) : 1; }
+
+  function ranks(a) {
+    var idx = a.map(function (v, i) { return [v, i]; }).sort(function (x, y) { return x[0] - y[0]; }), r = new Array(a.length), i = 0;
+    while (i < idx.length) {
+      var j = i;
+      while (j + 1 < idx.length && idx[j + 1][0] === idx[i][0]) j++;
+      for (var k = i; k <= j; k++) r[idx[k][1]] = (i + j) / 2 + 1;
+      i = j + 1;
+    }
+    return r;
+  }
+
+  // Spearman rangkorrelasjon. null hvis færre enn 3 punkter eller ingen variasjon.
+  function spearman(x, y) {
+    var n = x.length;
+    if (n < 3 || y.length !== n) return null;
+    var rx = ranks(x), ry = ranks(y), mx = (n + 1) / 2, sxy = 0, sxx = 0, syy = 0;
+    for (var i = 0; i < n; i++) { sxy += (rx[i] - mx) * (ry[i] - mx); sxx += (rx[i] - mx) * (rx[i] - mx); syy += (ry[i] - mx) * (ry[i] - mx); }
+    return sxx && syy ? sxy / Math.sqrt(sxx * syy) : null;
+  }
+
+  // Siste siffer (ører) i totalbeløpet: homogenitetstest mot de andre kassererne.
+  function lastDigitTest(counts, others) {
+    var n = counts.reduce(function (a, b) { return a + b; }, 0), no = others.reduce(function (a, b) { return a + b; }, 0);
+    if (!n || !no) return null;
+    var chi = 0, bins = 0, pool = { o: 0, e: 0 };
+    for (var d = 0; d < 10; d++) {
+      var e = n * others[d] / no;
+      if (e >= 5) { chi += (counts[d] - e) * (counts[d] - e) / e; bins++; } else { pool.o += counts[d]; pool.e += e; }
+    }
+    if (pool.e > 0) { chi += (pool.o - pool.e) * (pool.o - pool.e) / pool.e; bins++; }
+    return bins > 1 ? { chi: chi, df: bins - 1, p: chiSqP(chi, bins - 1) } : null;
+  }
+
   function numbers(items, scanMap, cfg) {
     var minAll = cnum(cfg.benfordMin, 100), minCash = cnum(cfg.benfordCashMin, 50), madLimit = cnum(cfg.benfordMad, 0.015);
     var rShare = cnum(cfg.roundShare, null), rMin = cnum(cfg.roundMinN, 20);
@@ -1571,9 +1696,35 @@
     sales.forEach(function (it) { groupInto(by, String(it.cashierNumber), it); });
     var round = function (arr) { return arr.length ? arr.filter(function (it) { return Math.round(it.totalAmount * 100) % 100 === 0; }).length / arr.length : 0; };
     var storeRound = round(sales), findings = [];
+    var digitMin = cnum(cfg.digitMin, 50), digitP = cnum(cfg.digitP, null), pooled = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], dig = {};
+    sales.forEach(function (it) {
+      var d = Math.round(it.totalAmount * 100) % 10;
+      pooled[d]++;
+      (dig[it.cashierNumber] = dig[it.cashierNumber] || [0, 0, 0, 0, 0, 0, 0, 0, 0, 0])[d]++;
+    });
+    // Normalfordeling = median over kassererne av hvert siffers andel (robust mot at én kasserer avviker). Krever minst tre kasserere.
+    var elig = Object.keys(dig).filter(function (c) { return dig[c].reduce(function (a, b) { return a + b; }, 0) >= digitMin; }), digitBase = null;
+    if (elig.length >= 3) {
+      digitBase = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(function (d) { return median(elig.map(function (c) { return dig[c][d] / dig[c].reduce(function (a, b) { return a + b; }, 0); })); });
+      var bs = digitBase.reduce(function (a, b) { return a + b; }, 0);
+      digitBase = bs > 0 ? digitBase.map(function (v) { return v / bs; }) : null;
+    }
     var cashiers = Object.keys(by).sort(numCmp).map(function (id) {
       var arr = by[id], b = benfordStats(arr.map(function (it) { return it.totalAmount; }));
-      var row = { id: id, n: arr.length, mad: b.mad, verdict: b.verdict, roundShare: round(arr), flagBenford: false, flagRound: false };
+      var row = { id: id, n: arr.length, mad: b.mad, verdict: b.verdict, roundShare: round(arr), flagBenford: false, flagRound: false, digitP: null, flagDigit: false };
+      var dc = dig[id];
+      if (dc && digitBase && arr.length >= digitMin) {
+        var dt = lastDigitTest(dc, digitBase);
+        if (dt) {
+          row.digitP = dt.p;
+          if (digitP !== null && dt.p < digitP) {
+            row.flagDigit = true;
+            var top = dc.indexOf(Math.max.apply(null, dc));
+            findings.push({ kind: 'Tallanalyse', code: 'digit', title: 'Avvikende siste siffer', flag: false, cashier: id, ids: [],
+              detail: 'Kasserer ' + id + ': siste siffer i totalbeløpet avviker fra de andre kassererne (χ² ' + dt.chi.toFixed(1) + ', p ' + (dt.p < 0.0001 ? '< 0,0001' : dt.p.toFixed(4).replace('.', ',')) + ', ' + arr.length + ' bonger; vanligste siffer ' + top + ' hos ' + Math.round(dc[top] / arr.length * 100) + ' %)' });
+          }
+        }
+      }
       if (b.n >= minCash && b.mad > madLimit) {
         row.flagBenford = true;
         findings.push({ kind: 'Tallanalyse', code: 'benford', title: 'Avvikende sifferfordeling', flag: false, cashier: id, ids: [],
@@ -2162,6 +2313,10 @@
     afterSettlement: afterSettlement,
     deletedReceipts: deletedReceipts,
     diffTrend: diffTrend,
+    retDiffCorr: retDiffCorr,
+    chiSqP: chiSqP,
+    spearman: spearman,
+    lastDigitTest: lastDigitTest,
     benfordStats: benfordStats,
     firstDigit: firstDigit,
     numbers: numbers,
