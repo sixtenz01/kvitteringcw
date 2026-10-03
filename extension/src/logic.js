@@ -834,7 +834,10 @@
     ['priceDevPct', 'Pris avviker fra vanlig pris ≥ % (tom = av)', '10'], ['priceMinN', 'Pris: minst antall salg av varen per butikk og dag', '5'],
     ['priceCashN', 'Pris: kasserer ved ≥ antall avvik (tom = av)', '3'],
     ['kuMissing', 'Medlem uten kjøpeutbytte (tom = av)', '1'], ['kuDiffPct', 'Kjøpeutbytte-grunnlag avviker ≥ % (tom = av)', '25'], ['kuDiffKr', 'Kjøpeutbytte-grunnlag avviker ≥ kr', '20'],
-    ['evOn', 'Hendelsesord på bong (tom = av)', '1']
+    ['evOn', 'Hendelsesord på bong (tom = av)', '1'],
+    ['lineTol', 'Linjer mot Totalt: toleranse kr (tom = av)', '0.10'], ['payTol', 'Betaling mot Totalt: toleranse kr (tom = av)', '0.10'],
+    ['vatOn', 'MVA-kontroll (tom = av)', '1'], ['vatTol', 'MVA: toleranse kr', '0.10'], ['vatRates', 'Gyldige MVA-satser % (komma)', '0,12,15,25'],
+    ['refDup', 'Samme betalingsreferanse på flere bonger (tom = av)', '1']
   ];
 
   // Innstillinger gruppert per test (brukes av Innstillinger-siden).
@@ -910,6 +913,14 @@
     { id: 'events', title: 'Hendelsesord', text: 'Tekstlinjer på bongen med ord som annullert, makulert, parkert, manuell eller spør pris. Slike hendelser er ikke observert ennå; testen fanger dem når de dukker opp. Se Diagnostikk for ukjente linjer.', fields: [
       sf('evOn', 'ctl', 'flag', 'Test på', '', 'Ord: annull, makul, storn, parker, på vent, manuell, spør pris, overstyr, prisendring, kansell, avbrutt.')
     ], weights: ['Hendelsesord på bong'] },
+    { id: 'ledger', title: 'Bongen går opp, MVA og betalingsreferanse', text: 'Regnskapet på hver bong: linjene mot Totalt, betalingene mot Totalt, MVA-tabellen, og samme betalingsreferanse på flere bonger. Krever skanning (ny skanning). Hver kontroll kalibrerer seg mot de skannede bongene.', fields: [
+      sf('lineTol', 'ctl', 'num', 'Linjer mot Totalt: toleranse', 'kr', 'Summen av varelinjene (etter rabatt, pluss øreavrunding) skal være lik Totalt.', true),
+      sf('payTol', 'ctl', 'num', 'Betaling mot Totalt: toleranse', 'kr', 'Betalinger minus kontant tilbake skal være lik Totalt.', true),
+      sf('vatOn', 'ctl', 'flag', 'MVA-kontroll', '', 'Sjekker MVA-tabellen: grunnlag × sats = MVA, grunnlag + MVA = sum, sum = Totalt, og at satsen er gyldig.'),
+      sf('vatTol', 'ctl', 'num', 'MVA: toleranse', 'kr'),
+      sf('vatRates', 'ctl', 'text', 'Gyldige MVA-satser (%, komma)', '', 'Standard for Norge: 0, 12, 15 og 25.'),
+      sf('refDup', 'ctl', 'flag', 'Samme betalingsreferanse på flere bonger', '', 'TransId gjelder alle bonger; Referanse gjelder bare samme kasse og dag.')
+    ], weights: ['Linjer stemmer ikke med totalen', 'Betaling stemmer ikke med totalen', 'MVA stemmer ikke', 'Ugyldig MVA-sats', 'Samme betalingsreferanse på flere bonger'] },
     { id: 'pant', title: 'Pant', text: 'Pantelapp-sjekk per dag og gjentatte pantebeløp.', fields: [
       sf('pantRepeatN', 'ctl', 'num', 'Samme pantebeløp: flagg ved', 'stk', '', true),
       sf('pantMin', 'ctl', 'num', 'Pantebeløp er minst', 'kr'),
@@ -1219,7 +1230,8 @@
     'Avvikende sifferfordeling': 2, 'Mange runde beløp': 2, 'Rabatt uten årsak': 3, 'Mange rabatter uten årsak': 2, 'Rabatt med overvåket årsak': 3, 'Mange rabatter med overvåket årsak': 3,
     'Medlem i flere butikker samtidig': 4, 'Medlemsnr flere ganger samme dag': 2, 'Medlemsnr brukt svært mye': 2, 'Medlemsnr nesten bare hos én kasserer': 3,
     'Ansatt-medlemsnr brukt': 2, 'Kasserer bruker eget medlemsnr': 5, 'Avvikende pris på vare': 3, 'Mange avvikende priser': 3,
-    'Medlem uten kjøpeutbytte': 2, 'Kjøpeutbytte avviker fra varesum': 2, 'Hendelsesord på bong': 2
+    'Medlem uten kjøpeutbytte': 2, 'Kjøpeutbytte avviker fra varesum': 2, 'Hendelsesord på bong': 2,
+    'Linjer stemmer ikke med totalen': 4, 'Betaling stemmer ikke med totalen': 4, 'MVA stemmer ikke': 3, 'Ugyldig MVA-sats': 4, 'Samme betalingsreferanse på flere bonger': 4
   };
 
   function sanitizeWeights(raw) {
@@ -1885,6 +1897,108 @@
     return { n: diffs.length, same: same, median: med, suggest: diffs.length >= 5 && Math.abs(med) >= 30 && near >= 0.7 * diffs.length ? med : null, sample: sample };
   }
 
+  // ---- bongregnskap: Totalt, betaling, MVA og betalingsreferanse ---------------------------
+  function vatRates(cfg) {
+    return String((cfg && cfg.vatRates) || '').split(/[;,\s]+/).filter(Boolean).map(function (x) { return Number(x.replace(',', '.')); }).filter(function (x) { return isFinite(x); });
+  }
+
+  function money(n) { return (Math.round(n * 100) / 100).toFixed(2); }
+
+  // Kontrollerer at hver bong går opp. Kalibrerer seg: er under 80 % av minst 10 skannede bonger konsistente,
+  // antas en annen regnskapsmåte på bongen, og avvik regnes ikke som funn. Bare v5-skanninger har Totalt, MVA og referanser.
+  function ledger(items, pop, scanMap, cfg) {
+    var res = { findings: [], sales: 0, scanned: 0, withTot: 0, lines: { n: 0, ok: 0, applicable: false }, pay: { n: 0, ok: 0, applicable: false },
+      vat: { n: 0, ok: 0, applicable: false, tables: 0 }, refs: { n: 0, dup: 0 }, coverage: 1 };
+    var lineTol = cnum(cfg.lineTol, null), payTol = cnum(cfg.payTol, null), vatOn = hasNum(cfg.vatOn), vatTol = cnum(cfg.vatTol, 0.1), rates = vatRates(cfg), refOn = hasNum(cfg.refDup);
+    var scope = {};
+    items.forEach(function (it) { scope[it.transactionId] = true; });
+    var rows = [];
+    pop.forEach(function (it) {
+      if (!isSale(it)) return;
+      res.sales++;
+      var sc = scanMap && scanMap[it.transactionId];
+      if (!hasV5(sc)) return;
+      res.scanned++;
+      var r = { it: it, sc: sc, S: null, P: null, lineOK: null, payOK: null, vatOK: null, vatBad: [], rateBad: [] };
+      var rnd = typeof sc.rnd === 'number' ? sc.rnd : 0;
+      if (typeof sc.tot === 'number') {
+        res.withTot++;
+        var tol = lineTol === null ? 0.1 : lineTol, ptol = payTol === null ? 0.1 : payTol;
+        if (!sc.trunc && sc.items.length) {
+          r.S = round2(sc.items.reduce(function (a, l) { return a + l.a; }, 0));
+          r.lineOK = Math.abs(r.S - sc.tot) <= tol || Math.abs(r.S + rnd - sc.tot) <= tol;
+        }
+        var labels = Object.keys(sc.pay || {});
+        if (labels.length) {
+          r.P = round2(labels.reduce(function (a, k) { return a + (k === 'Kontant tilbake' ? -sc.pay[k] : sc.pay[k]); }, 0));
+          r.payOK = Math.abs(r.P - sc.tot) <= ptol || Math.abs(r.P - sc.tot - rnd) <= ptol || Math.abs(r.P + rnd - sc.tot) <= ptol;
+        }
+        if (sc.mv && sc.mv.length) {
+          var vs = sc.mv.reduce(function (a, v) { return a + (typeof v.s === 'number' ? v.s : 0); }, 0);
+          var hasS = sc.mv.every(function (v) { return typeof v.s === 'number'; });
+          r.vatOK = true;
+          sc.mv.forEach(function (v) {
+            if (typeof v.m === 'number' && typeof v.r === 'number' && Math.abs(v.m - v.g * v.r / 100) > vatTol) { r.vatOK = false; r.vatBad.push('MVA ' + money(v.m) + ' mot grunnlag ' + money(v.g) + ' × ' + v.r + ' % = ' + money(v.g * v.r / 100)); }
+            if (typeof v.m === 'number' && typeof v.s === 'number' && Math.abs(v.g + v.m - v.s) > vatTol) { r.vatOK = false; r.vatBad.push('grunnlag ' + money(v.g) + ' + MVA ' + money(v.m) + ' ≠ sum ' + money(v.s)); }
+            if (typeof v.r === 'number' && rates.length && rates.indexOf(v.r) === -1) r.rateBad.push(v.r);
+          });
+          if (hasS && (Math.abs(vs - sc.tot) > Math.max(vatTol, 0) + Math.abs(rnd) + 0.001 * sc.mv.length)) { r.vatOK = false; r.vatBad.push('MVA-tabellens sum ' + money(vs) + ' mot Totalt ' + money(sc.tot)); }
+        }
+      }
+      rows.push(r);
+    });
+    res.coverage = res.sales ? res.scanned / res.sales : 1;
+    var cal = function (key, f) {
+      var ev = rows.filter(function (r) { return r[f] !== null; });
+      var ok = ev.filter(function (r) { return r[f]; }).length;
+      res[key].n = ev.length; res[key].ok = ok; res[key].applicable = ev.length >= 10 && ok / ev.length >= 0.8;
+    };
+    cal('lines', 'lineOK'); cal('pay', 'payOK'); cal('vat', 'vatOK');
+    res.vat.tables = rows.filter(function (r) { return r.sc.mv && r.sc.mv.length; }).length;
+    rows.forEach(function (r) {
+      if (!scope[r.it.transactionId]) return;
+      var id = r.it.transactionId;
+      if (lineTol !== null && res.lines.applicable && r.lineOK === false) {
+        res.findings.push({ kind: 'Regnskap', code: 'lineSum', title: 'Linjer stemmer ikke med totalen', flag: true,
+          detail: whereText(r.it) + ': linjene summerer til ' + money(r.S) + ' kr, Totalt er ' + money(r.sc.tot) + ' kr (differanse ' + money(r.S - r.sc.tot) + ')', ids: [id] });
+      }
+      if (payTol !== null && res.pay.applicable && r.payOK === false) {
+        res.findings.push({ kind: 'Regnskap', code: 'paySum', title: 'Betaling stemmer ikke med totalen', flag: true,
+          detail: whereText(r.it) + ': betalt netto ' + money(r.P) + ' kr, Totalt er ' + money(r.sc.tot) + ' kr (differanse ' + money(r.P - r.sc.tot) + ')', ids: [id] });
+      }
+      if (vatOn && res.vat.applicable && r.vatOK === false) {
+        res.findings.push({ kind: 'Regnskap', code: 'vatSum', title: 'MVA stemmer ikke', flag: true, detail: whereText(r.it) + ': ' + r.vatBad.join('; '), ids: [id] });
+      }
+      if (vatOn && r.rateBad.length) {
+        res.findings.push({ kind: 'Regnskap', code: 'vatRate', title: 'Ugyldig MVA-sats', flag: true,
+          detail: whereText(r.it) + ': sats ' + r.rateBad.join(', ') + ' % (gyldige: ' + rates.join(', ') + ')', ids: [id] });
+      }
+    });
+    if (refOn) {
+      var by = {};
+      rows.forEach(function (r) {
+        (r.sc.rf || []).forEach(function (x) {
+          var v = x.slice(2);
+          if (v.length < 4) return;
+          res.refs.n++;
+          var key = x.charAt(0) === 'T' ? x : x + '|' + r.it.storeNumber + '|' + r.it.workstationNumber + '|' + dayOf(r.it);
+          (by[key] = by[key] || { ref: x, list: [] }).list.push(r.it);
+        });
+      });
+      Object.keys(by).forEach(function (k) {
+        var g = by[k], uniq = {};
+        g.list.forEach(function (it) { uniq[it.transactionId] = it; });
+        var l = Object.keys(uniq).map(function (i) { return uniq[i]; });
+        if (l.length < 2) return;
+        res.refs.dup++;
+        res.findings.push({ kind: 'Regnskap', code: 'refDup', title: 'Samme betalingsreferanse på flere bonger', flag: true,
+          detail: 'Referanse ' + g.ref.slice(2) + ' (' + (g.ref.charAt(0) === 'T' ? 'TransId' : 'Referanse') + ') på ' + l.length + ' bonger: ' + l.map(function (it) { return 'kasse ' + it.workstationNumber + ' ' + parseDT(it.endDateTime).time; }).join(', '),
+          ids: l.map(function (it) { return it.transactionId; }) });
+      });
+    }
+    return res;
+  }
+
   // Samler ukjente linjer og hendelsesord fra alle skanninger, til diagnostikk-dialogen.
   function diagnostics(scanMap) {
     var d = { total: 0, v4: 0, unk: {}, ev: {}, ku: { with: 0, without: 0 }, types: {} };
@@ -2011,6 +2125,7 @@
     priceDeviation: priceDeviation,
     kuChecks: kuChecks,
     eventWords: eventWords,
+    ledger: ledger,
     diagnostics: diagnostics,
     median: median,
     SETTING_GROUPS: SETTING_GROUPS,

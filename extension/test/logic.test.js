@@ -805,4 +805,91 @@ assert.strictEqual(L.groupForReason('Mange avvikende priser'), 'price');
   assert.strictEqual(L.headerSeq('ingenting'), null);
 }
 
+
+// ---- bongregnskap: Totalt, betaling, MVA og betalingsreferanse ----
+{
+  const T = (a, c) => [a, '', c];
+  const f2 = (n) => n.toFixed(2);
+  let seq = 0;
+  const mkRows = (o) => {
+    const rows = o.lines.map((a, i) => T(`70000000000${i + 1} VARE ${i + 1}`, f2(a)));
+    rows.push(['', 'Totalt', f2(o.tot)]);
+    if (o.rnd !== undefined) rows.push(['Øreavrunding', f2(o.rnd)]);
+    Object.keys(o.pay || {}).forEach((k) => rows.push(T(k + ':', f2(o.pay[k]))));
+    (o.rf || []).forEach((r) => rows.push([r]));
+    if (o.mva) { rows.push(['MVA-grunnlag', 'MVA-%', 'MVA', 'Sum']); o.mva.forEach((v) => rows.push([f2(v[0]), v[1] + ' %', f2(v[2]), f2(v[3])])); }
+    return rows;
+  };
+  const mk = (o) => {
+    const id = '1001-1-' + (++seq);
+    const it = { transactionId: id, endDateTime: o.time || '2026-10-02 10:' + String(10 + (seq % 40)), storeNumber: 1001, workstationNumber: o.ws || 1, cashierNumber: '10', totalAmount: o.tot, receiptType: 1 };
+    return { it, sc: L.parseReceipt(mkRows(o)) };
+  };
+  const good = (i) => mk({ lines: [100 + i, 20], tot: 120 + i, pay: { Bank: 120 + i }, mva: [[96 + i * 0.8, 25, 24 + i * 0.2, 120 + i]] });
+  // 25 % MVA: grunnlag = total/1,25
+  const vatOf = (tot) => [[Math.round(tot / 1.25 * 100) / 100, 25, Math.round((tot - tot / 1.25) * 100) / 100, tot]];
+  const base = []; for (let i = 0; i < 12; i++) base.push(mk({ lines: [100 + i, 20], tot: 120 + i, pay: { Bank: 120 + i }, mva: vatOf(120 + i) }));
+  const badLine = mk({ lines: [100, 150], tot: 250, pay: { Bank: 250 }, mva: vatOf(250) }); badLine.sc = L.parseReceipt(mkRows({ lines: [100, 132], tot: 250, pay: { Bank: 250 }, mva: vatOf(250) }));
+  const badPay = mk({ lines: [100, 20], tot: 120, pay: { Bank: 100 }, mva: vatOf(120) });
+  const badVat = mk({ lines: [100, 20], tot: 120, pay: { Bank: 120 }, mva: [[96, 25, 30, 126]] });
+  const badRate = mk({ lines: [100, 20], tot: 120, pay: { Bank: 120 }, mva: [[100, 20, 20, 120]] });
+  const noTot = mk({ lines: [50], tot: 50, pay: { Bank: 50 } }); delete noTot.sc.tot;
+  const roundA = mk({ lines: [99.7], tot: 99.5, rnd: -0.2, pay: { Kontant: 99.5 } });
+  const roundB = mk({ lines: [99.7], tot: 99.7, rnd: -0.2, pay: { Kontant: 99.5 } });
+  const change = mk({ lines: [60], tot: 60, pay: { Kontant: 100, 'Kontant tilbake': 40 } });
+  const ret = mk({ lines: [-150], tot: -150, pay: { 'Kontant tilbake': 150 } });
+  const all = base.concat([badLine, badPay, badVat, badRate, noTot, roundA, roundB, change, ret]);
+  const scan = {}, items = all.map((x) => { scan[x.it.transactionId] = x.sc; return x.it; });
+  const lg = L.ledger(items, items, scan, L.defaultControl());
+  const byCode = (c) => lg.findings.filter((f) => f.code === c);
+  assert.deepStrictEqual([lg.lines.applicable, lg.pay.applicable, lg.vat.applicable], [true, true, true]);
+  assert.deepStrictEqual(byCode('lineSum').map((f) => f.ids[0]), [badLine.it.transactionId]);
+  assert.match(byCode('lineSum')[0].detail, /linjene summerer til 232\.00 kr, Totalt er 250\.00 kr \(differanse -18\.00\)/);
+  assert.deepStrictEqual(byCode('paySum').map((f) => f.ids[0]), [badPay.it.transactionId]);
+  assert.match(byCode('paySum')[0].detail, /betalt netto 100\.00 kr, Totalt er 120\.00 kr/);
+  assert.deepStrictEqual(byCode('vatSum').map((f) => f.ids[0]), [badVat.it.transactionId]);
+  assert.match(byCode('vatSum')[0].detail, /MVA 30\.00 mot grunnlag 96\.00 × 25 % = 24\.00/);
+  assert.deepStrictEqual(byCode('vatRate').map((f) => f.ids[0]), [badRate.it.transactionId]);
+  assert.match(byCode('vatRate')[0].detail, /sats 20 % \(gyldige: 0, 12, 15, 25\)/);
+  assert.ok(!lg.findings.some((f) => [roundA, roundB, change, ret, noTot].some((x) => f.ids.includes(x.it.transactionId))), 'avrunding, veksel, retur og manglende Totalt gir ikke funn');
+  assert.ok(lg.findings.every((f) => f.flag === true));
+  assert.strictEqual(lg.withTot, all.length - 1);
+  // uten tilstrekkelig bevis for regnskapsmåten gis ingen funn
+  const few = L.ledger(items.slice(0, 5), items.slice(0, 5), scan, L.defaultControl());
+  assert.deepStrictEqual([few.lines.applicable, few.findings.length], [false, 0]);
+  const wrong = all.map((x) => mk({ lines: [10], tot: 99, pay: { Bank: 99 } }));
+  const wScan = {}, wItems = wrong.map((x) => { wScan[x.it.transactionId] = x.sc; return x.it; });
+  const wl = L.ledger(wItems, wItems, wScan, L.defaultControl());
+  assert.deepStrictEqual([wl.lines.applicable, wl.findings.filter((f) => f.code === 'lineSum').length], [false, 0], 'konsekvent annen regnskapsmåte: ikke et funn');
+  // av/på og toleranser
+  const off = L.ledger(items, items, scan, Object.assign(L.defaultControl(), { lineTol: '', payTol: '', vatOn: '' }));
+  assert.deepStrictEqual(off.findings.map((f) => f.code), []);
+  assert.strictEqual(L.ledger(items, items, scan, Object.assign(L.defaultControl(), { lineTol: '30' })).findings.filter((f) => f.code === 'lineSum').length, 0);
+  assert.strictEqual(L.ledger(items, items, scan, Object.assign(L.defaultControl(), { vatRates: '0,25,20' })).findings.filter((f) => f.code === 'vatRate').length, 0);
+  // v4-skanninger har ikke Totalt: dekning, ingen funn
+  const v4 = {}; items.forEach((it) => { v4[it.transactionId] = Object.assign({}, scan[it.transactionId], { v: 4 }); });
+  const lv4 = L.ledger(items, items, v4, L.defaultControl());
+  assert.deepStrictEqual([lv4.scanned, lv4.findings.length], [0, 0]);
+  // betalingsreferanse
+  const r1 = mk({ lines: [10], tot: 10, pay: { Bank: 10 }, rf: ['TransId: DK7TV5W2F', 'Referanse: 44321'], time: '2026-10-02 11:00' });
+  const r2 = mk({ lines: [20], tot: 20, pay: { Bank: 20 }, rf: ['TransId: DK7TV5W2F'], time: '2026-10-02 11:20', ws: 2 });
+  const r3 = mk({ lines: [30], tot: 30, pay: { Bank: 30 }, rf: ['Referanse: 44321'], time: '2026-10-02 11:30' });
+  const r4 = mk({ lines: [40], tot: 40, pay: { Bank: 40 }, rf: ['Referanse: 44321'], time: '2026-10-03 11:30' });
+  const r5 = mk({ lines: [50], tot: 50, pay: { Bank: 50 }, rf: ['Referanse: 12'], time: '2026-10-02 12:00' });
+  const r6 = mk({ lines: [60], tot: 60, pay: { Bank: 60 }, rf: ['Referanse: 12'], time: '2026-10-02 12:05' });
+  const rr = [r1, r2, r3, r4, r5, r6], rScan = {}, rItems = rr.map((x) => { rScan[x.it.transactionId] = x.sc; return x.it; });
+  assert.deepStrictEqual(r1.sc.rf, ['T:DK7TV5W2F', 'R:44321']);
+  const lr = L.ledger(rItems, rItems, rScan, L.defaultControl());
+  assert.deepStrictEqual(lr.findings.map((f) => f.code), ['refDup', 'refDup']);
+  assert.deepStrictEqual(lr.findings[0].ids.sort(), [r1.it.transactionId, r2.it.transactionId].sort(), 'TransId gjelder alle kasser');
+  assert.deepStrictEqual(lr.findings[1].ids.sort(), [r1.it.transactionId, r3.it.transactionId].sort(), 'Referanse: samme kasse og dag, ikke dagen etter og ikke korte tall');
+  assert.match(lr.findings[0].detail, /Referanse DK7TV5W2F \(TransId\) på 2 bonger: kasse 1 11:00, kasse 2 11:20/);
+  assert.strictEqual(L.ledger(rItems, rItems, rScan, Object.assign(L.defaultControl(), { refDup: '' })).findings.length, 0);
+  // parser: Totalt, Øreavrunding, referanser og MVA-tabell fra den virkelige bongen
+  const real = L.parseReceipt([T('7071862047727 LINEA GAVEBÅND 20M', '4.36'), T('5712 APPELSIN', '28.41'), ['', 'Totalt', '72.77'], ['Øreavrunding', '-0.30'], T('Coopay:', '72.77'), ['TransId: DK7TVRW5F2PC5'],
+    ['MVA-grunnlag', 'MVA-%', 'MVA', 'Sum'], ['35.49', '25 %', '8.87', '44.36', ''], ['25.00', '15 %', '3.75', '28.75', '']]);
+  assert.deepStrictEqual([real.tot, real.rnd, real.rf], [72.77, -0.3, ['T:DK7TVRW5F2PC5']]);
+  assert.deepStrictEqual(real.mv, [{ g: 35.49, r: 25, m: 8.87, s: 44.36 }, { g: 25, r: 15, m: 3.75, s: 28.75 }]);
+}
+
 console.log('logic: ok');

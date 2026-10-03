@@ -87,7 +87,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   assert.strictEqual(await idbGet('kv', 'kvr.help.v1'), 1);
 
   // innstillingssiden: alle grupper, endring, av/på, standard
-  assert.strictEqual(await page.$$eval('details.kvr-set', n => n.length), 16);
+  assert.strictEqual(await page.$$eval('details.kvr-set', n => n.length), 17);
   await group('bong');
   assert.strictEqual(await badge('bong'), '');
   await input('bong', 'Stor panteretur fra').fill('250');

@@ -1314,13 +1314,14 @@
       member: L.memberChecks(items, pop, ctlCfg),
       price: L.priceDeviation(items, pop, scanMap, ctlCfg),
       ku: L.kuChecks(items, pop, scanMap, ctlCfg),
-      ev: L.eventWords(items, scanMap, ctlCfg)
+      ev: L.eventWords(items, scanMap, ctlCfg),
+      ledger: L.ledger(items, pop, scanMap, ctlCfg)
     };
     res.seq.findings = res.seq.findings.filter(function (f) { return f.code === 'hours'; });
     res.seq.skippedGaps = res.deleted.skippedGaps;
     res.findings = res.patterns.concat(res.pant.findings, res.seq.findings, res.falseRet.findings, res.after,
       res.deleted.findings.filter(keep), res.diff.findings.filter(keep), res.numbers.findings.filter(keep), res.disc.findings,
-      res.member.findings, res.price.findings, res.ku.findings, res.ev.findings);
+      res.member.findings, res.price.findings, res.ku.findings, res.ev.findings, res.ledger.findings);
     res.cashierExtra = {};
     res.findings.forEach(function (f) {
       if (f.flag) f.ids.forEach(function (id) { if (scopeIds[id]) addFlag(id, f.title); });
@@ -1398,6 +1399,37 @@
     box.appendChild(el('div', { class: 'kvr-row' }, [btn('Diagnostikk: ukjente linjer…', openDiag)]));
   }
 
+  function pctOf(a, b) { return b ? Math.round(a / b * 100) + ' %' : '–'; }
+
+  function calText(name, c, tol) {
+    return name + ': ' + c.n + ' bonger vurdert, ' + pctOf(c.ok, c.n) + ' stemmer. ' +
+      (c.applicable ? 'Kontrollen er aktiv.' : 'Kontrollen er ikke aktiv: færre enn 10 bonger, eller under 80 % stemmer, så regnskapsmåten på bongen er ikke bevist og avvik regnes ikke som funn.');
+  }
+
+  function oldScans() {
+    return recs.filter(function (r) { var sc = scanMap[r.item.transactionId]; return r.base && r.item.receiptType === 1 && sc && !L.hasV5(sc); });
+  }
+
+  function rescanOld() {
+    var todo = oldScans();
+    if (!todo.length || scanning) return;
+    var sec = Math.round(todo.length * 1.1), est = sec >= 60 ? Math.round(sec / 60) + ' min' : sec + ' s';
+    confirmBox('Skann på nytt', todo.length + ' bonger har eldre skanning uten Totalt, MVA og betalingsreferanse. Skanner dem på nytt (ca. ' + est + '). Hver bong åpnes i CWs visningsfelt, ett oppslag per bong.', 'Skann på nytt', function () {
+      scanList(todo).then(function () { apply(); });
+    });
+  }
+
+  function renderAcctCard(R) {
+    var box = ui.ctlAcct, G = R.ledger;
+    box.appendChild(hintEl(G.scanned + ' av ' + G.sales + ' salg har ny skanning (' + G.withTot + ' med Totalt). Eldre skanninger mangler Totalt, MVA og betalingsreferanse.'));
+    box.appendChild(hintEl(calText('Linjer mot Totalt', G.lines)));
+    box.appendChild(hintEl(calText('Betaling mot Totalt', G.pay)));
+    box.appendChild(hintEl(calText('MVA-tabell (' + G.vat.tables + ' tabeller)', G.vat) + ' Ugyldig sats flagges uansett.'));
+    box.appendChild(hintEl(G.refs.n + ' betalingsreferanser lest, ' + G.refs.dup + ' brukt på flere bonger.'));
+    var old = oldScans().length;
+    if (old) box.appendChild(el('div', { class: 'kvr-row' }, [btn('Skann på nytt (' + old + ' eldre)', rescanOld)]));
+  }
+
   function renderAuditCards(R) {
     var D = R.diff;
     if (!D || !D.rows.length) ui.ctlDiff.appendChild(hintEl('Ingen skannede kassaoppgjør i omfanget. Skann og kjør analysen på nytt.'));
@@ -1418,6 +1450,7 @@
     renderDiscCard(R.disc);
     renderMemberCard(R.member);
     renderMiscCard(R);
+    renderAcctCard(R);
     ui.ctlNum.appendChild(hintEl('MAD under 0,006 er nær Benford, 0,006–0,012 akseptabel, 0,012–0,015 marginal, over 0,015 avvikende (Nigrini). Avvik er en indikasjon som må forklares, ikke et bevis. Kasserere med færre enn ' + ctlCfg.benfordCashMin + ' bonger vurderes ikke.'));
   }
 
@@ -1425,7 +1458,7 @@
     if (!ui.ctlProfile) return;
     var R = ctlRes;
     ui.ctlInfo.textContent = R ? 'Sist kjørt ' + R.at.toLocaleTimeString('nb-NO') + ' på ' + R.n + (R.mode === 'visible' ? ' synlige' : ' kvitteringer i omfanget') + '.' : 'Ikke kjørt ennå. Filtrer listen først, og trykk «Kjør alle kontroller».';
-    [ui.ctlProfile, ui.ctlFindings, ui.ctlPant, ui.ctlRecon, ui.ctlDiff, ui.ctlNum, ui.ctlDisc, ui.ctlMember, ui.ctlMisc].forEach(function (n) { n.innerHTML = ''; });
+    [ui.ctlProfile, ui.ctlFindings, ui.ctlPant, ui.ctlRecon, ui.ctlDiff, ui.ctlNum, ui.ctlDisc, ui.ctlMember, ui.ctlMisc, ui.ctlAcct].forEach(function (n) { n.innerHTML = ''; });
     ui.ctlResults.style.display = R ? '' : 'none';
     ui.ctlSumCard.style.display = R ? '' : 'none';
     if (!R) return;
@@ -2413,12 +2446,14 @@
   // ---- CSV ------------------------------------------------------------------
   function exportCsv(onlySelected, listOverride) {
     var list = listOverride || recs.filter(function (r) { return onlySelected ? selected[r.item.transactionId] : r.show; });
-    var rows = [['Tid', 'Butikk', 'Kasse', 'Kasserer', 'Bongnr', 'Type', 'Sum', 'Medlem', 'Pant salg', 'Pant retur', 'Varegrupper', 'Avvik']];
+    var rows = [['Tid', 'Butikk', 'Kasse', 'Kasserer', 'Bongnr', 'Type', 'Sum', 'Medlem', 'Pant salg', 'Pant retur', 'Varegrupper', 'Avvik', 'Betaling', 'Rabatt kr', 'Kuponger', 'Betalingsref', 'Totalt på bong']];
     list.forEach(function (r) {
       var it = r.item, sc = scanMap[it.transactionId], gs = groupsOf(it.transactionId);
       rows.push([it.endDateTime, sLabel(it.storeNumber), it.workstationNumber, it.cashierNumber, it.bongnr, L.typeLabel(it.receiptType),
         it.totalAmount === null ? '' : String(it.totalAmount).replace('.', ','), it.memberNumber === null ? '' : it.memberNumber,
-        sc ? String(sc.sale).replace('.', ',') : '', sc ? String(sc.ret).replace('.', ',') : '', gs ? gs.join(', ') : '', (anomMap[it.transactionId] || []).join(', ')]);
+        sc ? String(sc.sale).replace('.', ',') : '', sc ? String(sc.ret).replace('.', ',') : '', gs ? gs.join(', ') : '', (anomMap[it.transactionId] || []).join(', '),
+        sc && sc.pay ? Object.keys(sc.pay).map(function (k) { return k + ' ' + String(sc.pay[k]).replace('.', ','); }).join('; ') : '', sc && L.hasDisc(sc) ? String(sc.disc).replace('.', ',') : '', sc && L.hasDisc(sc) ? sc.coupons.length : '',
+        sc && sc.rf ? sc.rf.map(function (x) { return x.slice(2); }).join('; ') : '', sc && typeof sc.tot === 'number' ? String(sc.tot).replace('.', ',') : '']);
     });
     download(new Blob([L.toCsv(rows)], { type: 'text/csv;charset=utf-8' }), 'kvitteringer.csv');
     say((rows.length - 1) + ' rader eksportert.');
@@ -2859,7 +2894,7 @@
         scope: { text: R.scopeText, mode: R.mode, filters: R.filters, coverageText: R.coverageText, compare: R.compare },
         items: R.items, pop: R.pop, scan: R.scan, storeLabels: R.storeLabels,
         settings: { ctl: R.ctl, anom: R.anomCfg, weights: weights, currentDiffers: KvReport.stable([R.ctl, R.anomCfg]) !== KvReport.stable([ctlCfg, anomCfg]) },
-        checks: { falseRet: { coverage: C.falseRet.coverage, lineCheck: C.falseRet.lineCheck }, skippedGaps: C.seq.skippedGaps || 0, numbers: C.numbers },
+        checks: { falseRet: { coverage: C.falseRet.coverage, lineCheck: C.falseRet.lineCheck }, skippedGaps: C.seq.skippedGaps || 0, numbers: C.numbers, ledger: C.ledger ? { lines: C.ledger.lines, pay: C.ledger.pay, vat: C.ledger.vat, refs: C.ledger.refs } : null },
         findings: C.findings, ranked: ranked, explain: explain, notes: noteSub,
         cashiers: L.rankCashiers(R.items, R.anom, weights, C.profile, C.cashierExtra).slice(0, 10),
         compare: compareForReport(R), failedScans: failedRecs.length,
@@ -3206,15 +3241,16 @@
     var secFindings = fold(section('findings', 'Mønstre og funn', [ui.ctlFindings]), 'findings', true);
     var secPantBal = fold(section('pantbal', 'Pantelapp-sjekk: balanse per dag', [ui.ctlPant]), 'pantbal', false);
     var secRecon = fold(section('recon', 'Dagsavstemming per kasse', [ui.ctlRecon]), 'recon', false);
-    ui.ctlDiff = el('div', {}); ui.ctlNum = el('div', {}); ui.ctlDisc = el('div', {}); ui.ctlMember = el('div', {}); ui.ctlMisc = el('div', {});
+    ui.ctlDiff = el('div', {}); ui.ctlNum = el('div', {}); ui.ctlDisc = el('div', {}); ui.ctlMember = el('div', {}); ui.ctlMisc = el('div', {}); ui.ctlAcct = el('div', {});
     var secDiff = fold(section('diff', 'Kassadifferanse over tid', [ui.ctlDiff]), 'diff', true);
     var secNum = fold(section('numbers', 'Tallanalyse: Benford og runde beløp', [ui.ctlNum]), 'numbers', false);
     var secDisc = fold(section('disc', 'Rabatter og kuponger', [ui.ctlDisc]), 'disc', true);
     var secMember = fold(section('member', 'Medlemsnummer', [ui.ctlMember]), 'member', true);
     var secMisc = fold(section('misc', 'Pris, kjøpeutbytte og hendelser', [ui.ctlMisc]), 'misc', false);
+    var secAcct = fold(section('acct', 'Bongregnskap og referanser', [ui.ctlAcct]), 'acct', false);
     ui.ctlSum = el('div', { class: 'kvr-ctlsum' });
     ui.ctlJump = el('div', { class: 'kvr-chips' });
-    [['profile', 'Profil'], ['findings', 'Funn'], ['pantbal', 'Pant'], ['recon', 'Avstemming'], ['diff', 'Differanse'], ['numbers', 'Tall'], ['disc', 'Rabatt'], ['member', 'Medlem'], ['misc', 'Pris m.m.']].forEach(function (j) {
+    [['profile', 'Profil'], ['findings', 'Funn'], ['pantbal', 'Pant'], ['recon', 'Avstemming'], ['diff', 'Differanse'], ['numbers', 'Tall'], ['disc', 'Rabatt'], ['member', 'Medlem'], ['misc', 'Pris m.m.'], ['acct', 'Regnskap']].forEach(function (j) {
       ui.ctlJump.appendChild(btn(j[1], function () {
         var n = openSec(j[0]);
         if (n) n.scrollIntoView({ block: 'start', behavior: 'smooth' });
@@ -3223,7 +3259,7 @@
     ui.ctlSumCard = section('ctlsum', 'Resultat', [ui.ctlSum, ui.ctlJump,
       el('div', { class: 'kvr-row' }, [btn('Fold sammen alle', function () { foldAll(false); }, 'kvr-sm'), btn('Åpne alle', function () { foldAll(true); }, 'kvr-sm'), btn('⤢ Bredere', function () { ui.wideBtn.click(); }, 'kvr-sm')]),
       hintEl('Tabellene har mange kolonner. «Bredere» gir plass til alle.')]);
-    ui.ctlResults = el('div', { class: 'kvr-pane' }, [secProfile, secFindings, secPantBal, secRecon, secDiff, secNum, secDisc, secMember, secMisc]);
+    ui.ctlResults = el('div', { class: 'kvr-pane' }, [secProfile, secFindings, secPantBal, secRecon, secDiff, secNum, secDisc, secMember, secMisc, secAcct]);
     ui.noteList = el('div', { class: 'kvr-list' });
     ui.noteCount = hintEl('');
     var kn = check('Tastaturflyt: ↑ ↓ bytter bong, N notat, M velg/fjern', function () { keyNav = kn.box.checked; store(K.keynav, keyNav); });
