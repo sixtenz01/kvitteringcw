@@ -7,9 +7,24 @@
     return TYPE_LABELS[t] || 'Type ' + t;
   }
 
+  function validDT(y, mo, d, h, mi) {
+    if (mo < 1 || mo > 12 || d < 1 || h > 23 || mi > 59) return false;
+    var leap = (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+    return d <= [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][mo - 1];
+  }
+
   function parseDT(s) {
-    var m = /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})/.exec(String(s || ''));
-    return m ? { date: m[1], time: m[2] } : { date: '', time: '' };
+    var m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/.exec(String(s || ''));
+    if (!m || !validDT(+m[1], +m[2], +m[3], +m[4], +m[5])) return { date: '', time: '' };
+    return { date: m[1] + '-' + m[2] + '-' + m[3], time: m[4] + ':' + m[5] };
+  }
+
+  // Celletekst fra bongen: Unicode NFC, uten skjulte tegn, NBSP og andre mellomrom som vanlig mellomrom.
+  function cleanText(s) {
+    return String(s === null || s === undefined ? '' : s).normalize('NFC')
+      .replace(/[\u00ad\u200b-\u200f\u202a-\u202e\u2060-\u2064\ufeff]/g, '')
+      .replace(/[\u00a0\u1680\u2000-\u200a\u202f\u205f\u3000]/g, ' ')
+      .replace(/\s+/g, ' ').trim();
   }
 
   var OSLO = null;
@@ -51,9 +66,15 @@
   // Dato og klokkeslett slik de vises i CW-listen, for eksempel «02.10.2026 22:04:15» eller «2026-10-02 22:04».
   function parseCellDT(text) {
     var t = String(text || '').replace(/\s+/g, ' ').trim(), m;
-    if ((m = /(\d{1,2})[.\/](\d{1,2})[.\/](\d{4}),? (\d{1,2}):(\d{2})(?::(\d{2}))?/.exec(t))) return m[3] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2) + ' ' + ('0' + m[4]).slice(-2) + ':' + m[5] + ':' + (m[6] || '00');
-    if ((m = /(\d{4})-(\d{2})-(\d{2})[ T](\d{1,2}):(\d{2})(?::(\d{2}))?/.exec(t))) return m[1] + '-' + m[2] + '-' + m[3] + ' ' + ('0' + m[4]).slice(-2) + ':' + m[5] + ':' + (m[6] || '00');
+    if ((m = /(\d{1,2})[.\/](\d{1,2})[.\/](\d{4}),? (\d{1,2}):(\d{2})(?::(\d{2}))?/.exec(t))) return validDT(+m[3], +m[2], +m[1], +m[4], +m[5]) ? m[3] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2) + ' ' + ('0' + m[4]).slice(-2) + ':' + m[5] + ':' + (m[6] || '00') : '';
+    if ((m = /(\d{4})-(\d{2})-(\d{2})[ T](\d{1,2}):(\d{2})(?::(\d{2}))?/.exec(t))) return validDT(+m[1], +m[2], +m[3], +m[4], +m[5]) ? m[1] + '-' + m[2] + '-' + m[3] + ' ' + ('0' + m[4]).slice(-2) + ':' + m[5] + ':' + (m[6] || '00') : '';
     return '';
+  }
+
+  // Løpenummer i bongens topptekst: «Kvittering: 2371 …».
+  function headerSeq(text) {
+    var m = /Kvittering:\s*(\d+)/i.exec(String(text || ''));
+    return m ? Number(m[1]) : null;
   }
 
   // Dato og tid i bongens topptekst: «Kvittering: 2371 02.10.2026 22:04:15».
@@ -112,11 +133,17 @@
   }
 
   // Medlemsnummer som tekst. Gridet kan gi tekst, tall eller et objekt.
+  // «007», «7», « 7 » og NBSP/store-små bokstaver gir samme nøkkel.
+  function normMember(v) {
+    var k = String(v === null || v === undefined ? '' : v).normalize('NFKC').toUpperCase().replace(/[^0-9A-Z]/g, '');
+    return /^\d+$/.test(k) ? k.replace(/^0+(?=\d)/, '') : k;
+  }
+
   function memberKey(item) {
     if (!hasMember(item)) return '';
     var m = item.memberNumber;
     if (typeof m === 'object') m = m.number || m.memberNumber || m.id || JSON.stringify(m);
-    return String(m).trim();
+    return normMember(m);
   }
 
   function matches(item, f, ctx) {
@@ -202,7 +229,7 @@
   function findDuplicates(items) {
     var groups = {};
     items.forEach(function (it) {
-      if (it.totalAmount === null || it.totalAmount === undefined) return;
+      if (typeof it.totalAmount !== 'number' || !isFinite(it.totalAmount) || it.totalAmount === 0) return;
       var key = [it.totalAmount, it.storeNumber, it.workstationNumber, parseDT(it.endDateTime).date + ' ' + parseDT(it.endDateTime).time].join('|');
       (groups[key] = groups[key] || []).push(it.transactionId);
     });
@@ -218,14 +245,35 @@
   }
 
   function sumSelected(items) {
-    var sum = 0;
-    items.forEach(function (it) { if (typeof it.totalAmount === 'number') sum += it.totalAmount; });
-    return { count: items.length, sum: Math.round(sum * 100) / 100 };
+    var sum = 0, skipped = 0;
+    items.forEach(function (it) {
+      if (typeof it.totalAmount !== 'number') return;
+      if (isFinite(it.totalAmount)) sum += it.totalAmount; else skipped++;
+    });
+    var out = { count: items.length, sum: Math.round(sum * 100) / 100 };
+    if (skipped) out.skipped = skipped;
+    return out;
   }
 
+  // Beløp som tall. Støtter + og − (også U+2212, tankestrek), etterstilt minus, parentes, mellomrom/NBSP som tusenskille og både
+  // «1 234,56», «1.234,56» og «1,234.56». Én enkelt komma er desimal (norsk); ett enkelt punkt er desimal.
   function parseAmount(text) {
-    var t = String(text || '').replace(/[\s\u00a0]/g, '').replace(',', '.').replace(/^\+/, '');
-    return /^-?\d+(\.\d+)?$/.test(t) ? Number(t) : null;
+    var t = String(text === null || text === undefined ? '' : text).normalize('NFKC').replace(/[\u2010-\u2015\u2212]/g, '-').replace(/\s/g, '');
+    var neg = false, m = /^\((.+)\)$/.exec(t);
+    if (m) { neg = true; t = m[1]; }
+    if (/^[^-].*-$/.test(t)) { neg = !neg; t = t.slice(0, -1); }
+    t = t.replace(/^\+/, '');
+    if (/^-/.test(t)) { neg = !neg; t = t.slice(1); }
+    var dot = t.lastIndexOf('.'), com = t.lastIndexOf(',');
+    if (dot !== -1 && com !== -1) {
+      var dec = dot > com ? '.' : ',';
+      t = t.split(dec === '.' ? ',' : '.').join('').replace(dec, '.');
+    } else if (com !== -1) t = /,.*,/.test(t) ? t.split(',').join('') : t.replace(',', '.');
+    else if (/\..*\./.test(t)) t = t.split('.').join('');
+    if (!/^\d+(\.\d+)?$/.test(t)) return null;
+    var n = Number(t);
+    if (!isFinite(n)) return null;
+    return n === 0 ? 0 : neg ? -n : n;
   }
 
   var PANT_LINE = /^\s*\d{1,4}\s+PANT(ELAPP)?\b/i;
@@ -249,9 +297,16 @@
   var EVENT_WORDS = /(annull|makul|storn|parker|på\s*vent|manuell|sp[øo]r\s*pris|overstyr|prisendring|kansell|avbrut)/i;
   var KNOWN_LABEL = /^(beskrivelse|totalt|sum|subtotal|mva|grunnlag|kj[øo]p|[øo]reavrunding|referanse|transid|retur vare|dato|tid)/i;
 
-  // v4: enhetspris (p) på varelinjer, Kjøpeutbytte-tabell (ku), hendelsesord (ev) og ukjente linjer (unk).
+  var MAX_ITEMS = 500, MAX_NAME = 80, MAX_PAY = 20;
+  var TOTAL_ROW = /^(?:Subtotal:?\s*)?(Totalt|Sum)\s*:?$/i;
+  var ROUND_ROW = /^(?:[Øø]re)?avrunding\s*:?$/i;
+  var REF_ROW = /^(Referanse|Trans\.?\s*id)\s*:?\s*(\S+)/i;
+
+  // v5: enhetspris (p), Kjøpeutbytte (ku), hendelsesord (ev), ukjente linjer (unk), Totalt (tot), Øreavrunding (rnd),
+  // betalingsreferanser (rf) og MVA-tabell (mv). Poster har faste grenser: maks 500 linjer, 80 tegn per navn og 20 betalingsmåter.
   function parseReceipt(rows) {
-    var items = [], pay = {}, last = null, coupons = [], ev = [], unk = [], ku = null, kuCols = null;
+    var items = [], pay = {}, payN = 0, last = null, coupons = [], ev = [], unk = [], ku = null, kuCols = null;
+    var vat = [], vatCols = null, rf = [], tot = null, rnd = 0, hasRnd = false, trunc = 0, discItems = [];
     var sale = 0, ret = 0, saleLines = 0, retLines = 0, np = 0, neg = 0;
     var note = function (c0) {
       var t = c0.replace(/\d+/g, '#').replace(/\s+/g, ' ').trim();
@@ -265,9 +320,10 @@
       if (m && ev.length < 6) { var rec = { k: m[1].toLowerCase().replace(/\s+/g, ' '), t: all.slice(0, 80) }; if (!ev.some(function (e) { return e.t === rec.t; })) ev.push(rec); }
       note(c0);
     };
-    (rows || []).forEach(function (cells) {
-      if (!cells || !cells.length) return;
-      var c0 = String(cells[0] || '').trim();
+    (rows || []).forEach(function (raw) {
+      if (!raw || !raw.length) return;
+      var cells = raw.map(cleanText);
+      var c0 = cells[0];
       if (kuCols) {
         var nk = cells.map(function (c) { return parseAmount(c); });
         if (nk.filter(function (n) { return n !== null; }).length >= 2 && nk[0] !== null) {
@@ -278,27 +334,50 @@
         }
         kuCols = null;
       }
+      if (vatCols) {
+        var vg = parseAmount(cells[vatCols.g]);
+        if (vg !== null) {
+          if (vat.length < 6) vat.push({ g: vg, r: vatCols.r >= 0 ? parseAmount(String(cells[vatCols.r]).replace('%', '')) : null, m: vatCols.m >= 0 ? parseAmount(cells[vatCols.m]) : null, s: vatCols.s >= 0 ? parseAmount(cells[vatCols.s]) : null });
+          return;
+        }
+        vatCols = null;
+      }
       if (/^Grunnlag$/i.test(c0) && cells.some(function (c) { return /kj[øo]p.*utbytte/i.test(c); })) {
         kuCols = { g: 0, k: -1, m: -1 };
         cells.forEach(function (c, i) { if (/kj[øo]p.*utbytte/i.test(c)) kuCols.k = i; else if (/mva/i.test(c)) kuCols.m = i; });
         ku = ku || { g: 0, k: 0, m: 0 };
         return;
       }
+      var vh = cells.findIndex(function (c) { return /^MVA.?grunnlag$/i.test(c); });
+      if (vh !== -1) {
+        vatCols = { g: vh, r: cells.findIndex(function (c) { return /%/.test(c); }), m: cells.findIndex(function (c) { return /^MVA$/i.test(c); }), s: cells.findIndex(function (c) { return /^Sum$/i.test(c); }) };
+        return;
+      }
+      var tl = (c0 === '' ? cells[1] : c0) || '';
+      if (cells.length >= 2 && TOTAL_ROW.test(tl)) { var ta = lastAmount(cells); if (ta !== null) { tot = ta; return; } }
+      if (cells.length >= 2 && ROUND_ROW.test(tl)) { var ra = lastAmount(cells); if (ra !== null) { rnd = round2(rnd + ra); hasRnd = true; return; } }
+      var rm = REF_ROW.exec(cells.join(' ').replace(/\s+/g, ' ').trim());
+      if (rm) { if (rf.length < 4) rf.push((/^R/i.test(rm[1]) ? 'R:' : 'T:') + rm[2].slice(0, 40)); return; }
       var q = QTY_ROW.exec(c0);
       if (q) { if (last) { last.q = parseAmount(q[1].replace(',', '.')); last.p = parseAmount(q[2].replace(',', '.')); } return; }
       var rb = RABATT_ROW.exec(c0);
       if (rb) {
-        if (last) { last.d = round2((last.d || 0) + (parseAmount(rb[1].replace(',', '.')) || 0)); if (rb[2]) last.dp = parseAmount(rb[2].replace(',', '.')); }
+        if (last) {
+          var had = !!last.d;
+          last.d = round2((last.d || 0) + (parseAmount(rb[1].replace(',', '.')) || 0));
+          if (!had && last.d) discItems.push(last);
+          if (rb[2]) last.dp = parseAmount(rb[2].replace(',', '.'));
+        }
         return;
       }
       var ar = ARSAK_ROW.exec(c0);
       if (ar) {
-        if (last && last.d) last.dr = (ar[1] + ' ' + cells.slice(1).join(' ')).replace(/\s+/g, ' ').trim();
+        if (last && last.d) last.dr = (ar[1] + ' ' + cells.slice(1).join(' ')).replace(/\s+/g, ' ').trim().slice(0, 60);
         return;
       }
       var kp = KUPONG_ROW.exec(c0.replace(/:\s*$/, ''));
       if (kp) {
-        if (coupons.length < 30) coupons.push({ i: kp[1], n: kp[2].trim().slice(0, 60), a: lastAmount(cells) || 0 });
+        if (coupons.length < 30) coupons.push({ i: kp[1].slice(0, 40), n: kp[2].trim().slice(0, 60), a: lastAmount(cells) || 0 });
         last = null;
         return;
       }
@@ -307,27 +386,31 @@
       var amount = lastAmount(cells);
       if (amount === null) { other(c0, cells); return; }
       if (/:\s*$/.test(c0)) {
-        var label = c0.replace(/:\s*$/, '');
-        pay[label] = round2((pay[label] || 0) + amount);
+        var label = c0.replace(/\s*:\s*$/, '').slice(0, 40);
+        if (label in pay || payN < MAX_PAY) { if (!(label in pay)) payN++; pay[label] = round2((pay[label] || 0) + amount); }
         last = null;
         return;
       }
       var m = ITEM_ROW.exec(c0);
       if (!m) { other(c0, cells); return; }
-      last = { c: m[1], n: m[2].trim(), a: amount };
-      items.push(last);
+      last = { c: m[1], n: m[2].trim().slice(0, MAX_NAME), a: amount };
+      if (items.length < MAX_ITEMS) items.push(last); else trunc++;
       if (PANT_LINE.test(c0)) {
         if (amount < 0) { ret += amount; retLines++; } else { sale += amount; saleLines++; }
       } else { np++; if (amount < 0) neg++; }
     });
     var disc = 0, discN = 0, discNR = 0, discNRsum = 0;
-    items.forEach(function (it) {
-      if (!it.d) return;
+    discItems.forEach(function (it) {
       disc += it.d; discN++;
       if (!it.dr) { discNR++; discNRsum += it.d; }
     });
-    var out = { v: 4, items: items, pay: pay, np: np, neg: neg, sale: round2(sale), ret: round2(ret), saleLines: saleLines, retLines: retLines,
+    var out = { v: 5, items: items, pay: pay, np: np, neg: neg, sale: round2(sale), ret: round2(ret), saleLines: saleLines, retLines: retLines,
       disc: round2(disc), discN: discN, discNR: discNR, discNRsum: round2(discNRsum), coupons: coupons };
+    if (tot !== null) out.tot = tot;
+    if (hasRnd) out.rnd = rnd;
+    if (rf.length) out.rf = rf;
+    if (vat.length) out.mv = vat;
+    if (trunc) out.trunc = trunc;
     if (ku) out.ku = ku;
     if (ev.length) out.ev = ev;
     if (unk.length) out.unk = unk;
@@ -363,6 +446,8 @@
   function hasDisc(sc) { return !!sc && sc.v >= 3; }
   // Enhetspris, Kjøpeutbytte, hendelsesord og ukjente linjer finnes først fra v4.
   function hasV4(sc) { return !!sc && sc.v >= 4 && !sc.settle; }
+  // Totalt, Øreavrunding, betalingsreferanser og MVA-tabell finnes først fra v5.
+  function hasV5(sc) { return !!sc && sc.v >= 5 && !sc.settle; }
   function couponSum(sc) { return round2(((sc && sc.coupons) || []).reduce(function (a, c) { return a + (c.a || 0); }, 0)); }
 
   function sumPant(items, scanMap) {
@@ -380,9 +465,10 @@
   function parseSettlement(rows) {
     var st = { telt: {}, diff: {}, tilg: {}, pose: '', bank: null, valor: {} };
     var mode = 'telt';
-    (rows || []).forEach(function (cells) {
-      if (!cells || !cells.length) return;
-      var c0 = String(cells[0] || '').trim();
+    (rows || []).forEach(function (raw) {
+      if (!raw || !raw.length) return;
+      var cells = raw.map(cleanText);
+      var c0 = cells[0];
       var a = lastAmount(cells);
       var pose = /^Pose:\s*(.+)$/i.exec(c0);
       if (pose) { st.pose = pose[1].trim(); return; }
@@ -657,7 +743,7 @@
   function sanitizeAnom(raw) {
     var d = defaultAnom();
     if (!raw || typeof raw !== 'object') return d;
-    ['bigReturn', 'manyLapper', 'roundMin', 'settleDiff'].forEach(function (k) { if (k in raw) d[k] = String(raw[k]); });
+    ['bigReturn', 'manyLapper', 'roundMin', 'settleDiff'].forEach(function (k) { if (k in raw) d[k] = String(raw[k]).slice(0, 200); });
     if ('cashNoSale' in raw) d.cashNoSale = !!raw.cashNoSale;
     return d;
   }
@@ -698,9 +784,13 @@
   }
 
   // ---- CSV ------------------------------------------------------------------
+  // Tekstceller som starter med = + - @ tab eller linjeskift kan kjøres som formel i regneark. De får et ledende '.
+  // Rene tall (også som tekst, som «-12,50») røres ikke.
+  var NUMERIC_TEXT = /^[+-]?\d[\d\s.,]*$/;
   function toCsv(rows) {
     var q = function (v) {
       v = v === null || v === undefined ? '' : String(v);
+      if (/^[=+\-@\t\r]/.test(v) && !NUMERIC_TEXT.test(v)) v = "'" + v;
       return /[;"\n\r]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
     };
     return '﻿' + rows.map(function (r) { return r.map(q).join(';'); }).join('\r\n');
@@ -710,7 +800,7 @@
   // ---- kontroller på tvers av kvitteringer ----------------------------------------
   function mins(t) {
     var m = /^(\d{1,2}):(\d{2})$/.exec(String(t || ''));
-    return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+    return m && Number(m[1]) <= 23 && Number(m[2]) <= 59 ? Number(m[1]) * 60 + Number(m[2]) : null;
   }
   function cnum(v, d) { return hasNum(v) ? Number(v) : d; }
   function dayOf(it) { return parseDT(it.endDateTime).date; }
@@ -864,7 +954,7 @@
   function sanitizeControl(raw) {
     var d = defaultControl();
     if (!raw || typeof raw !== 'object') return d;
-    Object.keys(d).forEach(function (k) { if (k in raw) d[k] = String(raw[k]); });
+    Object.keys(d).forEach(function (k) { if (k in raw) d[k] = String(raw[k]).slice(0, 200); });
     return d;
   }
 
@@ -1576,7 +1666,7 @@
       t = t.trim();
       if (!t) return;
       var m = /^([^=:]+)[=:](.+)$/.exec(t);
-      if (m) { pairs[m[1].trim() + '|' + m[2].trim()] = true; members[m[2].trim()] = true; } else members[t] = true;
+      if (m) { pairs[m[1].trim() + '|' + normMember(m[2])] = true; members[normMember(m[2])] = true; } else members[normMember(t)] = true;
       any = true;
     });
     return { members: members, pairs: pairs, any: any };
@@ -1903,8 +1993,11 @@
     typeLabel: typeLabel,
     parseDT: parseDT,
     localDT: localDT,
+    cleanText: cleanText,
+    normMember: normMember,
     parseCellDT: parseCellDT,
     headerDT: headerDT,
+    headerSeq: headerSeq,
     defaultFilters: defaultFilters,
     matches: matches,
     compare: compare,
@@ -1928,6 +2021,7 @@
     watchReasons: watchReasons,
     hasDisc: hasDisc,
     hasV4: hasV4,
+    hasV5: hasV5,
     memberKey: memberKey,
     couponSum: couponSum,
     CONTROL_FIELDS: CONTROL_FIELDS,

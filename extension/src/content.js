@@ -13,7 +13,8 @@
   var failedRecs = [];
   var lastRetry = null;
   var SCAN_TIMEOUT = 6000;
-  var SCAN_LIMIT = 2000;
+  var SCAN_LIMIT = 10000, SCAN_BYTES = 25 * 1024 * 1024;
+  var seqProof = { ok: 0, bad: 0 };
 
   var filters = L.defaultFilters();
   var selected = {};
@@ -77,11 +78,19 @@
     put('kv', key, value);
   }
 
+  // Skannecachen har hard grense både i antall og byte. Eldste skanninger går først.
+  var sizes = new WeakMap();
+  function recBytes(r) {
+    var n = sizes.get(r);
+    if (n === undefined) { try { n = JSON.stringify(r).length; } catch (e) { n = 2000; } sizes.set(r, n); }
+    return n;
+  }
+
   function saveScan() {
     var keys = Object.keys(scanMap).sort(function (a, b) { return (scanMap[a].t || 0) - (scanMap[b].t || 0); });
-    if (keys.length > SCAN_LIMIT) {
-      keys.slice(0, keys.length - SCAN_LIMIT).forEach(function (k) { delete scanMap[k]; delete dirty[k]; put('scan', k, null); });
-    }
+    var total = keys.reduce(function (a, k) { return a + recBytes(scanMap[k]); }, 0), drop = 0;
+    while (drop < keys.length - 1 && (keys.length - drop > SCAN_LIMIT || total > SCAN_BYTES)) { total -= recBytes(scanMap[keys[drop]]); drop++; }
+    keys.slice(0, drop).forEach(function (k) { delete scanMap[k]; delete dirty[k]; put('scan', k, null); });
     Object.keys(dirty).forEach(function (k) { if (scanMap[k]) put('scan', k, scanMap[k]); });
     dirty = {};
   }
@@ -266,16 +275,18 @@
     var rows = Array.prototype.map.call(doc.querySelectorAll('tr'), function (tr) {
       return Array.prototype.map.call(tr.children, function (c) { return c.textContent.replace(/\s+/g, ' ').trim(); });
     });
-    rows.hd = L.headerDT(doc.body ? doc.body.textContent : '');
+    var head = doc.body ? doc.body.textContent : '';
+    rows.hd = L.headerDT(head);
+    rows.hs = L.headerSeq(head);
     return rows;
   }
 
-  async function loadViaDom(r) {
+  async function loadViaDom(r, force) {
     var sel = grid.select();
-    var already = sel && sel[0] === r.tr;
+    var already = !force && sel && sel[0] === r.tr;
     var d = iframeDoc();
     if (!d) return null;
-    if (!already) { d.body.innerHTML = ''; grid.select(r.tr); }
+    if (!already) { d.body.innerHTML = ''; if (force && typeof grid.clearSelection === 'function') grid.clearSelection(); grid.select(r.tr); }
     var pace = window.__kvrScan || {}, settle = pace.settle >= 0 ? pace.settle : 150, poll = pace.poll > 0 ? pace.poll : 100;
     var waited = 0;
     while (waited < SCAN_TIMEOUT) {
@@ -290,18 +301,34 @@
     return null;
   }
 
+  // Kontroll mot feil bong i visningsfeltet: løpenummeret i topptekst skal være det samme som i den valgte raden.
+  // Håndheves først når formatet er bevist (minst 3 treff), slik at en annen nummerering ikke stopper skanningen.
+  function seqCheck(rows, rec) {
+    if (rows.hs === null || rows.hs === undefined) return 'unknown';
+    if (rows.hs === seqOf(rec.item.transactionId)) { seqProof.ok++; return 'ok'; }
+    seqProof.bad++;
+    return seqProof.ok >= 3 ? 'bad' : 'unknown';
+  }
+
   async function scanList(todo) {
     if (scanning || !todo.length) return { done: 0, failed: 0 };
     scanning = true; cancelScan = false;
     ui.scanBtn.disabled = true; ui.anomBtn.disabled = true; ui.stopBtn.disabled = false; ui.stopTop.style.display = ''; ui.retryBtn.disabled = true; if (ui.retryBtn2) ui.retryBtn2.disabled = true;
     var prev = grid.select();
     var prevTr = prev && prev[0];
-    var done = 0, failed = 0, t0 = Date.now();
+    var done = 0, failed = 0, mism = 0, t0 = Date.now();
     failedRecs = [];
     for (var i = 0; i < todo.length && !cancelScan; i++) {
       progress(i, todo.length, t0, 'Skanner', failed);
-      var rows = null;
-      try { rows = await loadViaDom(todo[i]); } catch (e) { rows = null; }
+      var rows = null, chk = 'unknown';
+      try {
+        for (var attempt = 0; attempt < 2; attempt++) {
+          rows = await loadViaDom(todo[i], attempt > 0);
+          chk = rows ? seqCheck(rows, todo[i]) : 'unknown';
+          if (chk !== 'bad') break;
+        }
+      } catch (e) { rows = null; }
+      if (chk === 'bad') { rows = null; mism++; }
       if (rows) {
         var id = todo[i].item.transactionId;
         scanMap[id] = todo[i].item.receiptType === 2 ? L.parseSettlement(rows) : L.parseReceipt(rows);
@@ -319,7 +346,7 @@
     if (prevTr) grid.select(prevTr); else if (typeof grid.clearSelection === 'function') grid.clearSelection();
     scanning = false;
     ui.scanBtn.disabled = false; ui.anomBtn.disabled = false; ui.stopBtn.disabled = true;
-    say((cancelScan ? 'Stoppet. ' : 'Ferdig. ') + 'Skannet ' + done + (failed ? ', feilet ' + failed : '') + '.');
+    say((cancelScan ? 'Stoppet. ' : 'Ferdig. ') + 'Skannet ' + done + (failed ? ', feilet ' + failed : '') + (mism ? ' (' + mism + ' med feil bong i visningsfeltet)' : '') + '.');
     return { done: done, failed: failed };
   }
 
@@ -1500,7 +1527,7 @@
   }
 
   function diagText(D) {
-    var out = ['Kvitteringshenter diagnostikk', 'Skannede bonger: ' + D.total + ' (ny skanning: ' + D.v4 + ')', 'Kjøpeutbytte-tabell: ' + D.ku.with + ' med, ' + D.ku.without + ' uten', 'Klokkeslett: ' + timeText(L.timeCheck(recs.map(function (r) { return r.item; }), scanMap)), '', 'Hendelsesord (ord, antall, tekst, eksempelbong):'];
+    var out = ['Kvitteringshenter diagnostikk', 'Skannede bonger: ' + D.total + ' (ny skanning: ' + D.v4 + ')', 'Løpenummer i topptekst: ' + seqProof.ok + ' stemte, ' + seqProof.bad + ' avvek',  'Kjøpeutbytte-tabell: ' + D.ku.with + ' med, ' + D.ku.without + ' uten', 'Klokkeslett: ' + timeText(L.timeCheck(recs.map(function (r) { return r.item; }), scanMap)), '', 'Hendelsesord (ord, antall, tekst, eksempelbong):'];
     if (!D.ev.length) out.push('  ingen');
     D.ev.forEach(function (e) { out.push('  ' + e.k + '\t' + e.n + '\t' + e.t + '\t' + e.id); });
     out.push('', 'Ukjente linjer (tekst med tall som #, antall, eksempelbong):');
@@ -1519,6 +1546,7 @@
       body.appendChild(hintEl('Listen ligger konsekvent ' + Math.abs(TC.suggest) + ' min ' + (TC.suggest > 0 ? 'bak' : 'foran') + ' bongen. Det tyder på tidssone eller en fast forskyvning i dataene.'));
       body.appendChild(btn('Flytt listetid ' + (TC.suggest > 0 ? '+' : '') + TC.suggest + ' min', function () { setTimeShift(timeShift + TC.suggest); closeModal(); say('Listetid flyttet ' + (TC.suggest > 0 ? '+' : '') + TC.suggest + ' min. Kjør analysen på nytt.'); }, 'kvr-primary'));
     }
+    body.appendChild(hintEl('Løpenummer i topptekst mot valgt rad: ' + seqProof.ok + ' stemte, ' + seqProof.bad + ' avvek' + (seqProof.ok >= 3 ? ' (kontrollen er aktiv: bonger med feil nummer avvises)' : ' (kontrollen aktiveres etter 3 treff)') + '.'));
     body.appendChild(hintEl(D.v4 ? D.v4 + ' av ' + D.total + ' skannede bonger har ny skanningsdata (eldre må skannes på nytt). Dette er linjer pluginen ikke kjenner igjen, og ord som tyder på annullert, parkert, manuell pris eller spør pris. Del listen for å få testene utvidet.' : 'Ingen skanninger med ny data ennå. Skann kvitteringer først (Skann → Skann innhold).'));
     if (D.v4) {
       body.appendChild(el('b', { class: 'kvr-subh', text: 'Hendelsesord' }));
@@ -3535,7 +3563,7 @@
     if (db) {
       mem = await readAll(db, 'kv');
       var raw = await readAll(db, 'scan');
-      Object.keys(raw).forEach(function (k) { if (raw[k] && (raw[k].v >= 2 && raw[k].v <= 4)) scanMap[k] = raw[k]; });
+      Object.keys(raw).forEach(function (k) { if (raw[k] && (raw[k].v >= 2 && raw[k].v <= 5)) scanMap[k] = raw[k]; });
     }
     migrateLocal();
     rules = L.sanitizeRules(store(K.rules));

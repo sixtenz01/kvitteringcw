@@ -478,7 +478,7 @@ const dsc = L.parseReceipt([
   ['TransId: DK7TVRW5F2PC5'],
   ['35.49', '25 %', '8.87', '44.36', '']
 ]);
-assert.strictEqual(dsc.v, 4);
+assert.strictEqual(dsc.v, 5);
 assert.deepStrictEqual([dsc.items[3].p, dsc.ku, dsc.ev, dsc.unk], [39.9, undefined, undefined, undefined]);
 assert.strictEqual(dsc.items.length, 4);
 assert.deepStrictEqual([dsc.items[0].d, dsc.items[0].dp, dsc.items[0].dr], [4.36, 50, '']);
@@ -604,7 +604,7 @@ const v4p = L.parseReceipt([
   ['Parkert bong gjenopptatt'], ['Linje annullert av kasserer', '', '-10.00'], ['Referanse: 4411'],
   ['Grunnlag', 'Kjøpeutbytte', 'MVA bonus'], ['100.00', '2.00', '0.40'], ['Bank:', '', '100.00'], ['Merkelig linje 77']
 ]);
-assert.strictEqual(v4p.v, 4);
+assert.strictEqual(v4p.v, 5);
 assert.deepStrictEqual(v4p.ku, { g: 100, k: 2, m: 0.4 });
 assert.deepStrictEqual(v4p.ev.map(e => e.k), ['parker', 'annull']);
 assert.deepStrictEqual(v4p.unk, ['Parkert bong gjenopptatt', 'Linje annullert av kasserer', 'Merkelig linje #']);
@@ -755,6 +755,54 @@ assert.strictEqual(L.groupForReason('Mange avvikende priser'), 'price');
   const few = L.timeCheck(tcItems.slice(0, 3).map((it) => Object.assign({}, it, { endDateTime: '2026-10-02 20:10' })), tcScan);
   assert.strictEqual(few.suggest, null, 'for få bonger til å foreslå');
   assert.strictEqual(L.timeCheck(tcItems, {}).n, 0);
+}
+
+
+// ---- herding (revisjonsfunn F1–F9, F12) ----
+{
+  const T = (a, c) => [a, '', c];
+  // F1 CSV-injeksjon
+  const csv = L.toCsv([['=HYPERLINK("x")', '+1+1', '@SUM(1)', '\t=1', '-5', '-12,50', '+3', '1 234,50', 'vanlig', '- punkt', 12, null]]).slice(1);
+  assert.strictEqual(csv, '"\'=HYPERLINK(""x"")";\'+1+1;\'@SUM(1);\'\t=1;-5;-12,50;+3;1 234,50;vanlig;\'- punkt;12;');
+  // F2 skjulte tegn og normalisering
+  assert.deepStrictEqual(L.parseReceipt([T('Bank​ :', '10.00'), T('Bank:', '5.00')]).pay, { Bank: 15 });
+  const nfd = L.parseReceipt([T('7000 VARE', '10.00'), ['Rabatt: Kr 5.00 (50%)'], ['Rabatt årsak: Datovare']]).items[0];
+  assert.strictEqual(nfd.dr, 'Datovare', 'oppløst å gir samme årsak');
+  assert.strictEqual(L.cleanText(' A​B C‮D '), 'AB CD');
+  assert.strictEqual(L.parseSettlement([['Kontant​:', '', '100.00'], ['Sum', '', '100.00']]).settle.telt.kontant, 100);
+  // F3 beløpsparser
+  const amt = { '1 000.00': 1000, '1 000,50': 1000.5, '1.234,56': 1234.56, '1,000.50': 1000.5, '−5.00': -5, '–5.00': -5, '5.00-': -5, '(5.00)': -5, '+1.00': 1, '1.234.567': 1234567, '12.345': 12.345, '-0.00': 0 };
+  Object.keys(amt).forEach((k) => assert.strictEqual(L.parseAmount(k), amt[k], k));
+  ['1e3', '', 'Kr 5.00', 'Infinity', '--5', '0x10', '١٢'].forEach((k) => assert.strictEqual(L.parseAmount(k), null, 'null: ' + k));
+  assert.strictEqual(L.parseReceipt([T('7000 VARE', '−10.00')]).items[0].a, -10);
+  // F4 størrelsesgrenser
+  const many = []; for (let i = 0; i < 800; i++) many.push(T('7000000000001 ' + 'N'.repeat(300), '1.00'));
+  many.push(['Rabatt: Kr 0.50 (50%)']);
+  for (let i = 0; i < 40; i++) many.push(T('Betaling' + i + ':', '1.00'));
+  const big = L.parseReceipt(many);
+  assert.deepStrictEqual([big.items.length, big.trunc, big.np], [500, 300, 800]);
+  assert.ok(big.items.every((x) => x.n.length === 80));
+  assert.strictEqual(Object.keys(big.pay).length, 20);
+  assert.deepStrictEqual([big.disc, big.discN], [0.5, 1], 'rabatt på bortkortet linje telles');
+  assert.ok(JSON.stringify(big).length < 120000);
+  // F6 datovalidering
+  ['2026-02-31 10:00', '2026-13-01 10:00', '2026-10-02 24:00', '2026-10-02 10:60'].forEach((x) => assert.deepStrictEqual(L.parseDT(x), { date: '', time: '' }, x));
+  assert.deepStrictEqual(L.parseDT('2028-02-29 23:59'), { date: '2028-02-29', time: '23:59' });
+  assert.deepStrictEqual(L.parseDT('2026-02-29 12:00'), { date: '', time: '' }, 'ikke skuddår');
+  ['31.02.2026 10:00', '02.10.2026 25:99', '2026-02-30 10:00'].forEach((x) => assert.strictEqual(L.parseCellDT(x), '', x));
+  assert.strictEqual(L.mins('25:99'), null);
+  assert.strictEqual(L.mins('00:00'), 0);
+  // F7 medlemsnr
+  assert.deepStrictEqual(['007', 7, ' 7 ', '0', 'm1', '75 1', '', null].map((m) => L.memberKey({ memberNumber: m })), ['7', '7', '7', '0', 'M1', '751', '', '']);
+  // F8 og F9
+  assert.strictEqual(L.findDuplicates([{ transactionId: 'a', totalAmount: 0, endDateTime: '2026-10-02 10:00' }, { transactionId: 'b', totalAmount: 0, endDateTime: '2026-10-02 10:00' }]).groups.length, 0);
+  assert.deepStrictEqual(L.sumSelected([{ totalAmount: 1 }, { totalAmount: NaN }, { totalAmount: Infinity }, { totalAmount: 2.5 }]), { count: 4, sum: 3.5, skipped: 2 });
+  assert.deepStrictEqual(L.sumSelected([{ totalAmount: 1 }]), { count: 1, sum: 1 });
+  // F12 grense på innstillinger
+  assert.strictEqual(L.sanitizeControl({ memberN: 'x'.repeat(5000) }).memberN.length, 200);
+  assert.strictEqual(L.sanitizeAnom({ bigReturn: 'y'.repeat(5000) }).bigReturn.length, 200);
+  assert.strictEqual(L.headerSeq('Butikk: 1 Kvittering: 2371 02.10.2026 22:03'), 2371);
+  assert.strictEqual(L.headerSeq('ingenting'), null);
 }
 
 console.log('logic: ok');
