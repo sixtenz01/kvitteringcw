@@ -118,6 +118,7 @@ Alt fra iframens `<tr>`-rader, uten API-kall:
 - Kjøpeutbytte-tabell: header `Grunnlag | Kjøpeutbytte | MVA bonus` og tallradene under (kolonnene finnes via headeren). Ikke bekreftet i ekte data hvilke bonger som har den.
 - Hendelsesord på tekstlinjer (ikke varelinjer): annull, makul, storn, parker, på vent, manuell, spør pris, overstyr, prisendring, kansell, avbrutt. **Ikke observert** i ekte data: annullert bong, manuell pris, parkert bong og spør pris. Fellen fanger dem hvis CW viser dem som tekst på bongen.
 - Ukjente linjer: tekstlinjer som ikke tolkes (tall byttet med `#`, maks 8 per bong), samlet i Diagnostikk-dialogen så vi kan lære hva CW faktisk viser. Kjente topp- og bunnlinjer (`Beskrivelse`, `Totalt`, `Referanse`, MVA …) filtreres bort.
+- Klokkeslett: gridradens `endDateTime` (rådata, format ikke bekreftet; kan være UTC) og cellen `td[data-field="endDateTime"]` (som vist, lokal tid). Topptekstens `Kvittering: <nr> <dato> <tid>` leses ut av iframen og sammenlignes i Diagnostikk. Bongen kan vise starttid mens listen har sluttid.
 - Medlemsnr leses fra gridfeltet `memberNumber` (ikke fra bongen), så medlemstestene trenger ikke skanning.
 
 ## Ikke i bruk: API-endepunkt

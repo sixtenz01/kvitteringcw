@@ -285,7 +285,7 @@
   <li><strong>Hendelsesord:</strong> tekstlinjer (ikke varenavn) med ord som annullert, makulert, parkert, på vent, manuell, spør pris, overstyr, prisendring eller kansell flagges.</li>
   <li><strong>Ukjente linjer:</strong> linjer pluginen ikke kjenner igjen samles opp, med tall byttet mot #.</li>
 </ul>
-<p>Åpne <strong>Diagnostikk</strong> fra kortet «Pris, kjøpeutbytte og hendelser» eller fra Innstillinger → Generelt. Der ser du hendelsesord og ukjente linjer med antall og et eksempel på bongnummer. «Kopier som tekst» gir en liste du kan dele, slik at testene kan utvides med det Lindbak faktisk viser. Listen inneholder ingen varenavn eller beløp, men bongnummer.</p>
+<p>Åpne <strong>Diagnostikk</strong> fra kortet «Pris, kjøpeutbytte og hendelser» eller fra Innstillinger → Generelt. Der ser du først en sammenligning av klokkeslettet i listen og på bongen, så hendelsesord og ukjente linjer med antall og et eksempel på bongnummer. «Kopier som tekst» gir en liste du kan dele, slik at testene kan utvides med det Lindbak faktisk viser. Listen inneholder ingen varenavn eller beløp, men bongnummer.</p>
 <div class="callout"><b>Skann på nytt</b>
   <p>Pris, Kjøpeutbytte, hendelsesord og diagnostikk bygger på data som bare nye skanninger har. Eldre skanninger tas automatisk på nytt neste gang du skanner, og dekningen står i kortet «Pris, kjøpeutbytte og hendelser» og i revisjonsrapporten.</p>
 </div>
@@ -361,6 +361,7 @@
   <thead><tr><th>Valg</th><th>Hva det gjør</th></tr></thead>
   <tbody>
     <tr><td>Egne butikknavn</td><td>Hvis Lindbak ikke leverer butikklisten, kan du skrive <code>1001=Navn</code>, ett per linje.</td></tr>
+    <tr><td>Tidsforskyvning for listen</td><td>Normalt 0. Brukes bare hvis klokkeslettet i listen avviker fast fra bongen (se kapittel 11). Diagnostikk foreslår verdien.</td></tr>
     <tr><td>Tastaturflyt</td><td>Slår på <kbd>↑</kbd> <kbd>↓</kbd> for å bytte bong, <kbd>N</kbd> for notat og <kbd>M</kbd> for å velge eller fjerne valg. Virker ikke mens du skriver i et felt.</td></tr>
     <tr><td>Eksporter / Importer innstillinger</td><td>Lagrer og leser inn terskler, poeng, egne regler, varegrupper og butikknavn som en fil. Praktisk for å dele samme oppsett mellom butikker. Skannet innhold og notater tas ikke med.</td></tr>
     <tr><td>Tilbakestill plassering</td><td>Setter panelets plass og størrelse tilbake.</td></tr>
@@ -420,6 +421,7 @@
 <h2 id="feilsoking"><span class="n">11</span>Feilsøking</h2>
 <details class="faq"><summary>Panelet vises ikke</summary><p>Sjekk at du står i Kvitteringsjournal (adressen slutter på <code>/Journal/Viewer</code>) og at tillegget er slått på under <code>chrome://extensions</code>. Trykk <kbd>F5</kbd>. Panelet kan være skjult: prøv <kbd>Alt</kbd>+<kbd>K</kbd> eller dobbeltklikk der toppen skulle vært. Krever Chrome 111 eller nyere.</p></details>
 <details class="faq"><summary>«Skannet 0 av N» og ingenting skjer</summary><p>Klikk <strong>Skann nå</strong> eller gå til Skann og velg Skann innhold. Vent til visningsfeltet i Lindbak får innhold for hver bong. Skanning tar ca. ett sekund per bong; avgrens listen først hvis den er lang.</p></details>
+<details class="faq"><summary>Klokkeslettet i pluginen er et annet enn på bongen</summary><p>Pluginen bruker klokkeslettet som vises i Lindbak-listen (lokal tid). Mangler det i listen, brukes rådata, og er de oppgitt i UTC flyttes de til norsk tid. Åpne <strong>Diagnostikk</strong> (Innstillinger → Generelt) for å sammenligne klokkeslettet i listen med det på bongens topptekst. Ligger listen konsekvent bak eller foran, foreslår Diagnostikk en forskyvning du kan bruke med én knapp; den kan også settes under Innstillinger → Generelt. Kjør analysen på nytt etterpå. Bongen viser ofte starttid og listen sluttid, så avvik på noen minutter er normalt.</p></details>
 <details class="faq"><summary>Filteret viser færre bonger enn forventet</summary><p>Filtre som krever skanning (pant, rabatt, vare, varegruppe) skjuler uskannede bonger. En gul stripe viser hvor mange. Skann for å se dem.</p></details>
 <details class="faq"><summary>Rabattfilteret finner ingenting selv om jeg har skannet</summary><p>Skanninger fra før versjon 3 har ikke rabattdata. «Skann synlige» tar dem på nytt, og statuslinjen viser «uten rabattdata».</p></details>
 <details class="faq"><summary>Testen «Retur uten salg» gir ingen treff</summary><p>Den vurderes bare når minst 80 % av salgene i datagrunnlaget er skannet. Rapporten sier fra hvis den ikke ble vurdert.</p></details>

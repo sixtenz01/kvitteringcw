@@ -12,6 +12,56 @@
     return m ? { date: m[1], time: m[2] } : { date: '', time: '' };
   }
 
+  var OSLO = null;
+  function osloParts(d) {
+    try {
+      OSLO = OSLO || new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Oslo', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' });
+      return OSLO.format(d);
+    } catch (e) { return ''; }
+  }
+
+  // Klokkeslett fra CW som lokal tid (Europe/Oslo): «ÅÅÅÅ-MM-DD TT:MM» (med :SS hvis kilden har sekunder).
+  // Tekst uten tidssone regnes som lokal tid. Tekst med Z eller +hh:mm (og Date) er et tidspunkt som flyttes til norsk tid.
+  function localDT(raw) {
+    if (raw instanceof Date) return isNaN(raw.getTime()) ? '' : osloParts(raw);
+    var m = /^(\d{4}-\d{2}-\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?\s*(Z|[+-]\d{2}:?\d{2})?$/.exec(String(raw === null || raw === undefined ? '' : raw).trim());
+    if (!m) return raw === null || raw === undefined ? '' : String(raw);
+    var plain = m[1] + ' ' + m[2] + ':' + m[3] + (m[4] ? ':' + m[4] : '');
+    if (!m[5]) return plain;
+    var off = m[5] === 'Z' ? 'Z' : m[5].replace(/^([+-]\d{2}):?(\d{2})$/, '$1:$2');
+    var d = new Date(m[1] + 'T' + m[2] + ':' + m[3] + ':' + (m[4] || '00') + off);
+    var out = isNaN(d.getTime()) ? '' : osloParts(d);
+    return out ? (m[4] ? out : out.slice(0, 16)) : plain;
+  }
+
+  // Legger minutter til «ÅÅÅÅ-MM-DD TT:MM[:SS]» uten å bry seg om tidssone.
+  function shiftDT(str, minutes) {
+    var m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})(?::(\d{2}))?$/.exec(String(str || ''));
+    if (!m || !minutes) return String(str || '');
+    var d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5] + Number(minutes), +(m[6] || 0)));
+    var iso = d.toISOString();
+    return iso.slice(0, 10) + ' ' + iso.slice(11, m[6] ? 19 : 16);
+  }
+
+  function dtMin(str) {
+    var m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})/.exec(String(str || ''));
+    return m ? Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]) / 60000 : null;
+  }
+
+  // Dato og klokkeslett slik de vises i CW-listen, for eksempel «02.10.2026 22:04:15» eller «2026-10-02 22:04».
+  function parseCellDT(text) {
+    var t = String(text || '').replace(/\s+/g, ' ').trim(), m;
+    if ((m = /(\d{1,2})[.\/](\d{1,2})[.\/](\d{4}),? (\d{1,2}):(\d{2})(?::(\d{2}))?/.exec(t))) return m[3] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2) + ' ' + ('0' + m[4]).slice(-2) + ':' + m[5] + ':' + (m[6] || '00');
+    if ((m = /(\d{4})-(\d{2})-(\d{2})[ T](\d{1,2}):(\d{2})(?::(\d{2}))?/.exec(t))) return m[1] + '-' + m[2] + '-' + m[3] + ' ' + ('0' + m[4]).slice(-2) + ':' + m[5] + ':' + (m[6] || '00');
+    return '';
+  }
+
+  // Dato og tid i bongens topptekst: «Kvittering: 2371 02.10.2026 22:04:15».
+  function headerDT(text) {
+    var m = /Kvittering:\s*\d+\s+(\d{1,2}[.\/]\d{1,2}[.\/]\d{4}|\d{4}-\d{2}-\d{2})\s+(\d{1,2}:\d{2}(?::\d{2})?)/i.exec(String(text || ''));
+    return m ? parseCellDT(m[1] + ' ' + m[2]) : '';
+  }
+
   function defaultFilters() {
     return {
       stores: [],
@@ -1727,6 +1777,24 @@
     return res;
   }
 
+  // Sammenligner klokkeslettet i listen med klokkeslettet i bongens topptekst (lagret som hd i skanningen).
+  function timeCheck(items, scanMap) {
+    var diffs = [], sample = null;
+    items.forEach(function (it) {
+      var sc = scanMap && scanMap[it.transactionId];
+      if (!sc || !sc.hd) return;
+      var a = dtMin(it.endDateTime), b = dtMin(sc.hd);
+      if (a === null || b === null) return;
+      diffs.push(b - a);
+      if (!sample || Math.abs(b - a) > Math.abs(sample.diff)) sample = { id: it.transactionId, list: it.endDateTime, bong: sc.hd, raw: it.rawDT === undefined ? '' : String(it.rawDT), diff: b - a };
+    });
+    var sorted = diffs.slice().sort(function (x, y) { return x - y; });
+    var med = sorted.length ? sorted[Math.floor(sorted.length / 2)] : 0;
+    var near = diffs.filter(function (x) { return Math.abs(x - med) <= 5; }).length;
+    var same = diffs.filter(function (x) { return Math.abs(x) <= 5; }).length;
+    return { n: diffs.length, same: same, median: med, suggest: diffs.length >= 5 && Math.abs(med) >= 30 && near >= 0.7 * diffs.length ? med : null, sample: sample };
+  }
+
   // Samler ukjente linjer og hendelsesord fra alle skanninger, til diagnostikk-dialogen.
   function diagnostics(scanMap) {
     var d = { total: 0, v4: 0, unk: {}, ev: {}, ku: { with: 0, without: 0 }, types: {} };
@@ -1834,6 +1902,9 @@
     TYPE_LABELS: TYPE_LABELS,
     typeLabel: typeLabel,
     parseDT: parseDT,
+    localDT: localDT,
+    parseCellDT: parseCellDT,
+    headerDT: headerDT,
     defaultFilters: defaultFilters,
     matches: matches,
     compare: compare,
@@ -1842,6 +1913,8 @@
     parseReceipt: parseReceipt,
     discounts: discounts,
     memberChecks: memberChecks,
+    shiftDT: shiftDT,
+    timeCheck: timeCheck,
     priceDeviation: priceDeviation,
     kuChecks: kuChecks,
     eventWords: eventWords,

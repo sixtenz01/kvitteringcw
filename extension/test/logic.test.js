@@ -719,4 +719,42 @@ assert.strictEqual(L.groupForReason('Kjøpeutbytte avviker fra varesum'), 'ku');
 assert.strictEqual(L.groupForReason('Mange avvikende priser'), 'price');
 }
 
+
+// ---- klokkeslett: liste mot bong ----
+{
+  assert.strictEqual(L.localDT('2026-10-02T20:04:00Z'), '2026-10-02 22:04:00', 'sommertid +2');
+  assert.strictEqual(L.localDT('2026-01-15T10:00:00.123Z'), '2026-01-15 11:00:00', 'vintertid +1');
+  assert.strictEqual(L.localDT('2026-10-02T20:04Z'), '2026-10-02 22:04', 'sekunder bare hvis kilden har dem');
+  assert.strictEqual(L.localDT('2026-10-02T22:04:00+02:00'), '2026-10-02 22:04:00');
+  assert.strictEqual(L.localDT('2026-10-02T20:04:00+0000'), '2026-10-02 22:04:00');
+  assert.strictEqual(L.localDT('2026-10-02T22:04:00'), '2026-10-02 22:04:00', 'uten tidssone regnes som lokal tid');
+  assert.strictEqual(L.localDT('2026-10-02 22:04'), '2026-10-02 22:04');
+  assert.strictEqual(L.localDT(new Date('2026-10-02T20:04:00Z')), '2026-10-02 22:04:00');
+  assert.strictEqual(L.localDT(null), '');
+  assert.strictEqual(L.localDT('ukjent'), 'ukjent');
+  assert.deepStrictEqual(L.parseDT(L.localDT('2026-10-02T21:59:00Z')), { date: '2026-10-02', time: '23:59' });
+  assert.deepStrictEqual(L.parseDT(L.localDT('2026-10-02T22:30:00Z')), { date: '2026-10-03', time: '00:30' }, 'over midnatt');
+  assert.strictEqual(L.parseCellDT('02.10.2026 22:04:15'), '2026-10-02 22:04:15');
+  assert.strictEqual(L.parseCellDT(' 2.10.2026, 9:05 '), '2026-10-02 09:05:00');
+  assert.strictEqual(L.parseCellDT('2026-10-02 22:04'), '2026-10-02 22:04:00');
+  assert.strictEqual(L.parseCellDT('02.10.2026'), '', 'uten klokkeslett brukes ikke');
+  assert.strictEqual(L.headerDT('Butikk: 1001, Kassenr: 2 Kvittering: 2371 02.10.2026 22:03:10 Medlemsnr.: 5'), '2026-10-02 22:03:10');
+  assert.strictEqual(L.headerDT('ingen topptekst'), '');
+  assert.strictEqual(L.shiftDT('2026-10-02 23:30', 60), '2026-10-03 00:30');
+  assert.strictEqual(L.shiftDT('2026-10-02 23:30:15', -60), '2026-10-02 22:30:15');
+  assert.strictEqual(L.shiftDT('2026-10-02 00:10', -20), '2026-10-01 23:50');
+  assert.strictEqual(L.shiftDT('2026-10-02 10:00', 0), '2026-10-02 10:00');
+  const tcItems = [], tcScan = {};
+  for (let i = 0; i < 8; i++) { const id = 'tc-' + i; tcItems.push({ transactionId: id, endDateTime: '2026-10-02 20:' + String(10 + i) }); tcScan[id] = { v: 4, hd: '2026-10-02 22:' + String(10 + i) + ':30' }; }
+  tcItems.push({ transactionId: 'tc-x', endDateTime: '2026-10-02 20:00' });
+  const tc = L.timeCheck(tcItems, tcScan);
+  assert.deepStrictEqual([tc.n, tc.same, tc.median, tc.suggest], [8, 0, 120, 120]);
+  assert.strictEqual(tc.sample.diff, 120);
+  tcItems.forEach((it) => { it.endDateTime = L.shiftDT(it.endDateTime, 120); });
+  assert.deepStrictEqual([L.timeCheck(tcItems, tcScan).same, L.timeCheck(tcItems, tcScan).suggest], [8, null]);
+  const few = L.timeCheck(tcItems.slice(0, 3).map((it) => Object.assign({}, it, { endDateTime: '2026-10-02 20:10' })), tcScan);
+  assert.strictEqual(few.suggest, null, 'for få bonger til å foreslå');
+  assert.strictEqual(L.timeCheck(tcItems, {}).n, 0);
+}
+
 console.log('logic: ok');

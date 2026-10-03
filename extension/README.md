@@ -69,6 +69,7 @@ Skanningen (v4) leser i tillegg enhetspris (`Antall: … à Kr …`), Kjøpeutby
 - **Kjøpeutbytte:** medlemsbong uten tabell, og grunnlag som avviker fra vanlig forhold til varesum (median over minst 10 bonger). Testene kalibrerer seg: finnes tabellen på under 80 % av medlemsbongene, regnes fravær ikke som avvik. Tabellen er ikke bekreftet i ekte data.
 - **Hendelsesord:** tekstlinjer (ikke varenavn) med annull, makul, storn, parker, på vent, manuell, spør pris, overstyr, prisendring, kansell eller avbrutt. Annullert, manuell pris, parkert og spør pris er ikke observert ennå.
 - **Diagnostikk** (Innstillinger → Generelt, eller kortet «Pris, kjøpeutbytte og hendelser»): hendelsesord og ukjente linjer med antall og eksempelbong; «Kopier som tekst» gir en liste til deling.
+- **Klokkeslett:** pluginen bruker tiden som vises i CW-listen (lokal tid). Mangler cellen, brukes rådata, flyttet til norsk tid hvis de har tidssone (`Z`/`+hh:mm`). Skanningen leser også dato og tid i bongens topptekst (`Kvittering: <nr> <dato> <tid>`), og Diagnostikk sammenligner liste og bong. Ligger listen konsekvent bak eller foran (minst 30 min, minst 5 bonger), foreslår Diagnostikk en forskyvning; den kan også settes under Innstillinger → Generelt. Topptekstformatet er ikke bekreftet i ekte data.
 
 Skanner fra tidligere versjoner (v2) har ikke rabattdata. «Skann synlige» skanner dem på nytt, og filteret skjuler dem til de er skannet (gul stripe viser antallet).
 
@@ -170,6 +171,7 @@ NODE_PATH=<global node_modules> node test/settings.js # innstillinger, hjelp, be
 node test/report.test.js                              # SHA-256, kontrollsummer og rapportbygger (uten nettleser)
 node test/noapi.test.js                               # ingen fetch/XHR/API-kall i kildekoden
 NODE_PATH=<global node_modules> node test/medlem.js    # medlemsnr, pris, kjøpeutbytte, hendelsesord og diagnostikk
+NODE_PATH=<global node_modules> node test/tid.js       # klokkeslett: liste mot bong, UTC, forskyvning
 NODE_PATH=<global node_modules> node test/rapport.js  # lager rapport i panelet, pakker ut ZIP og verifiserer alle kontrollsummer
 node test/docs.test.js                               # dekning av innstillinger, vekter, faner og kort i brukerveiledningen
 TOUR=<mappe> NODE_PATH=<global node_modules> node test/tour.js  # skjermbilder av alle faner (valgfritt)

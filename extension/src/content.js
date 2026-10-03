@@ -7,7 +7,7 @@
   var K = {
     saved: 'kvr.saved.v1', collapsed: 'kvr.collapsed.v1', scan: 'kvr.scan.v2', pos: 'kvr.pos.v1',
     size: 'kvr.size.v1', sec: 'kvr.sec.v1', rules: 'kvr.rules.v1', anom: 'kvr.anom.v1',
-    stores: 'kvr.stores.v1', tab: 'kvr.tab.v1', layout: 'kvr.layout.v1', arules: 'kvr.arules.v1', notes: 'kvr.notes.v1', tasks: 'kvr.tasks.v1', ctl: 'kvr.ctl.v1', keynav: 'kvr.keynav.v1', wide: 'kvr.wide.v1', sub: 'kvr.sub.v1', weights: 'kvr.weights.v1', lastrun: 'kvr.lastrun.v1', scope: 'kvr.scope.v1', help: 'kvr.help.v1', sub2: 'kvr.sub2.v1', reports: 'kvr.reports.v1', repopts: 'kvr.repopts.v1'
+    stores: 'kvr.stores.v1', tab: 'kvr.tab.v1', layout: 'kvr.layout.v1', arules: 'kvr.arules.v1', notes: 'kvr.notes.v1', tasks: 'kvr.tasks.v1', ctl: 'kvr.ctl.v1', keynav: 'kvr.keynav.v1', tshift: 'kvr.tshift.v1', wide: 'kvr.wide.v1', sub: 'kvr.sub.v1', weights: 'kvr.weights.v1', lastrun: 'kvr.lastrun.v1', scope: 'kvr.scope.v1', help: 'kvr.help.v1', sub2: 'kvr.sub2.v1', reports: 'kvr.reports.v1', repopts: 'kvr.repopts.v1'
   };
   var sayTimer = null;
   var failedRecs = [];
@@ -38,7 +38,7 @@
   var rules, anomCfg, manualStores, customRules = [];
   var scope = null, lastMode = 'scope', fetched = null;
   var weights = null, checkState = { newIds: {}, at: null, shown: 15, showChecked: false }, expanded = {};
-  var notes = {}, ctlRes = null, ctlCfg = null, tasksCustom = [], boundCount = 0, keyNav = true, settingsStale = false;
+  var notes = {}, ctlRes = null, ctlCfg = null, tasksCustom = [], boundCount = 0, keyNav = true, settingsStale = false, timeShift = 0;
 
   function openDb() {
     return new Promise(function (res) {
@@ -159,6 +159,11 @@
       var di = vi !== undefined ? view[vi] : grid.dataItem(tr);
       if (!di) return;
       var item = plain(di);
+      // Klokkeslett: det CW-listen viser (lokal tid) går først. Ellers rådata, flyttet til norsk tid hvis de har tidssone.
+      var dcell = tr.querySelector('td[data-field="endDateTime"]');
+      var shown = dcell ? L.parseCellDT(dcell.textContent) : '';
+      item.rawDT = item.endDateTime;
+      item.endDateTime = L.shiftDT(shown || L.localDT(item.endDateTime), timeShift);
       var cell = tr.querySelector('td[data-field="receiptIdentifier"]');
       item.bongnr = cell && cell.textContent.trim() ? cell.textContent.trim() : [item.storeNumber, item.workstationNumber, seqOf(item.transactionId)].join('-');
       var orig = pos.has(di) ? pos.get(di) : (di.uid && byUid[di.uid] !== undefined ? byUid[di.uid] : 0);
@@ -258,9 +263,11 @@
   }
 
   function rowsFrom(doc) {
-    return Array.prototype.map.call(doc.querySelectorAll('tr'), function (tr) {
+    var rows = Array.prototype.map.call(doc.querySelectorAll('tr'), function (tr) {
       return Array.prototype.map.call(tr.children, function (c) { return c.textContent.replace(/\s+/g, ' ').trim(); });
     });
+    rows.hd = L.headerDT(doc.body ? doc.body.textContent : '');
+    return rows;
   }
 
   async function loadViaDom(r) {
@@ -299,6 +306,7 @@
         var id = todo[i].item.transactionId;
         scanMap[id] = todo[i].item.receiptType === 2 ? L.parseSettlement(rows) : L.parseReceipt(rows);
         scanMap[id].t = Date.now();
+        if (rows.hd) scanMap[id].hd = rows.hd;
         dirty[id] = true;
         done++;
       } else { failed++; failedRecs.push(todo[i]); }
@@ -1243,7 +1251,7 @@
     var per = function (a, b) { return (a || '…') + ' → ' + (b || '…'); };
     return {
       at: res.at.getTime(), mode: mode, items: items, pop: pop, scan: scanSnap, anom: anomSnap, storeLabels: labels,
-      ctl: JSON.parse(JSON.stringify(ctlCfg)), anomCfg: JSON.parse(JSON.stringify(anomCfg)),
+      ctl: JSON.parse(JSON.stringify(ctlCfg)), anomCfg: JSON.parse(JSON.stringify(anomCfg)), timeShift: timeShift,
       scopeText: mode === 'scope' ? scopeSummary() : 'synlige kvitteringer i listen',
       scopeObj: mode === 'scope' ? JSON.parse(JSON.stringify(scope)) : null,
       compare: mode === 'scope' && scope.compare.on ? { a: per(scope.dateFrom, scope.dateTo), b: per(scope.compare.from, scope.compare.to) } : null,
@@ -1477,8 +1485,22 @@
   }
 
   // Ukjente linjer og hendelsesord fra skanningene. Brukes til å lære hva CW faktisk viser (annullert, parkert, manuell pris, spør pris).
+  function timeText(TC) {
+    if (!TC.n) return 'Ingen skannede bonger har dato og tid i topptekst (skann på nytt, eller formatet er ukjent).';
+    return TC.n + ' bonger sammenlignet: ' + TC.same + ' har samme klokkeslett i listen og på bongen (±5 min). Typisk avvik (bong minus liste): ' + TC.median + ' min. Forskyvning i bruk: ' + timeShift + ' min.' +
+      (TC.sample && Math.abs(TC.sample.diff) > 5 ? ' Størst avvik: bong ' + TC.sample.id + ', liste «' + TC.sample.list + '», bong «' + TC.sample.bong + '», rådata «' + TC.sample.raw + '».' : '');
+  }
+
+  function setTimeShift(min) {
+    timeShift = Number(min) || 0;
+    store(K.tshift, timeShift);
+    if (ui.tshift) ui.tshift.value = String(timeShift);
+    apply();
+    markStale();
+  }
+
   function diagText(D) {
-    var out = ['Kvitteringshenter diagnostikk', 'Skannede bonger: ' + D.total + ' (ny skanning: ' + D.v4 + ')', 'Kjøpeutbytte-tabell: ' + D.ku.with + ' med, ' + D.ku.without + ' uten', '', 'Hendelsesord (ord, antall, tekst, eksempelbong):'];
+    var out = ['Kvitteringshenter diagnostikk', 'Skannede bonger: ' + D.total + ' (ny skanning: ' + D.v4 + ')', 'Kjøpeutbytte-tabell: ' + D.ku.with + ' med, ' + D.ku.without + ' uten', 'Klokkeslett: ' + timeText(L.timeCheck(recs.map(function (r) { return r.item; }), scanMap)), '', 'Hendelsesord (ord, antall, tekst, eksempelbong):'];
     if (!D.ev.length) out.push('  ingen');
     D.ev.forEach(function (e) { out.push('  ' + e.k + '\t' + e.n + '\t' + e.t + '\t' + e.id); });
     out.push('', 'Ukjente linjer (tekst med tall som #, antall, eksempelbong):');
@@ -1490,6 +1512,13 @@
   function openDiag() {
     var D = L.diagnostics(scanMap);
     var body = el('div', { class: 'kvr-secbody' });
+    var TC = L.timeCheck(recs.map(function (r) { return r.item; }), scanMap);
+    body.appendChild(el('b', { class: 'kvr-subh', text: 'Klokkeslett: liste mot bong' }));
+    body.appendChild(hintEl(timeText(TC)));
+    if (TC.suggest !== null) {
+      body.appendChild(hintEl('Listen ligger konsekvent ' + Math.abs(TC.suggest) + ' min ' + (TC.suggest > 0 ? 'bak' : 'foran') + ' bongen. Det tyder på tidssone eller en fast forskyvning i dataene.'));
+      body.appendChild(btn('Flytt listetid ' + (TC.suggest > 0 ? '+' : '') + TC.suggest + ' min', function () { setTimeShift(timeShift + TC.suggest); closeModal(); say('Listetid flyttet ' + (TC.suggest > 0 ? '+' : '') + TC.suggest + ' min. Kjør analysen på nytt.'); }, 'kvr-primary'));
+    }
     body.appendChild(hintEl(D.v4 ? D.v4 + ' av ' + D.total + ' skannede bonger har ny skanningsdata (eldre må skannes på nytt). Dette er linjer pluginen ikke kjenner igjen, og ord som tyder på annullert, parkert, manuell pris eller spør pris. Del listen for å få testene utvidet.' : 'Ingen skanninger med ny data ennå. Skann kvitteringer først (Skann → Skann innhold).'));
     if (D.v4) {
       body.appendChild(el('b', { class: 'kvr-subh', text: 'Hendelsesord' }));
@@ -2798,7 +2827,7 @@
       });
       var model = {
         version: KvReport.VERSION, generatedAt: new Date().toISOString(), generatedLocal: new Date().toLocaleString('nb-NO'), analysedAt: new Date(R.at).toISOString(), analysedLocal: new Date(R.at).toLocaleString('nb-NO'),
-        reference: opts.reference, author: opts.author,
+        reference: opts.reference, author: opts.author, timeShift: R.timeShift || 0,
         scope: { text: R.scopeText, mode: R.mode, filters: R.filters, coverageText: R.coverageText, compare: R.compare },
         items: R.items, pop: R.pop, scan: R.scan, storeLabels: R.storeLabels,
         settings: { ctl: R.ctl, anom: R.anomCfg, weights: weights, currentDiffers: KvReport.stable([R.ctl, R.anomCfg]) !== KvReport.stable([ctlCfg, anomCfg]) },
@@ -3246,8 +3275,13 @@
       setFile.value = '';
     });
     ui.setStale = el('div', { class: 'kvr-notice', role: 'status', style: 'display:none' }, [el('span', { text: 'Innstillingene er endret siden siste analyse.' }), btn('Kjør analyse', function () { ui.go('check'); runAnalysis(); }, 'kvr-sm')]);
+    ui.tshift = el('input', { type: 'number', step: '1', 'aria-label': 'Tidsforskyvning for listen (min)' });
+    ui.tshift.value = String(timeShift);
+    ui.tshift.addEventListener('change', function () { var v = Math.round(Number(ui.tshift.value)); setTimeShift(isFinite(v) ? v : 0); });
     ui.setGeneral = section('set-general', 'Generelt', [
       field('Egne butikknavn (valgfritt, nr=navn per linje)', storeNames),
+      field('Tidsforskyvning for listen (min)', ui.tshift),
+      hintEl('Normalt 0. Brukes bare hvis klokkeslettet i listen avviker fast fra bongen; Diagnostikk foreslår verdien.'),
       kn.node,
       el('div', { class: 'kvr-row' }, [btn('Eksporter innstillinger', exportSettings), btn('Importer…', function () { setFile.click(); }), btn('Diagnostikk…', openDiag)]), setFile,
       el('div', { class: 'kvr-row' }, [
@@ -3512,6 +3546,7 @@
     tasksCustom = Array.isArray(store(K.tasks)) ? store(K.tasks) : [];
     ctlCfg = L.sanitizeControl(store(K.ctl));
     keyNav = store(K.keynav) !== false;
+    timeShift = Number(store(K.tshift)) || 0;
     weights = L.sanitizeWeights(store(K.weights));
     scope = sanitizeScope(store(K.scope));
     setInterval(attach, 1500);

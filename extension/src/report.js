@@ -2,7 +2,7 @@
   'use strict';
 
   var L = typeof module !== 'undefined' && module.exports ? require('./logic.js') : root.KvLogic;
-  var VERSION = '3.11.0';
+  var VERSION = '3.11.1';
 
   // ---- SHA-256 (ren JS, så rapporten ikke avhenger av crypto.subtle) -------------------
   var K256 = [
@@ -133,6 +133,7 @@
     out.push('«Hull i bongnummer» forutsetter at listen ikke er filtrert på type, kasse eller tid, og at kvitteringstypene deler nummerserie per kasse (ikke bekreftet i ekte data).');
     var nb = m.checks && m.checks.numbers;
     if (nb && nb.overall && nb.overall.enough === false) out.push('Benford: bare ' + nb.overall.n + ' bonger i omfanget, for få til en sikker konklusjon.');
+    out.push('Klokkeslett er som vist i CW-listen (lokal tid)' + (m.timeShift ? ', flyttet ' + (m.timeShift > 0 ? '+' : '') + m.timeShift + ' min etter innstillingen «Tidsforskyvning for listen»' : '') + '. Bongens topptekst kan vise starttid mens listen har sluttid.');
     if (m.failedScans) out.push(m.failedScans + ' kvitteringer kunne ikke skannes og er ikke med i innholdstestene.');
     if (m.scope.coverageText) out.push('Omfanget går utenfor det som er hentet fra CW (' + m.scope.coverageText + ').');
     if (m.settings.currentDiffers) out.push('Innstillingene er endret etter analysen. Rapporten viser verdiene som ble brukt i analysen.');
