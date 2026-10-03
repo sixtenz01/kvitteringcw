@@ -1476,7 +1476,7 @@
       });
       rows.push(['Butikksnitt', st.count, pct(st.retShare), fmt(st.avg), st.scanned ? st.lapperPer.toFixed(2) : '–', st.scanned ? st.negPer.toFixed(2) : '–']);
       ui.ctlProfile.appendChild(tbl(['Kasserer', 'Salg', 'Returandel', 'Snitt kr', 'Pantelapp/salg', 'Korr./salg'], rows));
-      ui.ctlProfile.appendChild(hintEl('Rødt = minst ' + ctlCfg.profFactor + '× butikksnittet (snitt også under 1/' + ctlCfg.profFactor + '). Returandel = salg med negativ sum. Pantelapper og korrigeringer (negative varelinjer utenom pant) krever skanning. Kasserere med færre enn ' + ctlCfg.profMin + ' bonger vurderes ikke.'));
+      ui.ctlProfile.appendChild(hintEl('Rødt = minst ' + ctlCfg.profFactor + '× butikksnittet (snitt også under 1/' + ctlCfg.profFactor + '). Returandel = salg med negativ sum. Pantelapper og korrigeringer (negative varelinjer utenom pant) krever skanning. Kasserere med færre enn ' + ctlCfg.profMin + ' bonger vurderes ikke.' + (ctlCfg.profShrink ? ' Tallene krympes mot butikksnittet (som ' + ctlCfg.profShrink + ' bonger), så få bonger gir små utslag.' : '')));
     }
     // funn
     if (!R.findings.length) ui.ctlFindings.appendChild(hintEl('Ingen funn med gjeldende terskler.'));
@@ -2104,7 +2104,7 @@
 
   function riskBadge(score) {
     var lvl = L.riskLevel(score);
-    return el('span', { class: 'kvr-risk ' + levelClass(score), title: 'Risikoscore ' + score, text: lvl.charAt(0).toUpperCase() + lvl.slice(1) + ' ' + score });
+    return el('span', { class: 'kvr-risk ' + levelClass(score), title: 'Risikoscore ' + score + ' poeng = RRS ' + L.rrs(score) + ' av 100', text: lvl.charAt(0).toUpperCase() + lvl.slice(1) + ' ' + score + ' (RRS ' + L.rrs(score) + ')' });
   }
 
   function checkRow(rk, first) {
@@ -2662,7 +2662,7 @@
       el('b', { class: 'kvr-subh', text: 'Tegnforklaring' }),
       legendRow(el('span', { class: 'kvr-sw kvr-sw-flag', text: '' }), 'Rød kant: bongen er flagget i analysen.'),
       legendRow(el('span', { class: 'kvr-sw kvr-sw-warn' }), 'Gul stripe: noe mangler (skanning eller data). Knappen ved siden av løser det.'),
-      legendRow(el('span', { class: 'kvr-sw kvr-sw-hi', text: 'Høy 8' }), 'Risikoscore er summen av poeng for avvikene. Høy fra 8, middels fra 4.'),
+      legendRow(el('span', { class: 'kvr-sw kvr-sw-hi', text: 'Høy 8' }), 'Risikoscore er summen av poeng for avvikene. Høy fra 8, middels fra 4. RRS 0–100 er samme tall på en skala der 8 poeng = 50.'),
       legendRow(el('span', { class: 'kvr-sw kvr-sw-new', text: 'Ny' }), 'Flagget siden forrige analyse.'),
       legendRow(el('span', { class: 'kvr-sw kvr-sw-ent', text: 'Kasserer 12' }), 'Klikk for å se alt som gjelder kassereren eller kassen (Fokus).'),
       legendRow(el('span', { class: 'kvr-sw kvr-sw-bad', text: '−70,00' }), 'Rødt tall i tabell: over terskelen.'),

@@ -263,7 +263,7 @@
         { html: g.weights.length ? g.weights.map(function (w) { return cfgLine(w.title, String(w.value), w.changed, false); }).join('') : '<span class="off">–</span>' }
       ] };
     }), 'cfg'));
-    P('<p class="hint">Risikonivå: høy fra 8 poeng, middels fra 4. Risikoscore er summen av poeng for avvikene på en kvittering.</p>');
+    P('<p class="hint">Risikonivå: høy fra 8 poeng, middels fra 4. Risikoscore er summen av poeng for avvikene på en kvittering. RRS (Receipt Risk Score, 0–100) = 100 × (1 − 2^(−poeng/8)): 4 poeng = 29, 8 = 50, 16 = 75.</p>');
 
     P('<h2>5. Funn</h2>');
     if (!m.findings.length) P('<p>Ingen funn med gjeldende terskler.</p>');
@@ -288,7 +288,7 @@
       P(table(['Risiko', 'Bongnr', 'Tidspunkt', 'Kasse', 'Kasserer', { t: 'Sum', n: true }, 'Avvik og forklaring', 'Status / notat', 'Bevis'], ranked.map(function (r) {
         var it = itemOf[r.id] || {}, n = m.notes[r.id], ev = m.evidence.byId[r.id];
         return { cells: [
-          { html: '<span class="badge ' + levelCls(r.score) + '">' + esc(cap(levelOf(r.score))) + ' ' + r.score + '</span>', },
+          { html: '<span class="badge ' + levelCls(r.score) + '">' + esc(cap(levelOf(r.score))) + ' ' + r.score + ' (RRS ' + L.rrs(r.score) + ')</span>', },
           it.bongnr || r.id, it.endDateTime || '', it.workstationNumber, it.cashierNumber, { t: typeof it.totalAmount === 'number' ? fmtNum(it.totalAmount) : '–', n: true },
           { html: '<ul>' + (m.explain[r.id] || r.reasons).map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>' },
           n ? (n.status === 'sjekket' ? 'Sjekket' : n.status === 'oppfolging' ? 'Til oppfølging' : '') + (n.note ? ': ' + n.note : '') : '',
@@ -343,9 +343,9 @@
     h.findings = add('data/funn.csv', L.toCsv([['Test', 'Tittel', 'Detalj', 'Bonger', 'Kasserer', 'Flagger bong']].concat(m.findings.map(function (f) {
       return [f.kind, f.title, f.detail, f.ids.map(bongOf).join('; '), f.cashier || '', f.flag ? 'ja' : 'nei'];
     }))));
-    h.flagged = add('data/flaggede_bonger.csv', L.toCsv([['Rang', 'Risiko', 'Poeng', 'Bongnr', 'Tidspunkt', 'Butikk', 'Kasse', 'Kasserer', 'Sum', 'Avvik', 'Status', 'Notat', 'Bevis']].concat(m.ranked.map(function (r, i) {
+    h.flagged = add('data/flaggede_bonger.csv', L.toCsv([['Rang', 'Risiko', 'Poeng', 'RRS', 'Bongnr', 'Tidspunkt', 'Butikk', 'Kasse', 'Kasserer', 'Sum', 'Avvik', 'Status', 'Notat', 'Bevis']].concat(m.ranked.map(function (r, i) {
       var it = itemOf[r.id] || {}, n = m.notes[r.id] || {}, ev = m.evidence.byId[r.id];
-      return [i + 1, cap(levelOf(r.score)), r.score, it.bongnr || r.id, it.endDateTime || '', it.storeNumber, it.workstationNumber, it.cashierNumber,
+      return [i + 1, cap(levelOf(r.score)), r.score, L.rrs(r.score), it.bongnr || r.id, it.endDateTime || '', it.storeNumber, it.workstationNumber, it.cashierNumber,
         typeof it.totalAmount === 'number' ? String(it.totalAmount).replace('.', ',') : '', r.reasons.join('; '), n.status || '', n.note || '', ev ? ev.path : ''];
     }))));
     h.settings = add('innstillinger.json', m.settingsJson);

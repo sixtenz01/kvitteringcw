@@ -819,7 +819,7 @@
     ['pantMin', 'Pantebeløp ≥ kr', '20'], ['pantRatio', 'Panteretur > salg ×', '1'],
     ['openFrom', 'Åpner (HH:MM)', '06:00'], ['openTo', 'Stenger (HH:MM)', '23:00'],
     ['maxGap', 'Maks hull i bongnr', '50'], ['profFactor', 'Avvik fra snitt ×', '1.5'],
-    ['profMin', 'Minst antall for profil', '5'], ['reconTol', 'Avstemt toleranse kr', '1'],
+    ['profMin', 'Minst antall for profil', '5'], ['profShrink', 'Krymping mot butikksnitt (antall bonger, tom = av)', '10'], ['reconTol', 'Avstemt toleranse kr', '1'],
     ['falseRet', 'Falsk retur-test (tom = av)', '1'], ['saleReturnMin', 'Salg og retur av samme beløp innen min', '60'],
     ['settleGraceMin', 'Salg etter oppgjør, frist min', '5'], ['diffRepeatN', 'Kassadiff. minus ≥ antall oppgjør', '3'],
     ['diffMin', 'Kassadifferanse teller fra kr', '1'], ['diffTotal', 'Kassadiff. minus totalt ≥ kr', '100'],
@@ -933,6 +933,7 @@
     { id: 'profile', title: 'Kassererprofil og avstemming', text: 'Sammenligning mot butikksnittet og toleranse i dagsavstemmingen.', fields: [
       sf('profFactor', 'ctl', 'num', 'Avviker fra snittet fra', '×'),
       sf('profMin', 'ctl', 'num', 'Minst antall bonger for profil', 'stk'),
+      sf('profShrink', 'ctl', 'num', 'Krymping mot butikksnitt', 'bonger', 'Butikksnittet teller som så mange bonger i hver kassereres tall. Få bonger gir små utslag. Tom = rå tall.', true),
       sf('reconTol', 'ctl', 'num', 'Avstemming: toleranse', 'kr')
     ], weights: [] },
     { id: 'rules', title: 'Egne regler', text: 'Reglene bygges under Analyse → Detaljer → Egne avviksregler.', fields: [], weights: ['Regel'] }
@@ -972,8 +973,10 @@
   function isSale(it) { return it.receiptType === 1 && typeof it.totalAmount === 'number'; }
 
   // Kassererprofil: forholdstall per kasserer mot butikksnittet.
+  // Tallene krympes mot butikksnittet: (n·x + k·snitt) / (n + k). Det hindrer at en kasserer med få bonger flagges på tilfeldigheter.
   function profiles(items, scanMap, cfg) {
-    var f = cnum(cfg.profFactor, 1.5), minN = cnum(cfg.profMin, 5);
+    var f = cnum(cfg.profFactor, 1.5), minN = cnum(cfg.profMin, 5), shr = cnum(cfg.profShrink, null);
+    var sh = function (x, n, mu) { return shr === null || !(n >= 0) ? x : (n * x + shr * mu) / (n + shr); };
     var acc = {}, tot = null;
     var fresh = function () { return { count: 0, ret: 0, pos: 0, posSum: 0, scanned: 0, lapper: 0, neg: 0 }; };
     tot = fresh();
@@ -990,7 +993,7 @@
     });
     var met = function (x) {
       return {
-        count: x.count, retShare: x.count ? x.ret / x.count : 0, avg: x.pos ? x.posSum / x.pos : 0,
+        count: x.count, pos: x.pos, retShare: x.count ? x.ret / x.count : 0, avg: x.pos ? x.posSum / x.pos : 0,
         scanned: x.scanned, lapper: x.lapper, lapperPer: x.scanned ? x.lapper / x.scanned : 0,
         neg: x.neg, negPer: x.scanned ? x.neg / x.scanned : 0
       };
@@ -1001,12 +1004,13 @@
       m.id = id;
       m.flags = {};
       if (m.count >= minN) {
-        m.flags.retShare = store.retShare > 0 && m.retShare >= store.retShare * f;
-        m.flags.avg = store.avg > 0 && (m.avg >= store.avg * f || (m.avg > 0 && m.avg <= store.avg / f));
+        var sr = sh(m.retShare, m.count, store.retShare), sa = sh(m.avg, m.pos, store.avg);
+        m.flags.retShare = store.retShare > 0 && sr >= store.retShare * f;
+        m.flags.avg = store.avg > 0 && (sa >= store.avg * f || (m.avg > 0 && sa <= store.avg / f));
       }
       if (m.scanned >= minN) {
-        m.flags.lapperPer = store.lapperPer > 0 && m.lapperPer >= store.lapperPer * f;
-        m.flags.negPer = store.negPer > 0 && m.negPer >= store.negPer * f;
+        m.flags.lapperPer = store.lapperPer > 0 && sh(m.lapperPer, m.scanned, store.lapperPer) >= store.lapperPer * f;
+        m.flags.negPer = store.negPer > 0 && sh(m.negPer, m.scanned, store.negPer) >= store.negPer * f;
       }
       m.flagged = Object.keys(m.flags).some(function (k) { return m.flags[k]; });
       return m;
@@ -1252,6 +1256,12 @@
 
   function riskScore(reasons, weights) {
     return round2((reasons || []).reduce(function (a, r) { return a + reasonWeight(r, weights); }, 0));
+  }
+
+  // Receipt Risk Score 0–100 fra poeng: 100 × (1 − 2^(−poeng/8)). 4 poeng = 29, 8 = 50, 16 = 75.
+  function rrs(points) {
+    var p = Number(points);
+    return isFinite(p) && p > 0 ? Math.min(100, Math.round(100 * (1 - Math.pow(2, -p / 8)))) : 0;
   }
 
   function riskLevel(score) { return score >= 8 ? 'høy' : score >= 4 ? 'middels' : 'lav'; }
@@ -2162,6 +2172,7 @@
     reasonBase: reasonBase,
     reasonWeight: reasonWeight,
     riskScore: riskScore,
+    rrs: rrs,
     riskLevel: riskLevel,
     rankReceipts: rankReceipts,
     rankCashiers: rankCashiers,

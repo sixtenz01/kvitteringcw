@@ -88,7 +88,7 @@ assert.strictEqual(shuffled.hashes.receipts, out.hashes.receipts, 'rekkefølge p
 assert.notStrictEqual(R.build(Object.assign(model(), { items: items.slice(0, 3) })).hashes.receipts, out.hashes.receipts, 'endret omfang endrer kontrollsummen');
 assert.ok(byPath['data/funn.csv'].includes('Falsk retur;Salg og retur av samme beløp;Kasse 1: salg 10:00 og retur 10:20, begge 100 kr;"1005-1-101; 1005-1-100";;ja'));
 assert.match(byPath['data/funn.csv'], /Tallanalyse;Mange runde beløp;.*;;A;nei/);
-assert.match(byPath['data/flaggede_bonger.csv'], /1;Høy;9;1005-1-101;2026-10-01 10:20;1005;1;A;-100;"Salg og retur av samme beløp; Kortkjøp refundert kontant";oppfolging;Sjekk med <script>alert\(1\)<\/script> butikksjef;bevis\/01_1005-1-101.png/);
+assert.match(byPath['data/flaggede_bonger.csv'], /1;Høy;9;54;1005-1-101;2026-10-01 10:20;1005;1;A;-100;"Salg og retur av samme beløp; Kortkjøp refundert kontant";oppfolging;Sjekk med <script>alert\(1\)<\/script> butikksjef;bevis\/01_1005-1-101.png/);
 assert.strictEqual(JSON.parse(byPath['innstillinger.json']).app, 'kvitteringshenter');
 
 // rapporten: alle deler, riktige tall, escaping

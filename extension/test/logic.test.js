@@ -892,4 +892,21 @@ assert.strictEqual(L.groupForReason('Mange avvikende priser'), 'price');
   assert.deepStrictEqual(real.mv, [{ g: 35.49, r: 25, m: 8.87, s: 44.36 }, { g: 25, r: 15, m: 3.75, s: 28.75 }]);
 }
 
+
+// ---- RRS 0–100 og krymping i kassererprofilen ----
+{
+  assert.deepStrictEqual([0, 4, 8, 9, 16, 24, 40, -5, NaN, null, 1e9].map((p) => L.rrs(p)), [0, 29, 50, 54, 75, 88, 97, 0, 0, 0, 100]);
+  assert.strictEqual(L.riskLevel(8), 'høy');
+  assert.ok(L.rrs(8) >= 50 && L.rrs(7) < 50 && L.rrs(4) >= 25 && L.rrs(3) < 25, 'RRS 50 = høy, 25 = middels');
+  const mkS = (cashier, n, rets) => { const out = []; for (let i = 0; i < n; i++) out.push({ transactionId: cashier + '-' + i, endDateTime: '2026-10-02 10:00', storeNumber: 1, workstationNumber: 1, cashierNumber: cashier, receiptType: 1, totalAmount: i < rets ? -50 : 100 }); return out; };
+  // butikk: kasserer A 300 bonger med 15 retur (5 %), B 5 bonger med 1 retur (20 %), C 40 bonger med 16 retur (40 %)
+  const sItems = mkS('A', 300, 15).concat(mkS('B', 5, 1), mkS('C', 40, 16));
+  const raw = L.profiles(sItems, {}, Object.assign(L.defaultControl(), { profShrink: '' }));
+  const shr = L.profiles(sItems, {}, L.defaultControl());
+  const fl = (p, id) => p.rows.find((r) => r.id === id).flags.retShare;
+  assert.deepStrictEqual([fl(raw, 'B'), fl(raw, 'C')], [true, true], 'rå tall flagger begge');
+  assert.deepStrictEqual([fl(shr, 'B'), fl(shr, 'C')], [false, true], 'krymping fjerner treffet for 5 bonger, beholder 40 bonger');
+  assert.strictEqual(L.sanitizeControl({}).profShrink, '10');
+}
+
 console.log('logic: ok');

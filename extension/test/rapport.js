@@ -143,7 +143,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   assert.strictEqual(exported.app, 'kvitteringshenter');
   assert.strictEqual(exported.ctl.diffTotal, '100');
   const flagged = await r1.zip.file('data/flaggede_bonger.csv').async('string');
-  assert.ok(flagged.split('\r\n')[1].startsWith('1;Høy;10;1005-1-104'), 'rangert etter risiko');
+  assert.ok(flagged.split('\r\n')[1].startsWith('1;Høy;10;58;1005-1-104'), 'rangert etter risiko');
   assert.ok(flagged.includes('oppfolging'), 'status fra notater er med');
 
   if (process.env.REPORT_OUT) {
