@@ -70,6 +70,38 @@
 
   function pctText(x) { return Math.round(x * 100) + ' %'; }
 
+  // ---- notatlogg: append-only med hash-kjede ---------------------------------------------
+  // Hver endring av et notat eller en status legges til som en egen hendelse. Hendelsen får h = SHA-256(forrige h + «|» + hendelsen),
+  // slik at en endret, fjernet eller flyttet hendelse bryter kjeden. Den avslører utilsiktet eller delvis endring i nettleserens lagring;
+  // den er ikke bevis mot den som har full tilgang. Kontrollsummen i rapporten (eller en notert kontrollsum) er det som låser den.
+  function logHash(prev, entry) {
+    var e = {};
+    Object.keys(entry).forEach(function (k) { if (k !== 'h') e[k] = entry[k]; });
+    return sha256(prev + '|' + stable(e));
+  }
+
+  function logAppend(log, entry) {
+    var prev = log.list.length ? log.list[log.list.length - 1].h : (log.base || '');
+    entry.h = logHash(prev, entry);
+    log.list.push(entry);
+    return entry;
+  }
+
+  function logVerify(log) {
+    var prev = (log && log.base) || '';
+    var list = (log && log.list) || [];
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].h !== logHash(prev, list[i])) return { ok: false, at: i, n: list.length, head: prev };
+      prev = list[i].h;
+    }
+    return { ok: true, n: list.length, head: prev };
+  }
+
+  // Beholder de nyeste max hendelsene; kontrollsummen til den siste fjernede blir ny base, så kjeden fortsatt kan verifiseres.
+  function logTrim(log, max) {
+    while (log.list.length > max) { log.base = log.list.shift().h; }
+  }
+
   // ---- datafiler (kontrollsummene regnes over nøyaktig disse filene) -------------------
   function receiptsCsv(pop, inScope) {
     var rows = [['Bong-ID', 'Bongnr', 'Tidspunkt', 'Butikk', 'Kasse', 'Kasserer', 'Type', 'Sum', 'Medlem', 'I omfang']];
@@ -273,6 +305,7 @@
       evs.forEach(function (e) { P('<div class="ev"><a href="' + esc(e.path) + '"><img src="' + esc(e.path) + '" alt="' + esc(e.path) + '"></a><div>' + esc(bong(e.id)) + '<br><span class="hash">' + esc(e.hash) + '</span></div></div>'); });
     }
 
+    var nl = m.notelog && m.notelog.list && m.notelog.list.length ? logVerify(m.notelog) : null;
     P('<h2>8. Kontrollsummer og verifisering</h2>');
     P(table(['Fil', 'SHA-256'], [
       { cells: ['data/kvitteringer.csv (alle kvitteringer i datagrunnlaget, sortert på bong-ID)', { html: '<span class="hash">' + h.receipts + '</span>' }] },
@@ -280,7 +313,7 @@
       { cells: ['innstillinger.json (terskler og poeng)', { html: '<span class="hash">' + h.settings + '</span>' }] },
       { cells: ['data/funn.csv', { html: '<span class="hash">' + h.findings + '</span>' }] },
       { cells: ['data/flaggede_bonger.csv', { html: '<span class="hash">' + h.flagged + '</span>' }] }
-    ]));
+    ].concat(h.notelog ? [{ cells: ['data/notatlogg.json (alle endringer av notater og status, hash-kjede: ' + nl.n + ' hendelser, ' + (nl.ok ? 'kjeden er ubrutt, hodekontrollsum ' + nl.head.slice(0, 16) + '…' : 'KJEDEN ER BRUTT ved hendelse ' + (nl.at + 1)) + ')', { html: '<span class="hash">' + h.notelog + '</span>' }] }] : [])));
     P('<p><b>Slik verifiserer du:</b> pakk ut ZIP-filen og kjør <span class="hash">sha256sum -c KONTROLLSUM.txt</span> (Windows: <span class="hash">certutil -hashfile fil SHA256</span>). Alle filer skal gi OK. Kontrollsummen for selve ZIP-filen vises i panelet ved eksport og kan noteres i saken.</p>');
     P('<p><b>Slik gjentar du analysen:</b> les inn innstillinger.json (Mer → Innstillinger → Importer), hent samme omfang i CW, skann og kjør analysen. Samme data gir samme kvitteringer.csv og samme funn.</p>');
     P('<h2>9. Forbehold</h2><ul><li>Funn er indikasjoner som må vurderes og forklares, ikke bevis for misligheter.</li><li>Kontrollsummene viser at innholdet i denne eksporten ikke er endret etter at den ble laget. De sier ikke at dataene i Lindbak er riktige.</li><li>Rapporten inneholder kasserernumre og bildet av kvitteringer. Medlemsnummer er ikke med i bevisbildene eller i datafilene (bare om kvitteringen hadde medlem).</li><li>Kvitteringsdata er lest ut fra visningen i Lindbak Chain Web; endringer i Lindbaks oppsett kan påvirke tolkningen.</li></ul>');
@@ -316,6 +349,7 @@
         typeof it.totalAmount === 'number' ? String(it.totalAmount).replace('.', ',') : '', r.reasons.join('; '), n.status || '', n.note || '', ev ? ev.path : ''];
     }))));
     h.settings = add('innstillinger.json', m.settingsJson);
+    if (m.notelog && m.notelog.list && m.notelog.list.length) h.notelog = add('data/notatlogg.json', stable({ base: m.notelog.base || '', list: m.notelog.list }) + '\n');
 
     var cov = coverageOf(m), lim = limitations(m, cov), tbl = settingsTable(m.settings.ctl, m.settings.anom, m.settings.weights);
     var html = renderHtml(m, h, cov, lim, tbl);
@@ -327,7 +361,7 @@
     return { files: files, hashes: h, coverage: cov, limitations: lim };
   }
 
-  var api = { VERSION: VERSION, sha256: sha256, sha256Bytes: sha256Bytes, utf8: utf8, stable: stable, fmtNum: fmtNum, receiptsCsv: receiptsCsv, contentJson: contentJson, settingsTable: settingsTable, coverageOf: coverageOf, limitations: limitations, build: build };
+  var api = { logHash: logHash, logAppend: logAppend, logVerify: logVerify, logTrim: logTrim, VERSION: VERSION, sha256: sha256, sha256Bytes: sha256Bytes, utf8: utf8, stable: stable, fmtNum: fmtNum, receiptsCsv: receiptsCsv, contentJson: contentJson, settingsTable: settingsTable, coverageOf: coverageOf, limitations: limitations, build: build };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.KvReport = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -323,6 +323,12 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   assert.strictEqual(await page.$$eval('.kvr-modal', n => n.length), 0);
   assert.ok(await page.$eval('tr[data-id="t-3"]', t => t.classList.contains('kvr-follow')));
   assert.match(await page.innerText('[data-sec=notes]'), /Til oppfølging: Sjekk kvittering mot kasse/);
+  // notatlogg: hendelsen er logget med ubrutt kjede
+  await page.click('[data-sec=notes] button:text-is("Notatlogg…")');
+  const nlTxt = (await page.innerText('.kvr-dlg')).replace(/\s+/g, ' ');
+  assert.match(nlTxt, /1 hendelser\. Kjeden er ubrutt; hodekontrollsum [0-9a-f]{16}…/);
+  assert.match(nlTxt, /ny oppfolging Sjekk kvittering mot kasse/);
+  await page.click('.kvr-dlg button:text-is("Lukk")');
   await tab('Filter');
   await page.selectOption('.kvr-f:has-text("Notat/status") select', 'oppfolging');
   assert.deepStrictEqual(await vis(), ['t-3']);

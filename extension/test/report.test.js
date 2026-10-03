@@ -126,4 +126,35 @@ assert.ok(lim.some(t => /utenfor det som er hentet fra CW \(fra 2026-09-01\)/.te
 const empty = R.build(Object.assign(model(), { findings: [], ranked: [], cashiers: [], notes: {}, explain: {}, evidence: { files: [], byId: {}, missing: [], requested: 0, cappedFrom: 0 } }));
 const eh = empty.files.find(f => f.path === 'rapport.html').text;
 assert.ok(eh.includes('Ingen funn med gjeldende terskler.') && eh.includes('Ingen flaggede kvitteringer.') && eh.includes('Ingen bevis-PNG er tatt med.'));
+
+// notatlogg: hash-kjede, manipulasjon og med i pakken
+{
+  const log = { base: '', list: [] };
+  R.logAppend(log, { t: 1, id: 'a', bong: '1-1-1', op: 'ny', s: 'oppfolging', n: 'sjekk' });
+  R.logAppend(log, { t: 2, id: 'a', bong: '1-1-1', op: 'endret', s: 'sjekket', n: 'ok', ps: 'oppfolging', pn: 'sjekk' });
+  R.logAppend(log, { t: 3, id: 'a', bong: '1-1-1', op: 'slettet', ps: 'sjekket', pn: 'ok' });
+  assert.deepStrictEqual(R.logVerify(log), { ok: true, n: 3, head: log.list[2].h });
+  assert.ok(/^[0-9a-f]{64}$/.test(log.list[0].h) && log.list[0].h !== log.list[1].h);
+  const tampered = JSON.parse(JSON.stringify(log));
+  tampered.list[1].n = 'endret etterpå';
+  assert.deepStrictEqual(R.logVerify(tampered).ok, false);
+  assert.strictEqual(R.logVerify(tampered).at, 1);
+  const removed = JSON.parse(JSON.stringify(log)); removed.list.splice(1, 1);
+  assert.deepStrictEqual([R.logVerify(removed).ok, R.logVerify(removed).at], [false, 1], 'fjernet hendelse bryter kjeden');
+  const swapped = JSON.parse(JSON.stringify(log)); swapped.list.reverse();
+  assert.strictEqual(R.logVerify(swapped).ok, false, 'omrokkert rekkefølge bryter kjeden');
+  const trimmed = JSON.parse(JSON.stringify(log)); R.logTrim(trimmed, 2);
+  assert.deepStrictEqual([trimmed.list.length, trimmed.base === log.list[0].h, R.logVerify(trimmed).ok], [2, true, true], 'trimming beholder verifiserbar kjede');
+  assert.deepStrictEqual(R.logVerify({ base: '', list: [] }), { ok: true, n: 0, head: '' });
+  const withLog = R.build(Object.assign(model(), { notelog: log }));
+  const lf = withLog.files.find(f => f.path === 'data/notatlogg.json');
+  assert.ok(lf && JSON.parse(lf.text).list.length === 3, 'loggen følger med pakken');
+  assert.ok(withLog.files.find(f => f.path === 'KONTROLLSUM.txt').text.includes(withLog.hashes.notelog + '  data/notatlogg.json'));
+  const lhtml = withLog.files.find(f => f.path === 'rapport.html').text;
+  assert.ok(lhtml.includes('data/notatlogg.json (alle endringer av notater og status, hash-kjede: 3 hendelser, kjeden er ubrutt, hodekontrollsum ' + log.list[2].h.slice(0, 16)));
+  const badHtml = R.build(Object.assign(model(), { notelog: tampered })).files.find(f => f.path === 'rapport.html').text;
+  assert.ok(badHtml.includes('KJEDEN ER BRUTT ved hendelse 2'));
+  assert.ok(!out.files.some(f => f.path === 'data/notatlogg.json'), 'uten logg ingen fil');
+}
+
 console.log('report: ok');

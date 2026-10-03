@@ -113,7 +113,10 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   assert.match(r1.name, /^revisjonsrapport_\d{8}_\d{4}\.zip$/);
   assert.strictEqual(r1.zipHash, sha(r1.buf), 'kontrollsummen i panelet er SHA-256 av ZIP-filen');
   const names = Object.keys(r1.zip.files).filter(n => !r1.zip.files[n].dir).sort();
-  assert.deepStrictEqual(names.filter(n => !n.startsWith('bevis/')), ['KONTROLLSUM.txt', 'data/flaggede_bonger.csv', 'data/funn.csv', 'data/innhold.json', 'data/kvitteringer.csv', 'innstillinger.json', 'rapport.html']);
+  assert.deepStrictEqual(names.filter(n => !n.startsWith('bevis/')), ['KONTROLLSUM.txt', 'data/flaggede_bonger.csv', 'data/funn.csv', 'data/innhold.json', 'data/kvitteringer.csv', 'data/notatlogg.json', 'innstillinger.json', 'rapport.html']);
+  const nlog = JSON.parse(await r1.zip.file('data/notatlogg.json').async('string'));
+  assert.deepStrictEqual([nlog.list.length, nlog.list[0].op, nlog.list[0].s], [1, 'ny', 'oppfolging']);
+  assert.strictEqual(require('../src/report.js').logVerify(nlog).ok, true, 'notatloggen i pakken har ubrutt kjede');
   const pngs = names.filter(n => n.startsWith('bevis/'));
   assert.strictEqual(pngs.length, 3);
   for (const n of pngs) {

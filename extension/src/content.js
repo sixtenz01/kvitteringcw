@@ -7,7 +7,7 @@
   var K = {
     saved: 'kvr.saved.v1', collapsed: 'kvr.collapsed.v1', scan: 'kvr.scan.v2', pos: 'kvr.pos.v1',
     size: 'kvr.size.v1', sec: 'kvr.sec.v1', rules: 'kvr.rules.v1', anom: 'kvr.anom.v1',
-    stores: 'kvr.stores.v1', tab: 'kvr.tab.v1', layout: 'kvr.layout.v1', arules: 'kvr.arules.v1', notes: 'kvr.notes.v1', tasks: 'kvr.tasks.v1', ctl: 'kvr.ctl.v1', keynav: 'kvr.keynav.v1', tshift: 'kvr.tshift.v1', wide: 'kvr.wide.v1', sub: 'kvr.sub.v1', weights: 'kvr.weights.v1', lastrun: 'kvr.lastrun.v1', scope: 'kvr.scope.v1', help: 'kvr.help.v1', sub2: 'kvr.sub2.v1', reports: 'kvr.reports.v1', repopts: 'kvr.repopts.v1'
+    stores: 'kvr.stores.v1', tab: 'kvr.tab.v1', layout: 'kvr.layout.v1', arules: 'kvr.arules.v1', notes: 'kvr.notes.v1', tasks: 'kvr.tasks.v1', ctl: 'kvr.ctl.v1', keynav: 'kvr.keynav.v1', tshift: 'kvr.tshift.v1', nlog: 'kvr.nlog.v1', wide: 'kvr.wide.v1', sub: 'kvr.sub.v1', weights: 'kvr.weights.v1', lastrun: 'kvr.lastrun.v1', scope: 'kvr.scope.v1', help: 'kvr.help.v1', sub2: 'kvr.sub2.v1', reports: 'kvr.reports.v1', repopts: 'kvr.repopts.v1'
   };
   var sayTimer = null;
   var failedRecs = [];
@@ -1592,7 +1592,57 @@
   }
 
   // ---- notater og oppfølging ----------------------------------------------------
-  function saveNotes() { store(K.notes, notes); }
+  // Notatlogg: hver endring av notat eller status legges til som en hendelse i en kjede (append-only).
+  var NLOG_MAX = 20000, nlog = null, notesShadow = {};
+
+  function noteState(n) { return n ? { s: n.status || '', n: String(n.note || '').slice(0, 2000), b: String(n.bong || '') } : null; }
+
+  function loadNoteLog() {
+    var v = store(K.nlog);
+    nlog = v && Array.isArray(v.list) ? v : { base: '', list: [] };
+    notesShadow = {};
+    Object.keys(notes).forEach(function (id) { notesShadow[id] = noteState(notes[id]); });
+    if (!nlog.list.length) {
+      Object.keys(notes).forEach(function (id) { var st = notesShadow[id]; KvReport.logAppend(nlog, { t: Date.now(), id: id, bong: st.b, op: 'start', s: st.s, n: st.n }); });
+      if (nlog.list.length) store(K.nlog, nlog);
+    }
+  }
+
+  function logNoteChanges() {
+    if (!nlog) loadNoteLog();
+    var ids = {}, changed = false;
+    Object.keys(notes).concat(Object.keys(notesShadow)).forEach(function (id) { ids[id] = true; });
+    Object.keys(ids).forEach(function (id) {
+      var now = noteState(notes[id]), was = notesShadow[id] || null;
+      if (!now && !was) return;
+      if (now && was && now.s === was.s && now.n === was.n) return;
+      var e = { t: Date.now(), id: id, bong: (now || was).b, op: !was ? 'ny' : !now ? 'slettet' : 'endret' };
+      if (now) { e.s = now.s; e.n = now.n; }
+      if (was) { e.ps = was.s; e.pn = was.n; }
+      KvReport.logAppend(nlog, e);
+      changed = true;
+      if (now) notesShadow[id] = now; else delete notesShadow[id];
+    });
+    if (changed) { KvReport.logTrim(nlog, NLOG_MAX); store(K.nlog, nlog); }
+  }
+
+  function saveNotes() { logNoteChanges(); store(K.notes, notes); }
+
+  function exportNoteLog() {
+    if (!nlog) loadNoteLog();
+    download(new Blob([KvReport.stable({ base: nlog.base || '', list: nlog.list }) + '\n'], { type: 'application/json' }), 'notatlogg.json');
+  }
+
+  function openNoteLog() {
+    if (!nlog) loadNoteLog();
+    var v = KvReport.logVerify(nlog), body = el('div', { class: 'kvr-secbody' });
+    body.appendChild(hintEl(v.n + ' hendelser. ' + (v.ok ? 'Kjeden er ubrutt' + (v.n ? '; hodekontrollsum ' + v.head.slice(0, 16) + '…' : '') + '.' : 'KJEDEN ER BRUTT ved hendelse ' + (v.at + 1) + ': noe er endret eller fjernet i lagringen.') +
+      ' Hver endring av et notat eller en status lagres som en ny hendelse, og de gamle blir stående. Loggen avslører utilsiktet endring, men er ikke bevis mot den som har full tilgang til nettleseren. Noter kontrollsummen i saken, eller lag en revisjonsrapport.'));
+    if (v.n) body.appendChild(tbl(['Tid', 'Bong', 'Handling', 'Status', 'Notat'], nlog.list.slice(-40).reverse().map(function (e) {
+      return [new Date(e.t).toLocaleString('nb-NO'), e.bong || e.id, e.op, e.s !== undefined ? e.s : (e.ps || ''), String(e.n !== undefined ? e.n : (e.pn || '')).slice(0, 80)];
+    })));
+    openModal('Notatlogg', body, [btn('Eksporter logg (JSON)', exportNoteLog), btn('Lukk', closeModal, 'kvr-primary')]);
+  }
 
   function openNote(rec) {
     if (!rec) return;
@@ -2890,7 +2940,7 @@
       });
       var model = {
         version: KvReport.VERSION, generatedAt: new Date().toISOString(), generatedLocal: new Date().toLocaleString('nb-NO'), analysedAt: new Date(R.at).toISOString(), analysedLocal: new Date(R.at).toLocaleString('nb-NO'),
-        reference: opts.reference, author: opts.author, timeShift: R.timeShift || 0,
+        reference: opts.reference, author: opts.author, timeShift: R.timeShift || 0, notelog: (function () { if (!nlog) loadNoteLog(); return { base: nlog.base || '', list: nlog.list.slice() }; })(),
         scope: { text: R.scopeText, mode: R.mode, filters: R.filters, coverageText: R.coverageText, compare: R.compare },
         items: R.items, pop: R.pop, scan: R.scan, storeLabels: R.storeLabels,
         settings: { ctl: R.ctl, anom: R.anomCfg, weights: weights, currentDiffers: KvReport.stable([R.ctl, R.anomCfg]) !== KvReport.stable([ctlCfg, anomCfg]) },
@@ -3267,7 +3317,7 @@
     ui.keyNavBox = kn;
     var secNotes = fold(section('notes', 'Oppfølging og tastatur', [
       ui.noteCount, ui.noteList,
-      el('div', { class: 'kvr-row' }, [btn('Notat på valgt rad', function () { openNote(currentRec()); }), btn('Eksporter notater', exportNotes)]),
+      el('div', { class: 'kvr-row' }, [btn('Notat på valgt rad', function () { openNote(currentRec()); }), btn('Eksporter notater', exportNotes), btn('Notatlogg…', openNoteLog)]),
       btn('Fjern «sjekket»', function () {
         confirmBox('Fjern sjekkede', 'Fjerne alle notater med status «sjekket»?', 'Fjern', function () {
           Object.keys(notes).forEach(function (id) { if (notes[id].status === 'sjekket') delete notes[id]; });
@@ -3607,6 +3657,7 @@
     manualStores = store(K.stores) || '';
     customRules = L.sanitizeCustom(store(K.arules));
     notes = store(K.notes) || {};
+    loadNoteLog();
     tasksCustom = Array.isArray(store(K.tasks)) ? store(K.tasks) : [];
     ctlCfg = L.sanitizeControl(store(K.ctl));
     keyNav = store(K.keynav) !== false;
