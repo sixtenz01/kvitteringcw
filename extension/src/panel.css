@@ -131,8 +131,24 @@ tr.kvr-follow>td.kvr-cb-cell::after{color:#e37400}
 .kvr-cmprow{display:flex;justify-content:space-between;gap:8px;padding:3px 4px;border-bottom:1px dotted #d2dad6;font-size:12px}
 .kvr-cmprow.kvr-only{background:#fff3cd}
 
-#kvr-panel.kvr-wide:not(.kvr-collapsed){width:min(780px,96vw)}
-#kvr-panel.kvr-wide .kvr-small th,#kvr-panel.kvr-wide .kvr-small td{font-size:12.5px;padding:4px 6px}
+/* stor visning: dokket til høyre (lista i Lindbak er synlig) eller full skjerm; innholdet flyter i flere kolonner */
+#kvr-panel.kvr-big:not(.kvr-collapsed){left:auto !important;right:12px;top:12px !important;width:min(62vw,1240px) !important;height:calc(100vh - 24px) !important;max-height:none !important;max-width:none;resize:none}
+#kvr-panel.kvr-full:not(.kvr-collapsed){left:1.5vw !important;top:1.5vh !important;width:97vw !important;height:97vh !important;max-height:none !important;max-width:none;resize:none}
+#kvr-panel.kvr-big .kvr-head,#kvr-panel.kvr-full .kvr-head{cursor:default}
+#kvr-panel.kvr-big .kvr-scroll,#kvr-panel.kvr-full .kvr-scroll{padding:14px 16px}
+#kvr-panel.kvr-big .kvr-scroll>.kvr-pane,#kvr-panel.kvr-full .kvr-scroll>.kvr-pane{display:block;column-width:470px;column-gap:16px}
+#kvr-panel.kvr-big .kvr-host,#kvr-panel.kvr-full .kvr-host,#kvr-panel.kvr-big .kvr-pane .kvr-pane,#kvr-panel.kvr-full .kvr-pane .kvr-pane{display:contents}
+#kvr-panel.kvr-big .kvr-subnav,#kvr-panel.kvr-full .kvr-subnav{column-span:all;margin-bottom:12px}
+#kvr-panel.kvr-big .kvr-card,#kvr-panel.kvr-full .kvr-card,#kvr-panel.kvr-big .kvr-set,#kvr-panel.kvr-full .kvr-set,#kvr-panel.kvr-big .kvr-notice,#kvr-panel.kvr-full .kvr-notice{break-inside:avoid;margin:0 0 12px}
+#kvr-panel.kvr-big .kvr-span,#kvr-panel.kvr-full .kvr-span{column-span:all}
+#kvr-panel.kvr-big .kvr-stats,#kvr-panel.kvr-full .kvr-stats{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;padding:8px 16px}
+#kvr-panel.kvr-big .kvr-stats>*,#kvr-panel.kvr-full .kvr-stats>*{margin-top:0;margin-bottom:0}
+#kvr-panel.kvr-big .kvr-stats .kvr-tiles,#kvr-panel.kvr-full .kvr-stats .kvr-tiles{flex:1 1 520px}
+#kvr-panel.kvr-big .kvr-stats .kvr-tile,#kvr-panel.kvr-full .kvr-stats .kvr-tile{padding:3px 4px}
+#kvr-panel.kvr-big .kvr-stats .kvr-first,#kvr-panel.kvr-full .kvr-stats .kvr-first,#kvr-panel.kvr-big .kvr-stats .kvr-barwrap,#kvr-panel.kvr-full .kvr-stats .kvr-barwrap{flex:1 1 100%}
+#kvr-panel.kvr-big .kvr-small th,#kvr-panel.kvr-big .kvr-small td,#kvr-panel.kvr-full .kvr-small th,#kvr-panel.kvr-full .kvr-small td{font-size:12.5px;padding:4px 6px}
+#kvr-panel.kvr-big .kvr-tiles,#kvr-panel.kvr-full .kvr-tiles{grid-template-columns:repeat(4,minmax(120px,1fr))}
+.kvr-bigui .kvr-dlg{width:min(1180px,100%)}
 #kvr-panel .kvr-small th,#kvr-panel .kvr-small td{font-size:11.5px}
 #kvr-panel .kvr-tablewrap th{position:sticky;top:0;background:#fff;z-index:1;cursor:help}
 #kvr-panel .kvr-scanrow{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:12px;color:var(--kv-muted)}

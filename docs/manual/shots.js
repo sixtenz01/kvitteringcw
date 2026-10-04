@@ -31,7 +31,8 @@ async function openSession(width, height) {
   await page.goto('https://chainweb.coop.no/LindbakRetail_1/Journal/Viewer');
   for (const f of ['lib/html2canvas.min.js', 'lib/jszip.min.js', 'src/logic.js', 'src/report.js']) await page.addScriptTag({ path: path.join(EXT, f) });
   await page.addStyleTag({ path: path.join(EXT, 'src/panel.css') });
-  await page.addStyleTag({ content: 'body > *:not(#kvr-panel):not(.kvr-modal):not(.kvr-ann):not(.kvr-tip) { visibility: hidden !important; } body { background: #e9eeeb !important; }' });
+  const hide = await page.addStyleTag({ content: 'body > *:not(#kvr-panel):not(.kvr-modal):not(.kvr-ann):not(.kvr-tip) { visibility: hidden !important; } body { background: #e9eeeb !important; }' });
+  await hide.evaluate((n) => { n.id = 'kvr-hide'; });
   await page.addScriptTag({ path: path.join(EXT, 'src/content.js') });
   await page.waitForSelector('#kvr-panel');
   await page.evaluate(() => { const p = document.getElementById('kvr-panel'); p.style.top = '10px'; p.style.left = '10px'; });
@@ -108,7 +109,7 @@ async function main() {
     await page.evaluate(() => { document.getElementById('kvr-panel').style.top = '48px'; });
     await c.annotate([
       { sel: '.kvr-title', n: 1, side: 'top' }, { sel: '.kvr-icon[title="Hjelp og tegnforklaring"]', n: 2, side: 'top' }, { sel: '.kvr-icon[title="Innstillinger"]', n: 3, side: 'top' },
-      { sel: '.kvr-icon[title^="Utvid"]', n: 4, side: 'top' }, { sel: '.kvr-icon[title^="Skjul"]', n: 5, side: 'top' }, { sel: '.kvr-badge', n: 6, side: 'top' },
+      { sel: '.kvr-icon[aria-label="Panelstørrelse"]', n: 4, side: 'top' }, { sel: '.kvr-icon[title^="Skjul"]', n: 5, side: 'top' }, { sel: '.kvr-badge', n: 6, side: 'top' },
       { sel: '.kvr-tiles', n: 7 }, { sel: '.kvr-chipsrow', n: 8 }, { sel: '.kvr-scanrow', n: 9 }, { sel: '.kvr-tabs', n: 10 }, { sel: '.kvr-foot', n: 11 }
     ]);
     await save('oversikt', null, { l: 8, r: 40, t: 40, b: 8 });
@@ -181,6 +182,25 @@ async function main() {
     for (const id of ['profile', 'findings', 'pantbal', 'recon', 'diff', 'numbers', 'disc', 'member', 'misc', 'acct']) { await unfold(id); }
     for (const id of ['profile', 'findings', 'pantbal', 'recon', 'diff', 'numbers', 'disc', 'member', 'misc', 'acct']) await cardShot('d-' + id, `[data-sec=${id}]`);
     await cardShot('d-anom', '[data-sec=anom]'); await cardShot('d-custom', '[data-sec=custom]'); await cardShot('d-tasks', '[data-sec=tasks]'); await cardShot('d-notes', '[data-sec=notes]');
+  }
+
+  if (want('stor')) {
+    const hideCss = await page.$eval('#kvr-hide', (n) => n.textContent);
+    await page.evaluate(() => { document.getElementById('kvr-hide').textContent = ''; });
+    await page.setViewportSize({ width: 1600, height: 900 }); await page.waitForTimeout(150);
+    await go('Analyse', 'Sjekk først');
+    await page.click('.kvr-icon[aria-label="Panelstørrelse"]');
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: path.join(OUT, 'stor-dokket.jpg'), type: 'jpeg', quality: 80 }); console.log('  stor-dokket');
+    await go('Analyse', 'Detaljer');
+    await page.click('.kvr-icon[aria-label="Panelstørrelse"]');
+    await page.waitForTimeout(600);
+    await page.evaluate(() => { document.querySelector('.kvr-scroll').scrollTop = 0; });
+    await page.screenshot({ path: path.join(OUT, 'stor-full.jpg'), type: 'jpeg', quality: 80 }); console.log('  stor-full');
+    await page.click('.kvr-icon[aria-label="Panelstørrelse"]');
+    await page.waitForTimeout(300);
+    await page.evaluate((css) => { document.getElementById('kvr-hide').textContent = css; const p = document.getElementById('kvr-panel'); p.style.top = '10px'; p.style.left = '10px'; }, hideCss);
+    await view(900);
   }
 
   // ---- mer

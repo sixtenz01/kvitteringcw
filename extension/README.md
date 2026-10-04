@@ -150,7 +150,7 @@ Fem faner: **Hent** (søk i hele journalen via CW), **Filtrer** (butikk som søk
 - **Én statuslinje** øverst viser fremdrift og resultat, og forsvinner av seg selv.
 - **Nullstilling uten refresh:** alt du har satt vises som chips under tallene: filtre, sortering, valgte kvitteringer, avviksmarkering og CW-søk. Hver chip fjernes med ett klikk, og «Nullstill alt» fjerner alt (også CW-filteret du satt i Hent-fanen).
 - **Fokus:** klikk på en kasserer eller kasse (lenker i rapporter, funn og avvikslister, pillene under Filtrer, eller Alt+klikk på KASSERER/KASSE i selve listen) for å filtrere listen og se alt om den: nøkkeltall, hvilke kasser/kasserere den er brukt sammen med, kassererprofil mot butikksnitt, pant og betaling, varegrupper, avvik og funn, kassaoppgjør, notater og aktivitet per time.
-- **⤢** gjør panelet bredt (for rapporter og tabeller). Tabeller har faste overskrifter med forklaring ved hover.
+- **⤢** bytter panelstørrelse: *Vanlig*, *Stor* (dokket til høyre, Lindbak-lista synlig, to kolonner) og *Full* (hele skjermen, flere kolonner). Valget huskes (`K.wide`: 0/1/2) og kan settes under Innstillinger → Generelt. «Vis i listen» fra Full går midlertidig til Stor. Tabeller har faste overskrifter med forklaring ved hover.
 - **Kontroll** viser et resultatkort først («2 funn · 4 flaggede bonger …») med hopplenker til profil, funn, pant og avstemming. Detaljene skjules til kontrollene er kjørt.
 - Faste knapper nederst: Velg alle, Fjern valg, Sammenlign (ved to valgte), CSV og PNG.
 
@@ -187,6 +187,7 @@ NODE_PATH=<global node_modules> node test/skann.js     # feil bong i visningsfel
 NODE_PATH=<global node_modules> node test/regnskap.js  # Totalt, betaling, MVA, referanser, omskanning, CSV
 NODE_PATH=<global node_modules> node test/rapport.js  # lager rapport i panelet, pakker ut ZIP og verifiserer alle kontrollsummer
 node test/docs.test.js                               # dekning av innstillinger, vekter, faner og kort i brukerveiledningen
+NODE_PATH=<global node_modules> node test/stor.js  # panelstørrelse: Vanlig/Stor/Full, dokking, kolonner, husking
 TOUR=<mappe> NODE_PATH=<global node_modules> node test/tour.js  # skjermbilder av alle faner (valgfritt)
 ```
 

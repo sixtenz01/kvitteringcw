@@ -163,12 +163,15 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   await page.click('[data-sec=who] .kvr-pill:text-is("6")');
   assert.strictEqual((await vis()).length, 5);
 
-  // utvid-knapp
+  // panelstørrelse: Vanlig -> Stor -> Full -> Vanlig
   const wpx = () => page.$eval('#kvr-panel', e => e.getBoundingClientRect().width);
   const w0 = await wpx();
-  await page.click('.kvr-icon[title^="Utvid"]');
-  assert.ok((await wpx()) > w0 + 200, 'bredt panel');
-  await page.click('.kvr-icon[title^="Utvid"]');
+  await page.click('.kvr-icon[aria-label="Panelstørrelse"]');
+  const w1 = await wpx();
+  assert.ok(w1 > w0 + 200, 'stor: bredt panel');
+  await page.click('.kvr-icon[aria-label="Panelstørrelse"]');
+  assert.ok((await wpx()) > w1, 'full: bredere enn stor');
+  await page.click('.kvr-icon[aria-label="Panelstørrelse"]');
   assert.ok(Math.abs((await wpx()) - w0) < 3, 'tilbake til normal bredde');
 
   // butikknavn fra CW-widgeten

@@ -905,6 +905,7 @@
   }
 
   function jumpTo(r) {
+    if (curSize === 2) { setSizeMode(1, false); say('Panelet er flyttet til siden så du ser bongen i lista.'); }
     r.tr.style.display = '';
     r.tr.scrollIntoView({ block: 'center' });
     if (grid) grid.select(r.tr);
@@ -3008,12 +3009,48 @@
   }
 
   function clamp(panel) {
+    if (curSize > 0) return;
     var w = panel.offsetWidth;
     var left = Math.min(Math.max(0, parseFloat(panel.style.left) || 0), Math.max(0, window.innerWidth - w));
     var top = Math.min(Math.max(0, parseFloat(panel.style.top) || 0), Math.max(0, window.innerHeight - 40));
     panel.style.left = left + 'px';
     panel.style.top = top + 'px';
     panel.style.maxHeight = Math.max(160, window.innerHeight - top - 12) + 'px';
+  }
+
+  // Panelstørrelse: 0 vanlig, 1 stor (dokket til høyre, lista i Lindbak er fortsatt synlig til venstre), 2 full (hele skjermen).
+  var curSize = 0;
+  var SIZE_NAMES = ['Vanlig', 'Stor', 'Full'];
+
+  function sizeMode() {
+    var v = store(K.wide);
+    return v === true ? 1 : Math.max(0, Math.min(2, Number(v) || 0));
+  }
+
+  function paintSizeMode() {
+    var panel = document.getElementById('kvr-panel');
+    if (!panel) return;
+    panel.classList.toggle('kvr-big', curSize === 1);
+    panel.classList.toggle('kvr-full', curSize === 2);
+    document.documentElement.classList.toggle('kvr-bigui', curSize > 0);
+    if (ui.wideBtn) {
+      ui.wideBtn.textContent = curSize === 0 ? '⤢' : curSize === 1 ? '⛶' : '⤡';
+      ui.wideBtn.title = curSize === 0 ? 'Større panel (dokket til høyre, lista beholdes)' : curSize === 1 ? 'Fullskjerm' : 'Tilbake til vanlig størrelse';
+    }
+    if (ui.sizeSel) ui.sizeSel.value = String(sizeMode());
+  }
+
+  // persist = false: midlertidig bytte (for eksempel for å vise en bong i lista), huskes ikke.
+  function setSizeMode(mode, persist) {
+    var panel = document.getElementById('kvr-panel');
+    if (!panel) return;
+    var was = curSize;
+    curSize = mode;
+    if (persist) store(K.wide, mode);
+    if (was > 0 && mode === 0) { panel.style.width = ''; panel.style.height = ''; store(K.size, null); }
+    paintSizeMode();
+    if (mode === 0) placePanel(panel);
+    setTimeout(renderChartsIfVisible, 80);
   }
 
   function placePanel(panel) {
@@ -3072,7 +3109,7 @@
 
     ui.badge = el('span', { class: 'kvr-badge', text: 'ingen filter' });
     var toggle = el('button', { type: 'button', class: 'kvr-icon', title: 'Skjul/vis (Alt+K)', text: '–' });
-    ui.wideBtn = el('button', { type: 'button', class: 'kvr-icon', title: 'Utvid eller forminsk panelet (for rapporter)', text: '⤢' });
+    ui.wideBtn = el('button', { type: 'button', class: 'kvr-icon', title: 'Større panel', 'aria-label': 'Panelstørrelse', text: '⤢' });
     ui.helpBtn = el('button', { type: 'button', class: 'kvr-icon', title: 'Hjelp og tegnforklaring', 'aria-label': 'Hjelp', text: '?' });
     ui.gearBtn = el('button', { type: 'button', class: 'kvr-icon', title: 'Innstillinger', 'aria-label': 'Innstillinger', text: '⚙' });
     ui.helpBtn.addEventListener('click', openHelp);
@@ -3303,13 +3340,17 @@
     ]);
     ui.ctlProfile = el('div', {}); ui.ctlFindings = el('div', { class: 'kvr-list' }); ui.ctlPant = el('div', {}); ui.ctlRecon = el('div', {});
     var secProfile = fold(section('profile', 'Kassererprofil mot butikksnitt', [ui.ctlProfile]), 'profile', true);
+    secProfile.classList.add('kvr-span');
     var secFindings = fold(section('findings', 'Mønstre og funn', [ui.ctlFindings]), 'findings', true);
     var secPantBal = fold(section('pantbal', 'Pantelapp-sjekk: balanse per dag', [ui.ctlPant]), 'pantbal', false);
     var secRecon = fold(section('recon', 'Dagsavstemming per kasse', [ui.ctlRecon]), 'recon', false);
+    secRecon.classList.add('kvr-span');
     ui.ctlDiff = el('div', {}); ui.ctlNum = el('div', {}); ui.ctlDisc = el('div', {}); ui.ctlMember = el('div', {}); ui.ctlMisc = el('div', {}); ui.ctlAcct = el('div', {});
     var secDiff = fold(section('diff', 'Kassadifferanse over tid', [ui.ctlDiff]), 'diff', true);
+    secDiff.classList.add('kvr-span');
     var secNum = fold(section('numbers', 'Tallanalyse: Benford og runde beløp', [ui.ctlNum]), 'numbers', false);
     var secDisc = fold(section('disc', 'Rabatter og kuponger', [ui.ctlDisc]), 'disc', true);
+    secDisc.classList.add('kvr-span');
     var secMember = fold(section('member', 'Medlemsnummer', [ui.ctlMember]), 'member', true);
     var secMisc = fold(section('misc', 'Pris, kjøpeutbytte og hendelser', [ui.ctlMisc]), 'misc', false);
     var secAcct = fold(section('acct', 'Bongregnskap og referanser', [ui.ctlAcct]), 'acct', false);
@@ -3322,8 +3363,8 @@
       }, 'kvr-chip'));
     });
     ui.ctlSumCard = section('ctlsum', 'Resultat', [ui.ctlSum, ui.ctlJump,
-      el('div', { class: 'kvr-row' }, [btn('Fold sammen alle', function () { foldAll(false); }, 'kvr-sm'), btn('Åpne alle', function () { foldAll(true); }, 'kvr-sm'), btn('⤢ Bredere', function () { ui.wideBtn.click(); }, 'kvr-sm')]),
-      hintEl('Tabellene har mange kolonner. «Bredere» gir plass til alle.')]);
+      el('div', { class: 'kvr-row' }, [btn('Fold sammen alle', function () { foldAll(false); }, 'kvr-sm'), btn('Åpne alle', function () { foldAll(true); }, 'kvr-sm'), btn('⤢ Større', function () { ui.wideBtn.click(); }, 'kvr-sm')]),
+      hintEl('Tabellene har mange kolonner. «Større» (⤢ i tittelfeltet) gir plass til alle: Stor dokker panelet til høyre og beholder lista i Lindbak, Full bruker hele skjermen.')]);
     ui.ctlResults = el('div', { class: 'kvr-pane' }, [secProfile, secFindings, secPantBal, secRecon, secDiff, secNum, secDisc, secMember, secMisc, secAcct]);
     ui.noteList = el('div', { class: 'kvr-list' });
     ui.noteCount = hintEl('');
@@ -3404,11 +3445,15 @@
       setFile.value = '';
     });
     ui.setStale = el('div', { class: 'kvr-notice', role: 'status', style: 'display:none' }, [el('span', { text: 'Innstillingene er endret siden siste analyse.' }), btn('Kjør analyse', function () { ui.go('check'); runAnalysis(); }, 'kvr-sm')]);
+    ui.sizeSel = el('select', { 'aria-label': 'Panelstørrelse' }, [opt('0', 'Vanlig (flyttbart)'), opt('1', 'Stor (dokket til høyre, lista beholdes)'), opt('2', 'Full (hele skjermen)')]);
+    ui.sizeSel.value = String(sizeMode());
+    ui.sizeSel.addEventListener('change', function () { setSizeMode(Number(ui.sizeSel.value), true); });
     ui.tshift = el('input', { type: 'number', step: '1', 'aria-label': 'Tidsforskyvning for listen (min)' });
     ui.tshift.value = String(timeShift);
     ui.tshift.addEventListener('change', function () { var v = Math.round(Number(ui.tshift.value)); setTimeShift(isFinite(v) ? v : 0); });
     ui.setGeneral = section('set-general', 'Generelt', [
       field('Egne butikknavn (valgfritt, nr=navn per linje)', storeNames),
+      field('Panelstørrelse', ui.sizeSel),
       field('Tidsforskyvning for listen (min)', ui.tshift),
       hintEl('Normalt 0. Brukes bare hvis klokkeslettet i listen avviker fast fra bongen; Diagnostikk foreslår verdien.'),
       kn.node,
@@ -3488,7 +3533,7 @@
     ];
     ui.subBtns = {}; ui.subPanes = {};
     var subNav = el('div', { class: 'kvr-subnav', role: 'tablist' });
-    var subHost = el('div', {});
+    var subHost = el('div', { class: 'kvr-host' });
     function showSub(id) {
       Object.keys(ui.subPanes).forEach(function (k) {
         ui.subPanes[k].style.display = k === id ? '' : 'none';
@@ -3511,7 +3556,7 @@
     var moreDefs = [['export', 'Eksport', [secAudit, secExport]], ['settings', 'Innstillinger', [ui.setBody]]];
     ui.moreBtns = {}; ui.morePanes = {};
     var moreNav = el('div', { class: 'kvr-subnav', role: 'tablist', 'aria-label': 'Mer' });
-    var moreHost = el('div', {});
+    var moreHost = el('div', { class: 'kvr-host' });
     function showMore(id) {
       Object.keys(ui.morePanes).forEach(function (k) {
         ui.morePanes[k].style.display = k === id ? '' : 'none';
@@ -3610,25 +3655,20 @@
     }
     function flip() { setCollapsed(!panel.classList.contains('kvr-collapsed')); }
     toggle.addEventListener('click', flip);
-    ui.wideBtn.addEventListener('click', function () {
-      var w = panel.classList.toggle('kvr-wide');
-      panel.style.width = ''; panel.style.height = '';
-      store(K.size, null); store(K.wide, w);
-      clamp(panel);
-      setTimeout(renderChartsIfVisible, 60);
-    });
+    ui.wideBtn.addEventListener('click', function () { setSizeMode((sizeMode() + 1) % 3, true); });
     enableDrag(panel, head, function () { if (panel.classList.contains('kvr-collapsed')) flip(); });
     document.addEventListener('keydown', function (e) {
       if (e.altKey && !e.ctrlKey && !e.metaKey && (e.key === 'k' || e.key === 'K')) { e.preventDefault(); flip(); }
     });
     document.addEventListener('mouseup', function () {
-      if (panel.classList.contains('kvr-collapsed')) return;
+      if (panel.classList.contains('kvr-collapsed') || sizeMode() > 0) return;
       if (panel.style.width || panel.style.height) { store(K.size, { width: panel.style.width, height: panel.style.height }); renderChartsIfVisible(); }
     });
-    window.addEventListener('resize', function () { clamp(panel); });
+    window.addEventListener('resize', function () { if (sizeMode() === 0) clamp(panel); });
 
-    if (store(K.wide)) panel.classList.add('kvr-wide');
+    curSize = sizeMode();
     placePanel(panel);
+    paintSizeMode();
     if (store(K.collapsed)) setCollapsed(true);
     renderSaved();
     renderRules();

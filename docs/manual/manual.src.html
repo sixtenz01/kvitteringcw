@@ -40,9 +40,21 @@
 <ul>
   <li><strong>Flytt panelet</strong> ved å dra i den grønne toppen. Dobbeltklikk toppen for å sette det tilbake.</li>
   <li><strong>Skjul og vis</strong> med <strong>–</strong> eller <kbd>Alt</kbd>+<kbd>K</kbd>.</li>
-  <li><strong>Gjør det bredere</strong> med <strong>⤢</strong>. Tabellene i Analyse har mange kolonner og trenger ofte plassen.</li>
+  <li><strong>Gjør det større</strong> med <strong>⤢</strong>. Hvert trykk bytter mellom <em>Vanlig</em>, <em>Stor</em> og <em>Full</em> (se under). Tabellene i Analyse har mange kolonner og trenger ofte plassen.</li>
 </ul>
 {{shotm:hjelp}}
+<h4>Panelstørrelse</h4>
+<p>Knappen <strong>⤢</strong> i tittelfeltet bytter mellom tre størrelser. Valget huskes til neste gang. Du kan også velge størrelse under Innstillinger → Generelt.</p>
+<div class="tw"><table>
+  <thead><tr><th>Størrelse</th><th>Hva du får</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Vanlig</strong> ⤢</td><td>Det lille, flyttbare panelet. Du kan dra i toppen og trekke i hjørnet.</td></tr>
+    <tr><td><strong>Stor</strong> ⛶</td><td>Panelet dokkes til høyre og fyller høyden. Lindbak-lista blir stående synlig til venstre, så du kan se bongene mens du leser analysen. Kortene ligger i to kolonner når bredden tillater det.</td></tr>
+    <tr><td><strong>Full</strong> ⤡</td><td>Panelet bruker hele skjermen, med flere kolonner og brede tabeller uten rulling til siden. Best til gjennomgang av Detaljer og rapporter.</td></tr>
+  </tbody></table></div>
+{{shotw:stor-dokket}}
+{{shotw:stor-full}}
+<p>Trykker du <strong>Vis i listen</strong> på en bong mens panelet er i Full, går det midlertidig over til Stor, slik at du ser bongen i Lindbak-lista. Trykk ⤢ igjen for å gå videre til Vanlig. Når du går tilbake til Vanlig, settes plassering og størrelse til det de var før.</p>
 
 <h2 id="panelet"><span class="n">2</span>Panelet på to minutter</h2>
 <h3>Oversikt</h3>
@@ -156,7 +168,7 @@
 {{shots:fokus-start,fokus-a}}
 <p>Fokus viser nøkkeltall, kassene eller kassererne vedkommende har brukt, sammenligning mot butikksnittet (rødt = avvik), pant og betaling, rabatter, varegrupper, flaggede bonger, aktivitet per time og kassaoppgjør. Knappene lar deg velge alle bongene, eksportere dem eller fjerne fokus.</p>
 <h4>Detaljer</h4>
-<p>Detaljer samler resultatene fra kontrollene. Kortene kan foldes sammen med et klikk på tittelen, og valget huskes. Knappen <strong>Åpne alle</strong> åpner alt, og <strong>⤢ Bredere</strong> gir tabellene mer plass.</p>
+<p>Detaljer samler resultatene fra kontrollene. Kortene kan foldes sammen med et klikk på tittelen, og valget huskes. Knappen <strong>Åpne alle</strong> åpner alt, og <strong>⤢ Større</strong> gir tabellene mer plass.</p>
 {{shot:detaljer-topp}}
 <div class="tw"><table>
   <thead><tr><th>Kort</th><th>Hva det viser</th></tr></thead>
@@ -386,6 +398,7 @@
   <tbody>
     <tr><td>Egne butikknavn</td><td>Hvis Lindbak ikke leverer butikklisten, kan du skrive <code>1001=Navn</code>, ett per linje.</td></tr>
     <tr><td>Tidsforskyvning for listen</td><td>Normalt 0. Brukes bare hvis klokkeslettet i listen avviker fast fra bongen (se kapittel 11). Diagnostikk foreslår verdien.</td></tr>
+    <tr><td>Panelstørrelse</td><td>Vanlig, Stor (dokket til høyre, lista i Lindbak synlig) eller Full (hele skjermen). Samme valg som ⤢ i tittelfeltet.</td></tr>
     <tr><td>Tastaturflyt</td><td>Slår på <kbd>↑</kbd> <kbd>↓</kbd> for å bytte bong, <kbd>N</kbd> for notat og <kbd>M</kbd> for å velge eller fjerne valg. Virker ikke mens du skriver i et felt.</td></tr>
     <tr><td>Eksporter / Importer innstillinger</td><td>Lagrer og leser inn terskler, poeng, egne regler, varegrupper og butikknavn som en fil. Praktisk for å dele samme oppsett mellom butikker. Skannet innhold og notater tas ikke med.</td></tr>
     <tr><td>Tilbakestill plassering</td><td>Setter panelets plass og størrelse tilbake.</td></tr>
