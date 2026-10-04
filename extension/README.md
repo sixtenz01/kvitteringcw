@@ -22,7 +22,7 @@ Chrome MV3-utvidelse for Lindbak Chain Web → Kvitteringsjournal. Leser kun gri
 
 ## Lagring (påvirker ikke Lindbak)
 
-All lagring (innstillinger, lagrede filtre, regler, skannecache) ligger i en egen IndexedDB (`kvr-store`). Ingenting skrives til localStorage eller sessionStorage, så Lindbaks egne data kan ikke bli påvirket. Cachen er begrenset til 2000 kvitteringer (eldste fjernes). Gamle `kvr.*`-nøkler i localStorage fra tidligere versjoner flyttes og slettes ved oppstart.
+All lagring (innstillinger, lagrede filtre, regler, skannecache) ligger i en egen IndexedDB (`kvr-store`). Ingenting skrives til localStorage eller sessionStorage, så Lindbaks egne data kan ikke bli påvirket. Cachen har hard grense på 10 000 kvitteringer og 25 MB (eldste fjernes), og hver skannede bong har grenser (maks 500 linjer, 80 tegn per varenavn, 20 betalingsmåter). Gamle `kvr.*`-nøkler i localStorage fra tidligere versjoner flyttes og slettes ved oppstart.
 
 ## Rapport, kassaoppgjør og egne regler
 
@@ -70,6 +70,17 @@ Skanningen (v4) leser i tillegg enhetspris (`Antall: … à Kr …`), Kjøpeutby
 - **Hendelsesord:** tekstlinjer (ikke varenavn) med annull, makul, storn, parker, på vent, manuell, spør pris, overstyr, prisendring, kansell eller avbrutt. Annullert, manuell pris, parkert og spør pris er ikke observert ennå.
 - **Diagnostikk** (Innstillinger → Generelt, eller kortet «Pris, kjøpeutbytte og hendelser»): hendelsesord og ukjente linjer med antall og eksempelbong; «Kopier som tekst» gir en liste til deling.
 - **Klokkeslett:** pluginen bruker tiden som vises i CW-listen (lokal tid). Mangler cellen, brukes rådata, flyttet til norsk tid hvis de har tidssone (`Z`/`+hh:mm`). Skanningen leser også dato og tid i bongens topptekst (`Kvittering: <nr> <dato> <tid>`), og Diagnostikk sammenligner liste og bong. Ligger listen konsekvent bak eller foran (minst 30 min, minst 5 bonger), foreslår Diagnostikk en forskyvning; den kan også settes under Innstillinger → Generelt. Topptekstformatet er ikke bekreftet i ekte data.
+
+## Bongregnskap, notatlogg og statistikk (v5, versjon 3.12.0)
+
+Skanningen (v5) leser i tillegg `Totalt`/`Sum`, `Øreavrunding`, `Referanse`/`TransId` og MVA-tabellen (`MVA-grunnlag | MVA-% | MVA | Sum`). Etter hvert oppslag kontrolleres løpenummeret i topptekst (`Kvittering: <nr>`) mot valgt rad; feil bong avvises etter ett nytt forsøk (aktiv etter tre treff). Skanninger i eldre versjon tas på nytt fra kortet «Bongregnskap og referanser» etter en bekreftelse med antall og omtrentlig tid.
+
+- **Bongen går opp:** linjer (etter rabatt, med/uten øreavrunding) mot Totalt, betalinger minus kontant tilbake mot Totalt, MVA (sats × grunnlag, grunnlag + MVA = sum, sum = Totalt, gyldig sats 0/12/15/25 %) og samme TransId/Referanse på flere bonger. Hver kontroll kalibrerer seg: minst 10 vurderte bonger og 80 % som stemmer, ellers regnes avvik ikke som funn. Egen gruppe under Innstillinger. CSV-eksporten har kolonner for betaling, rabatt, kuponger, betalingsref og Totalt på bong.
+- **Notatlogg:** hver endring av notat/status lagres som hendelse med lenket SHA-256 (append-only). «Notatlogg…» under Oppfølging viser kjeden, og `data/notatlogg.json` følger revisjonsrapporten og står i KONTROLLSUM.txt.
+- **RRS 0–100:** `100·(1−2^(−poeng/8))` vises ved siden av poengene (4 = 29, 8 = 50, 16 = 75); nivåene er uendret.
+- **Krymping i kassererprofilen:** `(n·x + k·snitt)/(n + k)` med k = 10 (innstilling, tom = rå tall).
+- **Siste siffer** (χ² mot medianfordelingen blant kassererne), **løpenummer mot tid** (bong utenfor tidene til tre nabonumre på hver side) og **retur mot kassadifferanse** (Spearman ρ over dager).
+- **Herding:** CSV-injeksjon (`'` foran tekst som starter med `= + - @`), NFC og skjulte tegn i bongtekst, beløpsparser (U+2212, parentes, etterstilt minus, tusenskille), datovalidering, medlemsnr (`007` = `7`), ingen 0 kr-duplikater, ikke-endelige summer hoppes over, og lengdegrense på innstillinger.
 
 Skanner fra tidligere versjoner (v2) har ikke rabattdata. «Skann synlige» skanner dem på nytt, og filteret skjuler dem til de er skannet (gul stripe viser antallet).
 
@@ -172,6 +183,8 @@ node test/report.test.js                              # SHA-256, kontrollsummer 
 node test/noapi.test.js                               # ingen fetch/XHR/API-kall i kildekoden
 NODE_PATH=<global node_modules> node test/medlem.js    # medlemsnr, pris, kjøpeutbytte, hendelsesord og diagnostikk
 NODE_PATH=<global node_modules> node test/tid.js       # klokkeslett: liste mot bong, UTC, forskyvning
+NODE_PATH=<global node_modules> node test/skann.js     # feil bong i visningsfeltet avvises
+NODE_PATH=<global node_modules> node test/regnskap.js  # Totalt, betaling, MVA, referanser, omskanning, CSV
 NODE_PATH=<global node_modules> node test/rapport.js  # lager rapport i panelet, pakker ut ZIP og verifiserer alle kontrollsummer
 node test/docs.test.js                               # dekning av innstillinger, vekter, faner og kort i brukerveiledningen
 TOUR=<mappe> NODE_PATH=<global node_modules> node test/tour.js  # skjermbilder av alle faner (valgfritt)

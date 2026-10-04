@@ -564,3 +564,30 @@ Kan bygges nå, uten API (grid + iframe):
 6. **Siffer-preferanse (7), regresjon nummer mot tid (5), korrelasjonsfunn (38).**
 
 Krever data vi ikke har (portal, bilder, OCR, HR, godkjenning): idé 1–4, 6, 9, 14–17, 23–37. Disse hører til en portal med slike data og er beskrevet slik at de kan bygges der.
+
+## 7. Status (2026-10-03)
+
+Bygget i versjon 3.12.0, med tester (`logic.test.js`, `report.test.js`, `skann.js`, `regnskap.js`, `smoke.js`).
+
+| Funn / punkt | Status |
+|---|---|
+| F1 CSV-injeksjon | Rettet (`toCsv`) |
+| F2 skjulte tegn og normalisering | Rettet (NFC, fjerner skjulte tegn og NBSP i all bongtekst) |
+| F3 beløpsparser | Rettet (U+2212, parentes, etterstilt minus, tusenskille) |
+| F4 størrelsesgrenser | Rettet (500 linjer, 80 tegn, 20 betalingsmåter, byte-tak 25 MB / 10 000 bonger) |
+| F5 sommertid | Ikke rettet |
+| F6 datovalidering | Rettet |
+| F7 medlemsnr | Rettet (`normMember`) |
+| F8 0 kr-duplikat | Rettet |
+| F9 NaN/Infinity i sum | Rettet |
+| F10 skannerace | Rettet: løpenummer i topptekst mot valgt rad, ett nytt forsøk, deretter feilet. Aktiveres etter tre treff |
+| F11 notater uten historikk | Rettet: append-only notatlogg med hash-kjede, med i rapporten |
+| F12 innstillingsstrenger | Rettet (200 tegn) |
+| F13 «Tøm cache» uten bekreftelse, «viser N av M» | Ikke rettet |
+| Idé 10 linjeregnskap + betaling | Bygget (kalibrerende) |
+| MVA-tabell, Øreavrunding, Referanse/TransId | Bygget (parser v5, MVA-kontroll, dobbel referanse) |
+| RRS 0–100 som visning | Bygget |
+| Idé 20 krymping i kassererprofil | Bygget (k = 10) |
+| Idé 7 siste siffer, idé 5 løpenummer mot tid, idé 38 retur mot kassadifferanse | Bygget |
+
+Fortsatt ikke bygget: F5, F13 og idéene som krever bilder, OCR, HR-data eller godkjenningsflyt.

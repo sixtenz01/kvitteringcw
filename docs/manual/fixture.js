@@ -67,7 +67,12 @@ function build(scale) {
     lines.splice(lines.length, 0, TOT(f2(total)));
     const pay = o.pay || (rnd() < 0.75 ? 'Bank' : 'Kontant');
     lines.push(T(pay + ':', f2(total)));
-    if (pay === 'Bank') lines.push(T('Referanse: ' + (10000 + Math.floor(rnd() * 80000)), ''));
+    if (pay === 'Bank') {
+      lines.push(T('Referanse: ' + (10000 + Math.floor(rnd() * 80000)), ''));
+      lines.push(SPAN('TransId: ' + (o.transId || 'DK' + Math.floor(rnd() * 1e9).toString(36).toUpperCase().padStart(6, '0') + 'F2')));
+    }
+    const g = r2(total / 1.25);
+    lines.push(`<tr><td>MVA-grunnlag</td><td>MVA-%</td><td>MVA</td><td>Sum</td></tr><tr><td>${f2(g)}</td><td>25 %</td><td>${f2(r2(total - g))}</td><td>${f2(total)}</td></tr>`);
     return { lines, total, pay };
   }
 
@@ -116,6 +121,11 @@ function build(scale) {
   for (let i = 0; i < 3; i++) { const s = saleLines({ items: [['7044610877488', 'PEPSI MAX 0.5L', 24.9, true]], noCoupons: true, pay: 'Bank' }); push(1001, 1, '2026-09-30', { m: 19 * 60 + 20 + i * 47, type: 1, cashier: '4102', lines: s.lines, total: s.total, pay: s.pay }); }
   // J: tekstlinje som tyder på annullering
   { const s = saleLines({ items: [CATALOG[7], CATALOG[8]], noCoupons: true, pay: 'Bank' }); s.lines.splice(1, 0, SPAN('Linje annullert av kasserer')); push(1001, 1, '2026-10-01', { m: 13 * 60 + 40, type: 1, cashier: '4101', lines: s.lines, total: s.total, pay: s.pay }); }
+  // K: bong der Totalt er 18 kr høyere enn linjene og betalingen (endret total)
+  { const s = saleLines({ items: [CATALOG[5], CATALOG[8]], noCoupons: true, pay: 'Bank' }); const lines = s.lines.map((l) => (l.indexOf('Totalt') !== -1 ? TOT(f2(s.total + 18)) : l));
+    push(1001, 1, '2026-10-01', { m: 20 * 60 + 40, type: 1, cashier: '4101', lines, total: r2(s.total + 18), pay: s.pay }); }
+  // L: samme TransId på to bonger i ulike kasser (dobbeltregistrert kortbetaling)
+  [[1, 12 * 60 + 5], [2, 12 * 60 + 9]].forEach((x) => { const s = saleLines({ items: [CATALOG[2]], noCoupons: true, pay: 'Bank', transId: 'DK7DUPLIKAT01' }); push(1001, x[0], '2026-09-29', { m: x[1], type: 1, cashier: x[0] === 1 ? '4101' : '4103', lines: s.lines, total: s.total, pay: s.pay }); });
   // Kjøpeutbytte-tabell på medlemsbonger (sist på bongen)
   Object.keys(events).forEach((k) => events[k].forEach((e) => {
     if (e.type !== 1 || !e.member || !(e.total > 0)) return;
@@ -163,7 +173,7 @@ function build(scale) {
   const rows = kept.map((e) => ({ transactionId: e.id, endDateTime: `${e.day} ${hhmm(e.m)}`, storeNumber: e.store, workstationNumber: e.ws, cashierNumber: e.cashier, totalAmount: e.total, receiptType: e.type, memberNumber: e.member || null, journalSourceName: 'main' }))
     .sort((a, b) => (a.endDateTime < b.endDateTime ? 1 : a.endDateTime > b.endDateTime ? -1 : 0));
   const receipts = {};
-  kept.forEach((e) => { receipts[e.id] = '<table>' + e.lines.join('') + '</table>'; });
+  kept.forEach((e) => { receipts[e.id] = `<div>Kvittering: ${e.seq} ${e.day.slice(8, 10)}.${e.day.slice(5, 7)}.${e.day.slice(0, 4)} ${hhmm(e.m)}:00</div><table>` + e.lines.join('') + '</table>'; });
   return { rows, receipts, droppedIds: dropped };
 }
 

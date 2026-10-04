@@ -84,8 +84,8 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   assert.strictEqual((fnd.match(/Regnskap: Linjer stemmer ikke/g) || []).length, 1);
   const acct = await txt('[data-sec=acct]');
   assert.match(acct, /18 av 18 salg har ny skanning \(18 med Totalt\)/);
-  assert.match(acct, /Linjer mot Totalt: 18 bonger vurdert, 94 % stemmer\. Kontrollen er aktiv\./);
-  assert.match(acct, /MVA-tabell \(16 tabeller\): 16 bonger vurdert, 94 % stemmer\. Kontrollen er aktiv\./);
+  assert.match(acct, /Linjer mot Totalt: 18 bonger vurdert, 94,4 % stemmer\. Kontrollen er aktiv\./);
+  assert.match(acct, /MVA-tabell \(16 tabeller\): 16 bonger vurdert, 93,7 % stemmer\. Kontrollen er aktiv\./);
   assert.match(acct, /18 betalingsreferanser lest, 1 brukt på flere bonger/);
   assert.ok(!(await page.$('[data-sec=acct] button:text-is("Skann på nytt")')) && !/Skann på nytt \(/.test(acct), 'ingen eldre skanninger ennå');
 

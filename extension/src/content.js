@@ -1400,7 +1400,13 @@
     box.appendChild(el('div', { class: 'kvr-row' }, [btn('Diagnostikk: ukjente linjer…', openDiag)]));
   }
 
-  function pctOf(a, b) { return b ? Math.round(a / b * 100) + ' %' : '–'; }
+  // Aldri «100 %» hvis noe ikke stemmer: rundes ned til én desimal.
+  function pctOf(a, b) {
+    if (!b) return '–';
+    if (a === b) return '100 %';
+    var v = Math.min(99.9, Math.floor(a / b * 1000) / 10);
+    return (v % 1 === 0 ? String(v) : v.toFixed(1).replace('.', ',')) + ' %';
+  }
 
   function calText(name, c, tol) {
     return name + ': ' + c.n + ' bonger vurdert, ' + pctOf(c.ok, c.n) + ' stemmer. ' +
