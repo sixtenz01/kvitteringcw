@@ -9,7 +9,7 @@ Chrome MV3-utvidelse for Lindbak Chain Web → Kvitteringsjournal. Leser kun gri
 - Valg av flere kvitteringer, sum for valgte.
 - Duplikatsjekk: samme beløp, butikk, kasse og minutt.
 - Skanning av pant: åpner hver synlige salgskvittering (type 1) i Lindbaks eget visningsfelt, leser linjene `NNN PANT` (salg) og `NNN PANTELAPP` (retur), og cacher beløp lokalt per kvittering. Filter «Pant» og pant-total for valgte. Ca. 0,5–1 s per kvittering; avbrytes med Stopp.
-- Lagrede filtre (localStorage på chainweb.coop.no).
+- Lagrede filtre (egen IndexedDB `kvr-store`, aldri localStorage).
 
 ## Funksjoner i v3
 
