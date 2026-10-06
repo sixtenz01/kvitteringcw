@@ -113,7 +113,17 @@ assert.deepStrictEqual(L.anomalies({ totalAmount: -45 }, lapper, cfg), ['Mange p
 assert.deepStrictEqual(L.anomalies({ totalAmount: 1000 }, null, Object.assign({}, cfg, { roundMin: '' })), []);
 
 assert.strictEqual(L.storeLabel(1005, { 1005: 'Coop Mega Kolbotn' }), '1005 – Coop Mega Kolbotn');
-assert.strictEqual(L.storeLabel(1005, { 1005: '1005 - Coop Mega Kolbotn' }), '1005 - Coop Mega Kolbotn');
+assert.strictEqual(L.storeLabel(1005, { 1005: '1005 - Coop Mega Kolbotn' }), '1005 – Coop Mega Kolbotn', 'nummeret foran navnet tas bort og settes på igjen likt');
+// 7-sifret butikknummer = nivå + avdelingsnummer
+assert.deepStrictEqual(L.storeParts(1311003), { full: '1311003', level: '131', dept: '1003' });
+assert.deepStrictEqual(L.storeParts('1005'), { full: '1005', level: '', dept: '1005' });
+assert.strictEqual(L.storeLabel(1311003, {}), '1003 (nivå 131)');
+assert.strictEqual(L.storeLabel('1311003', { 1311003: 'Coop Prix Bø' }), '1003 – Coop Prix Bø (nivå 131)');
+assert.strictEqual(L.storeLabel(1311003, { 1311003: '1311003 - Coop Prix Bø' }), '1003 – Coop Prix Bø (nivå 131)');
+assert.strictEqual(L.storeLabel(1311003, { 1311003: '1003 Coop Prix Bø' }), '1003 – Coop Prix Bø (nivå 131)');
+assert.strictEqual(L.storeShort(1311003) + ' ' + L.storeShort(1005), '1003 (131) 1005');
+assert.ok(['1311003', '1003', 'nivå 131', 'prix'].every((q) => L.storeSearch(1311003, { 1311003: 'Coop Prix Bø' }).indexOf(q) !== -1));
+assert.deepStrictEqual(L.parseStoreText('1311003=Coop Prix Bø\n131=Coop Øst\n1005 - Mega'), { 1311003: 'Coop Prix Bø', 131: 'Coop Øst', 1005: 'Mega' });
 assert.strictEqual(L.storeLabel(2000, {}), '2000');
 assert.deepStrictEqual(L.parseStoreText('1005=Coop Mega Kolbotn\nrusk\n1010 - Extra X'), { 1005: 'Coop Mega Kolbotn', 1010: 'Extra X' });
 assert.strictEqual(L.toCsv([['a;b', 'c"d'], [1, null]]), '\ufeff"a;b";"c""d"\r\n1;');

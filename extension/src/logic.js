@@ -811,10 +811,35 @@
   }
 
   // ---- butikknavn ----------------------------------------------------------
+  // Butikknummer i CW er nivå + avdelingsnummer: 1311003 = nivå 131 + avdeling 1003 (siste fire siffer). Korte numre har ikke nivå.
+  function storeParts(num) {
+    var t = String(num === null || num === undefined ? '' : num).trim();
+    return /^\d{5,}$/.test(t) ? { full: t, level: t.slice(0, -4), dept: t.slice(-4) } : { full: t, level: '', dept: t };
+  }
+
+  // Navn uten nummeret foran («1005 - Coop Mega» og «1311005 – Coop Mega» blir «Coop Mega»).
+  function storeName(num, map) {
+    var p = storeParts(num), n = String((map && map[p.full]) || '').trim();
+    var m = /^(\d+)\s*[-–:.]?\s*(.*)$/.exec(n);
+    return m && (m[1] === p.full || m[1] === p.dept) && m[2] ? m[2].trim() : n;
+  }
+
+  // «1003 – Coop Prix (nivå 131)»: avdelingsnummer, navn hvis kjent, og nivå når nummeret har det.
   function storeLabel(num, map) {
-    var n = map && map[String(num)];
-    if (!n) return String(num);
-    return /^\s*\d+\s*[-–]/.test(n) ? n : num + ' – ' + n;
+    var p = storeParts(num), n = storeName(num, map);
+    return p.dept + (n ? ' – ' + n : '') + (p.level ? ' (nivå ' + p.level + ')' : '');
+  }
+
+  // Kort etikett uten navn, til tabeller: «1003 (131)».
+  function storeShort(num) {
+    var p = storeParts(num);
+    return p.dept + (p.level ? ' (' + p.level + ')' : '');
+  }
+
+  // Alt det er naturlig å søke på for en butikk, i små bokstaver: hele nummeret, avdelingsnummer, nivå og navn.
+  function storeSearch(num, map) {
+    var p = storeParts(num);
+    return (p.full + ' ' + p.dept + ' ' + (p.level ? 'nivå ' + p.level + ' ' : '') + storeName(num, map)).toLowerCase();
   }
 
   // Butikknavn fra cellen i gridets BUTIKK-kolonne: «1005 Coop Mega», «1005 – Coop Mega», «Coop Mega (1005)» eller bare «Coop Mega».
@@ -832,7 +857,7 @@
   function parseStoreText(text) {
     var out = {};
     String(text || '').split(/\r?\n/).forEach(function (line) {
-      var m = /^\s*(\d{2,6})\s*[=\-–:]\s*(.+?)\s*$/.exec(line);
+      var m = /^\s*(\d{2,10})\s*[=\-–:]\s*(.+?)\s*$/.exec(line);
       if (m) out[m[1]] = m[2];
     });
     return out;
@@ -2934,6 +2959,10 @@
     sanitizeAnom: sanitizeAnom,
     anomalies: anomalies,
     storeLabel: storeLabel,
+    storeParts: storeParts,
+    storeName: storeName,
+    storeShort: storeShort,
+    storeSearch: storeSearch,
     parseStoreText: parseStoreText,
     storeNameFromCell: storeNameFromCell,
     toCsv: toCsv,

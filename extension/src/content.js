@@ -193,11 +193,14 @@
       if (!ms || !ms.dataSource) return;
       var data = ms.dataSource.data();
       var list = [];
+      var vf = (ms.options && ms.options.dataValueField) || 'number', tf = (ms.options && ms.options.dataTextField) || 'text';
+      var read = function (d, f) { return d.get ? d.get(f) : d[f]; };
       for (var i = 0; i < data.length; i++) {
         var d = data[i];
-        var num = d.get ? d.get('number') : d.number;
-        var name = d.get ? d.get('text') : d.text;
-        if (num !== undefined && num !== null && name) list.push({ number: num, name: name });
+        var num = read(d, 'number'), name = read(d, 'text');
+        if (num === undefined || num === null) num = read(d, vf);
+        if (!name) name = read(d, tf);
+        if (num !== undefined && num !== null && name) list.push({ number: num, name: String(name) });
       }
       if (list.length > result.length) result = list;
     });
@@ -671,12 +674,15 @@
     if (!box.names) return;
     box.names.innerHTML = '';
     var miss = box.values.filter(function (v) { return !storeMap[String(v)]; });
-    if (!miss.length) return;
-    var ta = el('textarea', { rows: String(Math.min(4, miss.length)), 'aria-label': 'Butikknavn' });
-    ta.value = miss.map(function (v) { return v + '='; }).join('\n');
+    var levels = {};
+    box.values.forEach(function (v) { var lv = L.storeParts(v).level; if (lv && !storeMap[lv]) levels[lv] = true; });
+    var lvMiss = Object.keys(levels).sort(function (a, b) { return a - b; });
+    if (!miss.length && !lvMiss.length) return;
+    var ta = el('textarea', { rows: String(Math.min(5, miss.length + lvMiss.length)), 'aria-label': 'Butikknavn' });
+    ta.value = lvMiss.concat(miss.map(String)).map(function (v) { return v + '='; }).join('\n');
     box.names.appendChild(el('details', { class: 'kvr-sub kvr-names' }, [
-      el('summary', { text: (miss.length === 1 ? 'Gi butikken navn' : 'Gi ' + miss.length + ' butikker navn') + ' (' + miss.slice(0, 4).join(', ') + (miss.length > 4 ? ' …' : '') + ')' }),
-      hintEl('Skriv navnet etter =. Navnene lagres i nettleseren og brukes i alle lister og rapporter.'), ta,
+      el('summary', { text: (miss.length === 1 ? 'Gi butikken navn' : 'Gi ' + miss.length + ' butikker navn') + (lvMiss.length ? ' og nivå' : '') + ' (' + (lvMiss.length ? lvMiss : miss).slice(0, 4).join(', ') + ((lvMiss.length ? lvMiss : miss).length > 4 ? ' …' : '') + ')' }),
+      hintEl('Skriv navnet etter =. ' + (lvMiss.length ? 'Et nivå er de tre første sifrene i butikknummeret (131 i 1311003). ' : '') + 'Navnene lagres i nettleseren og brukes i alle lister og rapporter.'), ta,
       btn('Lagre navn', function () {
         var add = L.parseStoreText(ta.value), cur = L.parseStoreText(manualStores);
         if (!Object.keys(add).length) { say('Skriv et navn etter = for minst én butikk.'); return; }
@@ -697,7 +703,7 @@
 
   function shownStores(box) {
     var q = box.query.toLowerCase();
-    return box.values.filter(function (v) { return !q || sLabel(v).toLowerCase().indexOf(q) !== -1; });
+    return box.values.filter(function (v) { return !q || L.storeSearch(v, storeMap).indexOf(q) !== -1; });
   }
 
   function renderStoreBox(box) {
@@ -705,12 +711,30 @@
     var shown = shownStores(box);
     if (!box.values.length) box.list.appendChild(el('div', { class: 'kvr-hint', text: 'Ingen butikker i listen ennå.' }));
     else if (!shown.length) box.list.appendChild(el('div', { class: 'kvr-hint', text: 'Ingen treff.' }));
-    shown.forEach(function (v) {
-      var key = String(v), cb = el('input', { type: 'checkbox', value: key });
+    var grouped = shown.some(function (v) { return L.storeParts(v).level; });
+    var row = function (v) {
+      var key = String(v), p = L.storeParts(v), nm = L.storeName(v, storeMap), cb = el('input', { type: 'checkbox', value: key });
       cb.checked = !!box.sel[key];
       cb.addEventListener('change', function () { box.sel[key] = cb.checked; renderStoreInfo(box); (box.cb || onChange)(); });
-      box.list.appendChild(el('label', { class: 'kvr-chk' }, [cb, el('span', { text: sLabel(v) }), el('em', { class: 'kvr-cnt', text: String(box.counts[key] || 0) })]));
-    });
+      return el('label', { class: 'kvr-chk', title: p.level ? 'Butikknummer ' + p.full + ': nivå ' + p.level + ', avdeling ' + p.dept : '' },
+        [cb, el('span', { text: grouped ? p.dept + (nm ? ' – ' + nm : '') : sLabel(v) }), el('em', { class: 'kvr-cnt', text: String(box.counts[key] || 0) })]);
+    };
+    if (!grouped) shown.forEach(function (v) { box.list.appendChild(row(v)); });
+    else {
+      // nummeret er nivå + avdelingsnummer: gruppert etter nivå, med valg av hele nivået
+      var by = {};
+      shown.forEach(function (v) { var lv = L.storeParts(v).level || '–'; (by[lv] = by[lv] || []).push(v); });
+      Object.keys(by).sort(function (a, b) { return a === '–' ? 1 : b === '–' ? -1 : a - b; }).forEach(function (lv) {
+        var vals = by[lv], set = function (on) { vals.forEach(function (v) { box.sel[String(v)] = on; }); renderStoreBox(box); (box.cb || onChange)(); };
+        box.list.appendChild(el('div', { class: 'kvr-lvl' }, [
+          el('b', { text: lv === '–' ? 'Uten nivå' : 'Nivå ' + lv + (storeMap[lv] ? ' – ' + storeMap[lv] : '') }),
+          el('span', { class: 'kvr-hint', text: vals.length + (vals.length === 1 ? ' butikk' : ' butikker') }),
+          el('button', { type: 'button', class: 'kvr-link', text: 'Velg', onclick: function () { set(true); } }),
+          el('button', { type: 'button', class: 'kvr-link', text: 'Fjern', onclick: function () { set(false); } })
+        ]));
+        vals.forEach(function (v) { box.list.appendChild(row(v)); });
+      });
+    }
     renderStoreInfo(box);
     renderStoreNames(box);
   }
@@ -1626,7 +1650,7 @@
     if (!R.pant.balance.length) ui.ctlPant.appendChild(hintEl('Ingen skannede salg.'));
     else {
       ui.ctlPant.appendChild(tbl(['Dag', 'Butikk', 'Pant salg', 'Pantelapper ut', 'Diff'], R.pant.balance.map(function (b) {
-        return [b.day, b.store, fmt(b.sale), { t: fmt(b.ret), bad: b.flag }, fmt(b.diff)];
+        return [b.day, L.storeShort(b.store), fmt(b.sale), { t: fmt(b.ret), bad: b.flag }, fmt(b.diff)];
       })));
       ui.ctlPant.appendChild(hintEl('Rødt = utbetalt panteretur er over ' + ctlCfg.pantRatio + '× pantesalget samme dag. Pantelapper kan stamme fra flasker kjøpt andre steder, så vurder over flere dager.'));
     }
@@ -1922,7 +1946,7 @@
       var rc = ctlRes.recon.filter(function (r) { return r.flag; });
       secs.push({ h: 'Dagsavstemming', li: rc.length ? rc.map(function (r) { return r.day + ' kasse ' + r.kasse + ': diff ' + fmt(r.diff) + ' kr'; }) : ['Ingen avvik.'] });
       var pb = ctlRes.pant.balance.filter(function (b) { return b.flag; });
-      secs.push({ h: 'Pantebalanse', li: pb.length ? pb.map(function (b) { return b.day + ' butikk ' + b.store + ': salg ' + fmt(b.sale) + ', utbetalt ' + fmt(b.ret); }) : ['Ingen avvik.'] });
+      secs.push({ h: 'Pantebalanse', li: pb.length ? pb.map(function (b) { return b.day + ' butikk ' + L.storeShort(b.store) + ': salg ' + fmt(b.sale) + ', utbetalt ' + fmt(b.ret); }) : ['Ingen avvik.'] });
     }
     var open = Object.keys(notes).filter(function (id) { return notes[id].status === 'oppfolging'; }).length;
     secs.push({ h: 'Oppfølging', li: [open + ' bonger er merket «til oppfølging».'] });
@@ -2733,7 +2757,7 @@
       return;
     }
     cwStoreList.filter(function (st) {
-      return !q || String(st.number).indexOf(q) !== -1 || String(st.name).toLowerCase().indexOf(q) !== -1;
+      return !q || L.storeSearch(st.number, storeMap).indexOf(q) !== -1;
     }).slice(0, 200).forEach(function (st) {
       var cb = el('input', { type: 'checkbox', value: String(st.number) });
       cb.checked = !!cw.stores[st.number];

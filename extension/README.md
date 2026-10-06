@@ -89,6 +89,7 @@ Ikke verifisert: om kvitteringen skriver årsaken som nummer eller tekst (begge 
 ## Samlet utseende og butikknavn (versjon 3.16.0)
 
 - **Alle filter under Filtrer.** Innholdsfiltrene (vare, varegruppe, pant, rabatt, rabatt-%, spesialbetaling) ligger i kortet «Innhold» og er merket *skanning*. Skann har bare skanning (knapper og cache) og varegrupper. Sortering og lagrede filtre er ett kort.
+- **Nivå og avdeling:** butikknummer med mer enn fire siffer er nivå + avdelingsnummer (`1311003` = nivå `131` + avdeling `1003`, `storeParts` i `logic.js`). Etiketten er «1003 – navn (nivå 131)», listen grupperes etter nivå med «Velg»/«Fjern» per nivå, søket treffer hele nummeret, avdeling, nivå og navn, og nivåer kan få navn (`131=Coop Øst`). Navnelesingen fra CW bruker feltnavnene widgeten selv oppgir (`dataValueField`/`dataTextField`).
 - **Butikknavn og nummer overalt** («1005 – Coop Mega Kolbotn»). Navn hentes fra CWs butikkliste, ellers fra BUTIKK-kolonnen i listen (`storeNameFromCell`), og egne navn overstyrer. Butikker uten navn får «Gi butikken navn» direkte under butikklisten.
 - **Felles design:** alle farger, radier og kontrollhøyder kommer fra tokens i `panel.css` (`--kv-*`) og brukes likt i panel og dialoger. Samme overskriftsstil på kort og innstillingsgrupper, ett utseende på varsler, like høye felt og knapper.
 
@@ -208,6 +209,7 @@ NODE_PATH=<global node_modules> node test/skann.js     # feil bong i visningsfel
 NODE_PATH=<global node_modules> node test/regnskap.js  # Totalt, betaling, MVA, referanser, omskanning, CSV
 NODE_PATH=<global node_modules> node test/rapport.js  # lager rapport i panelet, pakker ut ZIP og verifiserer alle kontrollsummer
 node test/docs.test.js                               # dekning av innstillinger, vekter, faner og kort i brukerveiledningen
+NODE_PATH=<global node_modules> node test/avdeling.js  # butikknummer = nivå + avdeling: gruppert liste, søk, valg av nivå, navn
 NODE_PATH=<global node_modules> node test/butikk.js    # butikknavn fra BUTIKK-kolonnen, redigering, filter samlet under Filtrer
 NODE_PATH=<global node_modules> node test/linjer.js    # samme funn i panelet: kort, søk på spesialbetaling og rabatt-%
 NODE_PATH=<global node_modules> node test/stor.js  # panelstørrelse: Vanlig/Stor/Full, dokking, kolonner, husking
