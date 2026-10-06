@@ -350,4 +350,20 @@ const mapOf = (pairs) => pairs.reduce((m, [it, s]) => (m[it.transactionId] = s, 
   assert.ok(L.rrs(L.riskScore(['Pantelapp slettet', 'Varelinjer slettet, pant utbetalt kontant'])) > 50);
 }
 
+// samme kampanjespørsmål stilles bare én gang per bong, helst under en test som teller
+{
+  const c1 = { key: '7311041012582', c: '7311041012582', name: 'KAFFE', rateText: '40 %', n: 6, cashiers: 3 }, c2 = { key: '7000000000017', c: '7000000000017', name: 'TE', rateText: '30 %', n: 4, cashiers: 2 };
+  const fs = [
+    { title: 'Rabatt uten årsak', camp: [c1, c2], ids: ['b1'] },
+    { title: 'Rabatt uten treff på andre salg', camp: [c1], ids: ['b1'] },
+    { title: 'Høy rabattprosent', camp: [c1], ids: ['b2'] }
+  ];
+  const bd = [{ reason: 'Rabatt uten årsak', counts: false }, { reason: 'Rabatt uten treff på andre salg', counts: true }];
+  const a = L.campAsk(bd, fs, 'b1');
+  assert.deepStrictEqual(a.map((q) => q.map((c) => c.key)), [['7000000000017'], ['7311041012582']], 'varen spørres under testen som teller, resten under den andre');
+  assert.deepStrictEqual(L.campAsk(bd, fs, 'b2').map((q) => q.length), [0, 0], 'andre bonger påvirkes ikke');
+  assert.deepStrictEqual(L.campAsk([{ reason: 'Rabatt uten årsak', counts: true }, { reason: 'Rabatt uten treff på andre salg', counts: true }], fs, 'b1').map((q) => q.map((c) => c.key)), [['7311041012582', '7000000000017'], []], 'teller begge, første får spørsmålet');
+  assert.deepStrictEqual(L.explainReason('Rabatt uten årsak', { id: 'b1', findings: [{ title: 'Rabatt uten årsak', ids: ['b1'], detail: 'Slutter på punktum.' }], cfg: L.defaultAnom() }), 'Slutter på punktum.');
+}
+
 console.log('linjer: ok');

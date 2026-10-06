@@ -938,7 +938,7 @@
     ['specialWords', 'Spesialbetaling: ord (komma, tom = av)', DEFAULT_SPECIAL], ['specialN', 'Spesialbetaling: kasserer ved ≥ antall bonger (tom = av)', '3'],
     ['discHiFrom', 'Høy rabatt fra % (tom = av)', '70'], ['discHiTo', 'Høy rabatt til %', '100'],
     ['discMatchPct', 'Rabatt uten treff på andre salg: fra % (tom = av)', '30'], ['discMatchNR', 'Treff-test: bare rabatt uten årsak (tom = alle)', '1'],
-    ['campBongs', 'Mulig kampanje: samme vare og rabatt på ≥ antall bonger (tom = av)', '3'], ['campCashiers', 'Mulig kampanje: hos ≥ antall kasserere', '2'], ['campDay', 'Kampanjedag: andel bonger med rabatt ≥ % (tom = av)', '40'],
+    ['campBongs', 'Mulig kampanje: samme vare med rabatt på ≥ antall bonger (tom = av)', '3'], ['campCashiers', 'Mulig kampanje: hos ≥ antall kasserere', '2'], ['campDay', 'Kampanjedag: andel bonger med rabatt ≥ % (tom = av)', '40'],
     ['askDevPct', 'Spør pris avviker fra dagens salg ≥ % (tom = av)', '5'], ['askMinN', 'Spør pris: minst antall salg av varen samme dag', '3'], ['askN', 'Spør pris: kasserer ved ≥ antall bonger (tom = av)', '5'],
     ['cardRetN', 'Returer på samme kort ≥ antall (tom = av)', '3'], ['cardRetDays', 'Returer på samme kort innen dager', '30'],
     ['manualWords', 'Manuell kvittering: ord (komma, tom = av)', 'manuell kvittering, manuell bong, til gode, tilgode'], ['manualDays', 'Manuell kvittering: match innen dager', '3']
@@ -1004,7 +1004,7 @@
       sf('discHiTo', 'ctl', 'num', 'Høy rabatt: overvåk til', '%'),
       sf('discMatchPct', 'ctl', 'num', 'Rabatt uten treff på andre salg: fra', '%', 'Varen har rabatt på denne bongen, men ingen andre bonger i butikken samme dag har varen med samme rabatt.', true),
       sf('discMatchNR', 'ctl', 'flag', 'Treff-testen gjelder bare rabatt uten årsak', '', 'Av = alle rabatter, også med årsak.'),
-      sf('campBongs', 'ctl', 'num', 'Mulig kampanje: samme vare og rabatt på minst', 'bonger', 'Over alle innlastede dager og butikker. Bongen flagges med notat om mulig sentral kampanje, og du blir spurt om det stemmer.', true),
+      sf('campBongs', 'ctl', 'num', 'Mulig kampanje: samme vare med rabatt på minst', 'bonger', 'Over alle innlastede dager og butikker. Bongen flagges med notat om mulig sentral kampanje, og du blir spurt om det stemmer.', true),
       sf('campCashiers', 'ctl', 'num', 'Mulig kampanje: hos minst', 'kasserere', 'Samme vare og rabatt hos flere kasserere tyder på kampanje fra sentralt hold, ikke på én person.'),
       sf('campDay', 'ctl', 'num', 'Kampanjedag: andel bonger med rabatt over', '%', 'Minst 30 salg den dagen. Rabatter den dagen får notat om mulig kampanjedag.', true)
     ], weights: ['Rabatt uten årsak', 'Mange rabatter uten årsak', 'Rabatt med overvåket årsak', 'Mange rabatter med overvåket årsak', 'Høy rabattprosent', 'Rabatt uten treff på andre salg'] },
@@ -1482,7 +1482,7 @@
       return 'Treffer din regel «' + name + '»' + (rule ? ': ' + ruleText(rule) : '') + '.';
     }
     var f = (ctx.findings || []).filter(function (x) { return x.title === b && x.ids.indexOf(ctx.id) !== -1; })[0];
-    if (f) return f.detail + '.';
+    if (f) return /[.!?]$/.test(f.detail) ? f.detail : f.detail + '.';
     if (b === 'Bonger utenfor åpningstid') return 'Bongen er tatt utenfor åpningstid' + (ctx.ctl ? ' (' + ctx.ctl.openFrom + '–' + ctx.ctl.openTo + ')' : '') + '.';
     return String(reason);
   }
@@ -1904,6 +1904,17 @@
   // Svaret gjelder varen, uansett rabattprosent, så det oppdaterer alle flaggede bonger med den varen. Bongen flagges som før, men får notat
   // om mulig kampanje. Brukerens svar avgjør: decisions[EAN] er «kampanje» (rabatten flagges ikke lenger) eller «ikke» (aldri notat om kampanje).
   // En dag der svært mange salg har rabatt får også notat.
+  // Spørsmål om sentral kampanje per årsak på en bong, parallelt med breakdown. Samme vare spørres bare én gang, helst under en test som teller.
+  function campAsk(breakdown, findings, id) {
+    var asked = {}, out = breakdown.map(function () { return []; });
+    breakdown.map(function (x, i) { return i; }).sort(function (a, b) { return (breakdown[b].counts ? 1 : 0) - (breakdown[a].counts ? 1 : 0) || a - b; }).forEach(function (i) {
+      var base = reasonBase(breakdown[i].reason);
+      var cf = (findings || []).filter(function (f) { return f.title === base && f.camp && f.ids.indexOf(id) !== -1; })[0];
+      if (cf) cf.camp.forEach(function (c) { if (!asked[c.key]) { asked[c.key] = true; out[i].push(c); } });
+    });
+    return out;
+  }
+
   function campKey(c) { return String(c); }
 
   function ratesText(rates) {
@@ -2941,6 +2952,7 @@
     campaigns: campaigns,
     campKey: campKey,
     sanitizeCamp: sanitizeCamp,
+    campAsk: campAsk,
     wordList: wordList,
     DEFAULT_SPECIAL: DEFAULT_SPECIAL,
     ledger: ledger,

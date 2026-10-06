@@ -168,6 +168,19 @@ async function main() {
     await save('sjekk-kort', await page.$(first), { l: 8, r: 40, t: 8, b: 8 });
     await c.un();
   }
+  if (want('kampanje')) {
+    await go('Analyse', 'Sjekk først');
+    const q = '[data-sec=chk-list] .kvr-ck:has(.kvr-ck-t:has-text("09-29 10:12"))';
+    for (let i = 0; i < 10 && !(await page.$(q)); i++) { const more = await page.$('[data-sec=chk-list] button:has-text("Vis flere")'); if (!more) break; await more.click(); await page.waitForTimeout(150); }
+    if (!(await page.$eval(q, (n) => n.classList.contains('kvr-open')))) await page.click(q + ' .kvr-ck-h');
+    await (await page.$(q)).scrollIntoViewIfNeeded();
+    await save('sjekk-kampanje', await page.$(q), { l: 8, r: 40, t: 8, b: 8 });
+    await go('Analyse', 'Sjekk først');
+    await page.click('[data-sec=chk-top] button:text-is("Svar nå")');
+    await page.waitForSelector('.kvr-modal .kvr-camp, .kvr-modal table');
+    await save('kampanje-dialog', await page.$('.kvr-dlg'));
+    await page.click('.kvr-modal button:text-is("Lukk")');
+  }
   if (want('diagram')) {
     await go('Analyse', 'Diagram'); await view(1000);
     for (const id of ['ch-hours', 'ch-days', 'ch-cash', 'ch-heat', 'ch-benford', 'ch-pant']) await cardShot(id, `[data-sec=${id}]`);

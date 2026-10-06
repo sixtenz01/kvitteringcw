@@ -75,6 +75,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   assert.match(await txt('[data-sec=chk-top]'), /1 mulig sentral kampanje venter på svar/);
   assert.match(await txt('.kvr-ctlsum'), /6 å sjekke/);
   assert.match(await txt('[data-sec=chk-list] .kvr-camp'), /Kan være sentral kampanje: «KAMPANJEVARE» med 40 % og 33 % rabatt er på 6 bonger hos 6 kasserere\. Stemmer det\?/);
+  assert.ok(!/\.\./.test(await txt('[data-sec=chk-list]')), 'forklaringen slutter ikke på to punktum');
   assert.ok(await page.$('[data-sec=chk-list] .kvr-camp button:text-is("Ja, kampanje")') && await page.$('[data-sec=chk-list] .kvr-camp button:text-is("Nei, ikke kampanje")'));
   await go('Analyse', 'Detaljer');
   await page.click('button:text-is("Åpne alle")');

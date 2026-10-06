@@ -65,6 +65,10 @@ L.DISC_REASONS.forEach((r, i) => has(r));
 // tast og snarveier som pluginen faktisk har
 ['Alt+K', 'Alt+klikk'].forEach((t) => assert.ok(html.includes(t.replace('Alt+', '<kbd>Alt</kbd>+').replace('+K', '+<kbd>K</kbd>')) || text.includes(t) || html.includes('<kbd>Alt</kbd>+'), t));
 
+// tegnforklaringen i hjelpen og i veiledningen følger hverandre, og kampanjespørsmålet og butikknavn er forklart
+['Overstrøket årsak', 'Kan være sentral kampanje', 'Svar nå', 'Rabatt uten årsak', 'Mulig sentral kampanje', 'Nivå og avdelingsnummer', 'Spesialbetaling', 'Spør pris', 'Samme forhold', 'kampanjesvar', 'Ja, kampanje', 'Nei, ikke kampanje', 'Angre', 'Gi butikken navn'].forEach(has);
+['Overstrøket årsak', 'sentral kampanje', 'Panelstørrelse'].forEach((t) => assert.ok(content.includes(t), 'hjelpen i panelet mangler «' + t + '»'));
+
 // ---- lenker og bilder er hele
 const ids = {};
 html.replace(/\sid="([^"]+)"/g, (m, id) => { ids[id] = true; return m; });

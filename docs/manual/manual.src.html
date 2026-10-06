@@ -114,7 +114,7 @@
     <tr><td>Skann innhold (synlige)</td><td>Skanner alle bonger som passerer filtrene dine. Pluginen skanner også de som pant- og rabattfilteret ellers ville skjult, så ingen faller utenfor.</td></tr>
     <tr><td>Stopp</td><td>Avbryter skanningen. Det som er ferdig beholdes.</td></tr>
     <tr><td>Prøv feilede på nytt</td><td>Kjører bare de bongene som feilet sist.</td></tr>
-    <tr><td>Tøm cache</td><td>Sletter alt skannet innhold og alle avviksmarkeringer. Innstillinger og notater beholdes.</td></tr>
+    <tr><td>Tøm cache</td><td>Sletter alt skannet innhold og alle avviksmarkeringer. Innstillinger, notater, butikknavn og kampanjesvar beholdes.</td></tr>
     <tr><td>Varegrupper</td><td>Gruppér varer med nøkkelord (se under). Filteret på varegruppe ligger under Filtrer → Innhold.</td></tr>
   </tbody></table></div>
 <div class="callout"><b>Den gule stripen</b>
@@ -141,13 +141,14 @@
     <tr><td>Hurtigvalg</td><td>Hele listen, I går, Siste 7 dager, Forrige uke, Denne måneden, Forrige måned.</td></tr>
     <tr><td>Periode fra / til</td><td>Fritt tidsrom. Med «Sammenlign» på heter de Periode A.</td></tr>
     <tr><td>Sammenlign med en annen periode</td><td>Periode A mot periode B: returandel, snittbeløp og risikoscore per kasserer, med endringer markert rødt.</td></tr>
-    <tr><td>Butikk, Kasserer, Kasse</td><td>Tom = alle. Du kan kombinere, for eksempel én kasserer i én butikk.</td></tr>
+    <tr><td>Butikk, Kasserer, Kasse</td><td>Tom = alle. Du kan kombinere, for eksempel én kasserer i én butikk. Butikklisten er den samme som under Filtrer, med navn og gruppering etter nivå.</td></tr>
     <tr><td>Bruk også filtrene i listen</td><td>Analyserer bare bonger som også passerer filtrene dine.</td></tr>
     <tr><td>Nullstill omfang</td><td>Tilbake til hele listen.</td></tr>
   </tbody></table></div>
 <p>Går omfanget utenfor det du har hentet fra Lindbak, vises en gul advarsel og analysen henter det som mangler. Husk at dette overskriver datoer og butikker i Lindbaks eget filter.</p>
 <p>Hver flaggede bong er et kort. Klikk på det for å åpne det.</p>
 {{annotated:sjekk-kort}}
+<p>Under pillene står en forklaring per test, med knappen <strong>Juster</strong> som åpner riktig innstillingsgruppe. Når flere tester måler samme forhold, teller bare den høyeste, og de andre vises overstrøket. Kan en rabatt skyldes en sentral kampanje, står det et notat og en boks med <em>Ja, kampanje</em> og <em>Nei, ikke kampanje</em> (se kapittel 5). Nederst setter du status (Til oppfølging eller Sjekket) og skriver notat.</p>
 <h4>Diagram</h4>
 <p>Diagrammene viser omfanget ditt og er klikkbare: klikk en søyle eller rute for å filtrere listen på den timen, dagen eller kassen. Knappen <strong>Tabell</strong> viser tallene bak diagrammet.</p>
 <div class="shots">{{fig:ch-hours}}{{fig:ch-days}}</div>
@@ -240,6 +241,10 @@
   <dt>Understreket grønn lenke</dt><dd>Klikk for å se alt om kassereren eller kassen (Fokus).</dd>
   <dt>Rødt tall i tabell</dt><dd>Verdien er over grensen eller avviker fra snittet.</dd>
   <dt>Stiplet pille</dt><dd>Markering som ikke er et filter, for eksempel «Avvik markert». ✕ fjerner den.</dd>
+  <dt>Overstrøket årsak</dt><dd>Testen er dekket av en høyere test på samme forhold og teller ikke i poengene. Forklaringen står ved siden av.</dd>
+  <dt>Boks «Kan være sentral kampanje»</dt><dd>Rabatten kan skyldes en kampanje fra sentralt hold. Svar <em>Ja</em> eller <em>Nei</em> under bongen; svaret gjelder varen på alle flaggede bonger. <em>Angre</em> setter det tilbake.</dd>
+  <dt>«skanning» ved et filter</dt><dd>Filteret krever at bongene er skannet. Uskannede bonger skjules, og en gul stripe viser hvor mange.</dd>
+  <dt>⤢ i tittelfeltet</dt><dd>Bytter panelstørrelse: Vanlig, Stor (dokket til høyre) eller Full.</dd>
 </dl>
 
 <h2 id="rabatt"><span class="n">5</span>Rabatt og kuponger</h2>
@@ -263,6 +268,14 @@
     <tr><td>6</td><td>Best før</td><td>Nei</td></tr>
   </tbody></table></div>
 <p>Årsak 2, 4 og 5 overvåkes fordi de er mest skjønnsmessige: kassereren velger selv. Du endrer listen under Innstillinger → Rabatt.</p>
+<h3>Rabatt uten årsak</h3>
+<p>Rabattårsak er valgfri på bongen, så en tom årsak er ikke en feil i seg selv. Pluginen behandler det slik:</p>
+<ul>
+  <li><strong>Bongen flagges</strong> når en rabattlinje uten årsak har en rabattprosent på minst 30 % (Innstillinger → Rabatt, «Rabatt uten årsak fra»; tom = av). Rabatter under grensen flagges ikke. Testen bruker prosenten som er trykt på rabattlinjen. En linje uten trykt prosent vurderes i stedet av «Høy rabattprosent» og «Rabatt uten treff», som regner prosenten ut fra beløpene.</li>
+  <li><strong>Kassereren markeres</strong> (ikke bongen) når andelen av hans eller hennes bonger med rabatt uten årsak er minst 1,5 ganger butikkens andel, med minst 5 bonger og minst 2 bonger med rabatt uten årsak. Det står i kassererprofilen som «Mange rabatter uten årsak», og kan slås av med «Sammenlign kasserere».</li>
+  <li><strong>Mulig sentral kampanje:</strong> er samme vare solgt med rabatt hos flere kasserere, får bongen et notat og du blir spurt (under). Svarer du Ja, flagges ikke varen, og den teller ikke mot kassereren.</li>
+  <li><strong>Bonger som ikke er skannet</strong> ses ikke. Dekningsgraden i kortet Rabatter og kuponger viser hvor mange salg som er vurdert.</li>
+</ul>
 <h3>Høy rabatt, rabatt uten treff og kampanje</h3>
 <p>Tre tester ser på selve rabatten, utover årsakskoden. De ligger i gruppen Rabatt under Innstillinger.</p>
 <div class="tw"><table>
@@ -283,6 +296,8 @@
   <li><strong>Svarene huskes</strong> i nettleseren, følger med Eksporter og Importer innstillinger, og står i revisjonsrapporten, slik at ingen rabatter forsvinner uten at det kan etterprøves.</li>
   <li>En dag der svært mange salg har rabatt (standard 40 % av minst 30 salg) får bare et notat om mulig kampanjedag.</li>
 </ul>
+{{shotm:sjekk-kampanje}}
+{{shotm:kampanje-dialog}}
 <p>Du kan også søke etter rabatt under Filtrer → Innhold: skriv for eksempel 40 i både «Rabatt % fra» og «til» for å se alle bonger med 40 % rabatt. Kortet Rabatter og kuponger viser de mulige kampanjene.</p>
 <h3>Hvor du finner rabatt</h3>
 <ul>
@@ -292,7 +307,7 @@
 </ul>
 {{shotw:d-disc}}
 <div class="callout"><b>Ikke bekreftet</b>
-  <p>Vi har ikke sett en ekte kvittering med utfylt rabattårsak, og vet derfor ikke sikkert om årsaken skrives som tall eller tekst (begge håndteres). Vi vet heller ikke hvordan lokale kampanjer ser ut, så pluginen kan ikke skille dem fra rabatter butikken har gitt selv. Eldre skanninger fra før versjon 3 mangler rabattdata og må skannes på nytt.</p>
+  <p>Vi har ikke sett en ekte kvittering med utfylt rabattårsak, og vet derfor ikke sikkert om årsaken skrives som tall eller tekst (begge håndteres). Pluginen kan heller ikke se om en rabatt er en sentral kampanje. Den ser bare mønsteret (samme vare, mange bonger, flere kasserere) og spør deg, i stedet for å anta noe. Eldre skanninger fra før versjon 3 mangler rabattdata og må skannes på nytt.</p>
 </div>
 
 <h2 id="medlem"><span class="n">6</span>Medlem, pris, pant og hendelser</h2>
@@ -402,13 +417,13 @@
     <tr><td><code>data/innhold.json</code></td><td>Skannet bonginnhold, sortert, uten skannetidspunkt, slik at samme data gir samme kontrollsum.</td></tr>
     <tr><td><code>data/funn.csv</code>, <code>data/flaggede_bonger.csv</code></td><td>Alle funn og alle flaggede bonger med score, årsaker, status og notat.</td></tr>
     <tr><td><code>data/notatlogg.json</code></td><td>Alle endringer av notater og status (hash-kjede), når det finnes notater. Rapporten viser om kjeden er ubrutt.</td></tr>
-    <tr><td><code>innstillinger.json</code></td><td>Terskler, poeng, egne regler, varegrupper og butikknavn som ble brukt. Kan leses inn igjen under Mer → Innstillinger → Importer.</td></tr>
+    <tr><td><code>innstillinger.json</code></td><td>Terskler, poeng, egne regler, varegrupper, butikknavn og svar om sentral kampanje som ble brukt. Kan leses inn igjen under Mer → Innstillinger → Importer.</td></tr>
     <tr><td><code>KONTROLLSUM.txt</code></td><td>SHA-256 for hver fil i pakken.</td></tr>
   </tbody></table></div>
 <h3>Slik leser du rapporten</h3>
 {{shotw:rapport-forside}}
 <ul>
-  <li><strong>Dekningsgrad og begrensninger</strong> forteller hvor mye av grunnlaget testene faktisk så, og hvilke tester som ikke ble vurdert. Les denne før du leser funnene.</li>
+  <li><strong>Dekningsgrad og begrensninger</strong> forteller hvor mye av grunnlaget testene faktisk så, og hvilke tester som ikke ble vurdert. Les denne før du leser funnene. Her står også kampanjesvarene: hvilke varer du har svart er sentral kampanje (og som derfor ikke er flagget), hvilke du har avvist, og hvor mange som ikke er avklart.</li>
   <li><strong>Metode</strong> viser alle terskler og poeng som ble brukt, med endringer fra standard merket gult.</li>
   <li><strong>Funn</strong> er gruppert per test. <strong>Flaggede kvitteringer</strong> er rangert etter risiko, med forklaring, status og notat, og lenke til bevisbildet.</li>
 </ul>
@@ -450,13 +465,13 @@
 <div class="tw"><table>
   <thead><tr><th>Valg</th><th>Hva det gjør</th></tr></thead>
   <tbody>
-    <tr><td>Egne butikknavn</td><td>Hvis Lindbak ikke leverer butikklisten, kan du skrive <code>1001=Navn</code>, ett per linje.</td></tr>
+    <tr><td>Egne butikknavn</td><td>Hvis Lindbak ikke leverer butikklisten, kan du skrive <code>1001=Navn</code>, ett per linje. Et nivå kan også få navn (<code>131=Navn</code>). Samme felt finnes under Filtrer → Butikk («Gi butikken navn»). Egne navn går foran navn fra Lindbak.</td></tr>
     <tr><td>Tidsforskyvning for listen</td><td>Normalt 0. Brukes bare hvis klokkeslettet i listen avviker fast fra bongen (se kapittel 11). Diagnostikk foreslår verdien.</td></tr>
     <tr><td>Panelstørrelse</td><td>Vanlig, Stor (dokket til høyre, lista i Lindbak synlig) eller Full (hele skjermen). Samme valg som ⤢ i tittelfeltet.</td></tr>
     <tr><td>Tastaturflyt</td><td>Slår på <kbd>↑</kbd> <kbd>↓</kbd> for å bytte bong, <kbd>N</kbd> for notat og <kbd>M</kbd> for å velge eller fjerne valg. Virker ikke mens du skriver i et felt.</td></tr>
-    <tr><td>Eksporter / Importer innstillinger</td><td>Lagrer og leser inn terskler, poeng, egne regler, varegrupper og butikknavn som en fil. Praktisk for å dele samme oppsett mellom butikker. Skannet innhold og notater tas ikke med.</td></tr>
+    <tr><td>Eksporter / Importer innstillinger</td><td>Lagrer og leser inn terskler, poeng, egne regler, varegrupper, butikknavn og svar om sentral kampanje som en fil. Praktisk for å dele samme oppsett mellom butikker. Skannet innhold og notater tas ikke med.</td></tr>
     <tr><td>Tilbakestill plassering</td><td>Setter panelets plass og størrelse tilbake.</td></tr>
-    <tr><td>Alt til standard</td><td>Tilbake til standardverdier for alle terskler og poeng. Egne regler, varegrupper og butikknavn beholdes.</td></tr>
+    <tr><td>Alt til standard</td><td>Tilbake til standardverdier for alle terskler og poeng. Egne regler, varegrupper, butikknavn og kampanjesvar beholdes.</td></tr>
   </tbody></table></div>
 <h3>Alle innstillingene</h3>
 <p>Under står hver innstilling, hva den gjør, standardverdien og hvordan du kan bruke den. Bruk søkefeltet for å finne en bestemt.</p>
@@ -471,6 +486,8 @@
     <tr><td>Du savner treff du vet finnes</td><td>Senk grensen. Sjekk dekningsgraden: mange tester ser bare skannede bonger.</td></tr>
     <tr><td>Samme kasserer øverst hver gang</td><td>Se Kassererprofil. En kasserer på pantekassen eller i kveldsskiftet kan ha helt andre tall enn snittet. Sammenlign med omfang per kasse eller periode mot periode.</td></tr>
     <tr><td>Falske hull i bongnummer</td><td>Listen er sannsynligvis filtrert på type, kasse eller tid. Fjern filtrene, eller sett «Størst hull» lavere.</td></tr>
+    <tr><td>Mange spørsmål om kampanje</td><td>Svar Ja én gang per vare: svaret gjelder alle bonger med varen, uansett rabattprosent. Eller øk «Mulig kampanje: samme vare med rabatt på minst» og «Mulig kampanje: hos minst» under Rabatt.</td></tr>
+    <tr><td>Lavere poeng enn du forventet</td><td>Samme forhold teller bare én gang (kapittel 4, Poeng). Overstrøkede piller viser hvilke tester som er dekket av en høyere.</td></tr>
     <tr><td>Salg etter oppgjør rett etter midnatt</td><td>Sett riktig åpningstid. Oppgjør før åpningstid regnes som forrige dag.</td></tr>
   </tbody></table></div>
 
@@ -504,7 +521,7 @@
 <h2 id="lagring"><span class="n">10</span>Lagring og personvern</h2>
 {{dia:storage}}
 <ul>
-  <li><strong>Egen database.</strong> Alt pluginen husker (innstillinger, lagrede filtre, regler, notater, skannet innhold, rapportlogg) ligger i en egen database i nettleseren. Pluginen skriver aldri til Lindbaks egen lagring.</li>
+  <li><strong>Egen database.</strong> Alt pluginen husker (innstillinger, lagrede filtre, regler, butikknavn, svar om sentral kampanje, notater, skannet innhold, rapportlogg) ligger i en egen database i nettleseren. Pluginen skriver aldri til Lindbaks egen lagring.</li>
   <li><strong>Hardt tak.</strong> Skannet innhold begrenses til 10 000 bonger og 25 MB, de eldste fjernes først. Hver skannet bong har dessuten grenser (maks 500 linjer, 80 tegn per varenavn og 20 betalingsmåter). Under Skann → Tøm cache sletter du alt skannet innhold.</li>
   <li><strong>Ingenting sendes bort.</strong> Dataene blir på maskinen din. Pluginen kaller ikke eksterne tjenester og sender ingen egne kall mot Lindbaks API. Den leser bare det Lindbaks egen side allerede viser.</li>
   <li><strong>Persondata.</strong> Bevisbilder har ikke medlemsnummer. Rapporten har kasserernumre og bilder av kvitteringer. Behandle ZIP-filen som annen intern dokumentasjon.</li>
@@ -522,6 +539,10 @@
 <details class="faq"><summary>Analysen overskrev datoene i Lindbak</summary><p>Når omfanget går utenfor det du har hentet, henter analysen det som mangler og setter Lindbaks dato og butikker. Det tømmer også medlems-, vare- og bongsøk i Lindbak.</p></details>
 <details class="faq"><summary>Jeg endret en terskel, men ingenting skjedde</summary><p>Terskler gjelder fra neste analyse. Trykk Kjør analyse. Poeng gjelder med en gang.</p></details>
 <details class="faq"><summary>Bevisbildene mangler for noen bonger</summary><p>Bonger som ikke lenger er i listen, eller der tegningen feilet, får ikke bilde. Det står i rapportens dekningsdel. Hent bongene på nytt og lag rapporten igjen.</p></details>
+<details class="faq"><summary>Jeg svarte «Ja, kampanje», men bongen er fortsatt flagget</summary><p>Svaret gjelder rabatt på akkurat den varen. Andre rabatter på bongen, andre varer og andre tester (for eksempel pris eller spesialbetaling) flagges som før. Åpne bongen i «Sjekk først» for å se hva som er igjen. <strong>Angre</strong> finnes under bongen og i tabellen «Mulige sentrale kampanjer».</p></details>
+<details class="faq"><summary>Jeg får ikke spørsmålet om kampanje</summary><p>Spørsmålet vises bare når samme vare har rabatt på minst 3 bonger hos minst 2 kasserere i de innlastede bongene (over alle dager og butikker), og bongen er flagget for rabatt. Bongene må være skannet. Last inn flere dager, eller senk grensene under Innstillinger → Rabatt.</p></details>
+<details class="faq"><summary>Butikkene vises bare som tall</summary><p>Navnet hentes fra Lindbaks butikkliste, ellers fra BUTIKK-kolonnen i listen. Mangler begge, skriver du navnet under Filtrer → Butikk → «Gi butikken navn», eller under Innstillinger → Generelt. Nummer med mer enn fire siffer vises som avdelingsnummer med nivå i parentes, for eksempel «1003 (131)».</p></details>
+<details class="faq"><summary>Panelet dekker lista i Lindbak</summary><p>Trykk <strong>⤢</strong> i tittelfeltet og velg Stor. Panelet dokkes til høyre, og lista i Lindbak er synlig ved siden av. Full bruker hele skjermen. Valget huskes.</p></details>
 <details class="faq"><summary>Noe virker galt i Lindbak etter at jeg installerte tillegget</summary><p>Slå tillegget av under <code>chrome://extensions</code> og last siden på nytt. Pluginen skriver ikke til Lindbaks lagring, men kan skjule eller flytte rader med filtre. Fjern filtrene med «Nullstill alt».</p></details>
 
 <h2 id="ordliste"><span class="n">12</span>Ordliste</h2>
@@ -534,7 +555,13 @@
   <dt>Enhetspris</dt><dd>Prisen for én enhet av en vare før rabatt. Brukes til å sammenligne samme vare på tvers av bonger.</dd>
   <dt>Pantelapp 99 og 399</dt><dd>Kode 99 er en pantelapp lagt inn manuelt av kassereren. Kode 399 kommer fra pantemaskinen.</dd>
   <dt>Motlinje</dt><dd>En linje med samme kode og beløp, men motsatt fortegn, som sletter en tidligere linje på samme bong.</dd>
-  <dt>Kampanjedag</dt><dd>En dag og butikk der minst 40 % av minst 30 salg har rabatt. Rabattflagg undertrykkes den dagen.</dd>
+  <dt>Kampanjedag</dt><dd>En dag og butikk der minst 40 % av minst 30 salg har rabatt. Rabattene flagges fortsatt, men får et notat om mulig kampanjedag.</dd>
+  <dt>Mulig sentral kampanje</dt><dd>Samme vare med rabatt på minst 3 bonger hos minst 2 kasserere. Bongen tas med, får et notat, og du svarer Ja eller Nei. Svaret gjelder varen på alle bonger.</dd>
+  <dt>Samme forhold</dt><dd>Tester som måler det samme (for eksempel kontant tilbake uten salg og slettede linjer). Bare den høyeste teller i poengene; de andre vises overstrøket.</dd>
+  <dt>Nivå og avdelingsnummer</dt><dd>Butikknummer med mer enn fire siffer: de fire siste sifrene er avdelingsnummeret, resten er nivået (1311003 er nivå 131, avdeling 1003).</dd>
+  <dt>Spesialbetaling</dt><dd>Betaling eller linje merket eget forbruk, internt forbruk, utbetaling, finansiering eller sjekk.</dd>
+  <dt>Spør pris</dt><dd>Vare lagt inn uten fast pris, der kassereren spør. Prisen sammenlignes med dagens øvrige salg av samme vare.</dd>
+  <dt>Til gode-lapp / manuell kvittering</dt><dd>Kvittering skrevet for hånd eller en lapp som gir kunden tilgode. Sammenlignes med andre bonger i butikken.</dd>
   <dt>Kjøpeutbytte</dt><dd>Tabellen med Grunnlag, Kjøpeutbytte og MVA bonus på medlemsbonger.</dd>
   <dt>Hendelsesord</dt><dd>Ord på tekstlinjer som tyder på annullert, parkert, manuell pris eller spør pris.</dd>
   <dt>Diagnostikk</dt><dd>Oversikt over linjer pluginen ikke kjenner igjen og hendelsesord, til å dele slik at testene kan utvides.</dd>
@@ -542,7 +569,7 @@
   <dt>Datagrunnlag</dt><dd>Alle innlastede bonger i valgte butikker. Tester som må se hele bildet bruker det.</dd>
   <dt>Terskel</dt><dd>Grensen en test bruker for å avgjøre om noe flagges.</dd>
   <dt>Poeng</dt><dd>Hvor mye en test teller i risikoscoren.</dd>
-  <dt>Risikoscore</dt><dd>Summen av poeng på en bong. Høy fra 8, middels fra 4.</dd>
+  <dt>Risikoscore</dt><dd>Summen av poeng på en bong, der bare det høyeste poenget i hver gruppe av samme forhold teller. Høy fra 8, middels fra 4.</dd>
   <dt>Panteretur / pantelapp</dt><dd>Utbetaling av pant mot pantelapp (varelinjen «399 PANTELAPP»). Pant på salg er linjen «220 PANT».</dd>
   <dt>Dekningsgrad</dt><dd>Hvor stor andel av grunnlaget testene faktisk har sett (skannet innhold, rabattdata, leste oppgjør).</dd>
   <dt>Benfords lov</dt><dd>Fordelingen av første siffer i naturlige tall. Tall som er konstruert avviker ofte. Avviket måles som MAD.</dd>
@@ -559,6 +586,8 @@
   <li>Hvordan annullerte bonger, manuell pris, bonger på vent og «spør pris» ser ut. Pluginen leter etter hendelsesord og samler ukjente linjer (Diagnostikk), men vet ikke hva Lindbak faktisk viser.</li>
   <li>Hvordan slettede varelinjer og pantelapper, «spør pris», manuelle kvitteringer, til gode-lapper, spesialbetalinger og kortnummer står på bongen. Testene leter etter motlinjer, ord og maskerte kortnumre, og Diagnostikk samler det de ikke kjenner igjen.</li>
   <li>At Kjøpeutbytte-tabellen finnes på medlemsbonger og hva grunnlaget omfatter. Testene kalibrerer seg mot det som finnes.</li>
+  <li>At BUTIKK-kolonnen i listen og butikklisten i Lindbak har butikknavn, og at butikknummer med mer enn fire siffer er nivå pluss avdelingsnummer (131 og 1003).</li>
+  <li>At en rabatt som mange kasserere gir på samme vare er en sentral kampanje. Pluginen spør i stedet for å anta, og kan ikke se kampanjen selv.</li>
   <li>At medlemsnummer alltid er satt på bongen i listen, og hvilket format det har.</li>
   <li>Hvordan Totalt, øreavrunding, MVA-tabell, Referanse og TransId står på bongen. Regnskapskontrollene kalibrerer seg og er av til de er bevist av dataene.</li>
   <li>At løpenummeret i bongens topptekst er det samme som i bongnummeret. Kontrollen aktiveres først etter tre treff.</li>

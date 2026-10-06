@@ -292,6 +292,7 @@ tr.kvr-follow>td.kvr-cb-cell::after{color:#e37400}
 .kvr-sw-new{background:#e8f1fd;border-color:#b5cff2;color:#1a4f9c}
 .kvr-sw-ent{border:0;background:none;color:#00704a;text-decoration:underline dotted}
 .kvr-sw-bad{background:#fde7e5;color:#a1170c;border-color:transparent}
+.kvr-sw-cov{opacity:.55;text-decoration:line-through;text-decoration-thickness:1px}
 #kvr-panel .kvr-set-sw{min-width:40px}
 #kvr-panel .kvr-set-sp{display:inline-block}
 #kvr-panel .kvr-btn.kvr-ent{min-height:0;padding:1px 3px;border:0;background:none}

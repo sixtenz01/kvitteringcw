@@ -642,3 +642,19 @@ Overlapp med ulike signaler er beholdt (for eksempel medlemsnr flere ganger samm
 Ikke gjort: kobling mellom kupongnavn og varenavn på bongen. Det trenger en ekte bong der kampanjerabatt og kupong står sammen.
 
 Oppdatering 3.19.0: svaret gjelder varen (EAN), uansett rabattprosent, slik at alle flaggede bonger med varen oppdateres når brukeren svarer på én bong. Statuslinjen viser antall flaggede bonger før og etter. Risiko: en manuell rabatt med annen prosent på en bekreftet kampanjevare flagges ikke lenger. Tabellen viser alle prosentene, og Angre setter varen tilbake.
+
+## 11. Dokumentasjonsrevisjon (versjon 3.19.1)
+
+| Funn | Tiltak |
+|---|---|
+| `innstillinger.json` i revisjonsrapporten manglet kampanjesvar, så «gjenta analysen» ga andre funn | `camp` er med i filen, og e2e-testen `rapport.js` sjekker det |
+| Ordlisten sa at kampanjedag undertrykker rabattflagg, og at risikoscore er summen av alle poeng | Rettet: kampanjedag gir bare notat, og bare høyeste poeng per forhold teller |
+| «Ikke bekreftet»-boksen om kampanjer var utdatert | Omskrevet: pluginen ser mønsteret og spør |
+| Tegnforklaring (manual og hjelp i panelet) manglet overstrøket årsak, kampanjespørsmål, «skanning»-merket og ⤢ | Lagt til begge steder |
+| Rabatt uten årsak var ikke beskrevet samlet | Ny del i kapittel 5: hva som flagges, kassererandel, kampanje, dekning |
+| Kampanjesvar og butikknavn manglet i eksport/import, «Alt til standard», Tøm cache, lagring og rapportpakke | Lagt til i kapittel 3, 7, 8 og 10 |
+| FAQ, ordliste og begrensninger manglet nye begreper | Fire FAQ-svar, seks ordlisteoppføringer og to begrensninger |
+| Innstillingen «samme vare og rabatt på minst» var misvisende etter 3.19.0 | Omdøpt til «samme vare med rabatt på minst» |
+| Ingen skjermbilder av kampanjespørsmålet | Demodata utvidet med en kampanje; to nye bilder |
+
+Kjent hull som ikke er endret: «Rabatt uten årsak» bruker bare trykt prosent på rabattlinjen. Linjer uten trykt prosent fanges av «Høy rabattprosent» og «Rabatt uten treff», som regner prosent fra beløpene.

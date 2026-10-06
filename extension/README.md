@@ -14,7 +14,7 @@ Chrome MV3-utvidelse for Lindbak Chain Web → Kvitteringsjournal. Leser kun gri
 ## Funksjoner i v3
 
 - **Søk i CW** (hele journalen): dato, butikker (med navn fra CW), medlem, lojalitets-ID, vare/EAN, bongnr. Fyller CW sine egne felt og trykker OPPDATER.
-- **Butikknavn** hentes fra CW sin butikkliste og vises i alle filtre og i CSV.
+- **Butikknavn** hentes fra CW sin butikkliste (ellers fra BUTIKK-kolonnen), kan overstyres med egne navn, og vises i alle filtre og i CSV. Nummer over fire siffer vises som avdeling og nivå.
 - **Skanning:** leser varelinjer, betaling og pant fra kvitteringene. Hver kvittering åpnes i CWs visningsfelt og leses derfra (ca. 1 s per bong). Pluginen sender aldri egne kall mot CWs API; `test/noapi.test.js` feiler hvis kildekoden inneholder `fetch`, `XMLHttpRequest`, `$http` eller `/Api/`.
 - **Varegrupper** med nøkkelord (`ord` = starten av ord, `*ord` = inneholder, `#kode` = varenr/EAN). Ekskluder-ord treffer hvor som helst. Regelsettet bygges opp fra «Varer uten gruppe», og kan eksporteres/importeres.
 - **Avvik** (kun på knapp): stor panteretur, mange pantelapper, kontant tilbake uten salg, rundt beløp.
@@ -150,7 +150,7 @@ Mer → Eksport → **Lag revisjonsrapport…** (også som knapp i Sjekk først 
 - `rapport.html`: forside (referanse, utarbeidet av, tidspunkt, omfang), sammendrag, omfang og datagrunnlag, **dekningsgrad og begrensninger**, metode med alle terskler og poeng (endrede verdier er merket), funn per test, rangerte flaggede bonger med forklaring og notater/status, bevisbilder, kontrollsummer og forbehold. Kan skrives ut til PDF fra nettleseren.
 - `bevis/`: PNG av de høyest rangerte bongene (standard 30, 0 = ingen, maks 100). Bevisbildene har topptekst med butikk, kasse, kasserer, bongnr og tid, men aldri medlemsnummer.
 - `data/kvitteringer.csv`: alle kvitteringer i datagrunnlaget (også de tester på tvers av bonger brukte utenfor omfanget, merket «I omfang»). `data/innhold.json`: skannet bonginnhold. `data/funn.csv` og `data/flaggede_bonger.csv`.
-- `innstillinger.json`: terskler, poeng, egne regler, varegrupper og butikknavn slik de var i analysen. Kan leses inn under Mer → Innstillinger → Importer for å gjenta analysen.
+- `innstillinger.json`: terskler, poeng, egne regler, varegrupper, butikknavn og kampanjesvar slik de var i analysen. Kan leses inn under Mer → Innstillinger → Importer for å gjenta analysen.
 - `KONTROLLSUM.txt`: SHA-256 for alle filer, i formatet `sha256sum -c KONTROLLSUM.txt` forstår. Kontrollsummen for datasettet er SHA-256 av `data/kvitteringer.csv`, og for innholdet SHA-256 av `data/innhold.json` (sortert på bong-ID, uten skannetidspunkt), så den kan kontrolleres uavhengig av pluginen.
 
 Rapporten viser det som gjaldt da analysen ble kjørt (omfang, bonger, skanninnhold, terskler), også om listen eller innstillingene er endret etterpå; en merknad forteller om dette. Kontrollsummen for selve ZIP-filen vises i panelet og lagres i en logg («Tidligere rapporter», bare i denne nettleseren), for å kunne noteres i saken. Kontrollsummer viser at eksporten ikke er endret, ikke at dataene i Lindbak er riktige. Funn er indikasjoner, ikke bevis.
@@ -160,9 +160,9 @@ Rapporten viser det som gjaldt da analysen ble kjørt (omfang, bonger, skanninnh
 - **Mer → Innstillinger** (eller ⚙ øverst) samler alle terskler, avviksgrenser og poeng, gruppert per test: Avvik per bong, Mønstre, Falsk retur, Salg etter kassaoppgjør, Slettede bonger, Kassadifferanse over tid, Tallanalyse, Rabatt, Pant, Åpningstider, Kassererprofil og Egne regler. Hver gruppe viser forklaring, enhet, hvor mange verdier som er endret, og «Standard for denne gruppen».
 - Tester som kan slås av har en «På»-bryter (avskrudd = tom verdi = testen kjøres ikke). Endrede verdier merkes med gul kant. Alt lagres med en gang.
 - Terskler gjelder fra neste analyse (Sjekk først og Innstillinger viser en melding og en knapp for å kjøre på nytt). Poeng gjelder med en gang.
-- **Generelt:** egne butikknavn, tastaturflyt, tilbakestilling av plassering, **Eksporter** og **Importer** innstillinger (JSON med terskler, poeng, egne regler, varegrupper og butikknavn) og «Alt til standard».
+- **Generelt:** egne butikknavn, tastaturflyt, tilbakestilling av plassering, **Eksporter** og **Importer** innstillinger (JSON med terskler, poeng, egne regler, varegrupper, butikknavn og kampanjesvar) og «Alt til standard».
 - «Juster» ved siden av hver forklaring i «Hvorfor flagget?» åpner riktig innstillingsgruppe.
-- **?** øverst: kort veiledning, tegnforklaring (rød kant, gul stripe, risikonivå, «Ny», lenker, rødt tall) og snarveier. En ikke-blokkerende melding vises første gang.
+- **?** øverst: kort veiledning, tegnforklaring (rød kant, gul stripe, risikonivå, «Ny», lenker, rødt tall, overstrøket årsak, kampanjespørsmål, panelstørrelse) og snarveier. En ikke-blokkerende melding vises første gang.
 - Slettinger og tilbakestillinger bekreftes i panelet, ikke med nettleserdialoger.
 - Piltaster (← → Home End) bytter fane når en fane har fokus. Kortene i Detaljer kan foldes sammen, og valget huskes.
 

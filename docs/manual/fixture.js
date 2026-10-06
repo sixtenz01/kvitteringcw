@@ -147,6 +147,13 @@ function build(scale) {
   // S: spør pris på Pepsi Max hos 4102 (28,00 mot vanlig 32,90)
   { const it = CATALOG[1]; push(1001, 2, '2026-09-30', { m: 20 * 60 + 40, type: 1, cashier: '4102', lines: [T('0 SPØR PRIS', '0.00'), T(`${it[0]} ${it[1]}`, '28.00'), T('Antall: 1 stk à Kr 28.00', ''), TOT('28.00'), T('Bank:', '28.00')], total: 28, pay: 'Bank' }); }
 
+  // T: samme vare med rabatt uten årsak (40, 40, 33 og 40 %) hos tre kasserere i to butikker: mulig sentral kampanje
+  [[1001, 3, '2026-09-29', 10 * 60 + 12, '4101', 40], [1001, 2, '2026-09-30', 11 * 60 + 33, '4103', 40], [1001, 2, '2026-10-01', 13 * 60 + 21, '4103', 33], [1002, 1, '2026-09-30', 14 * 60 + 4, '4201', 40]].forEach((x) => {
+    const d = r2(29.9 * x[5] / 100), net = r2(29.9 - d), g = r2(net / 1.25);
+    push(x[0], x[1], x[2], { m: x[3], type: 1, cashier: x[4], pay: 'Kontant', total: net, lines: [T('7311041012582 PRINGLES ORIGINAL', f2(net)), SPAN(`Rabatt: Kr ${f2(d)} (${f2(x[5]).replace('.00', '.0')}%)`), SPAN('Rabatt årsak: '), TOT(f2(net)), T('Kontant:', f2(net)),
+      `<tr><td>MVA-grunnlag</td><td>MVA-%</td><td>MVA</td><td>Sum</td></tr><tr><td>${f2(g)}</td><td>25 %</td><td>${f2(r2(net - g))}</td><td>${f2(net)}</td></tr>`] });
+  });
+
   // Kjøpeutbytte-tabell på medlemsbonger (sist på bongen)
   Object.keys(events).forEach((k) => events[k].forEach((e) => {
     if (e.type !== 1 || !e.member || !(e.total > 0)) return;

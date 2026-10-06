@@ -28,6 +28,8 @@ const IMG = {
   'sjekk-etter': ['Sjekk først etter analysen', 'Etter analysen: rangerte kasserere og flaggede bonger.'],
   'sjekk-omfang': ['Velg omfang åpnet', 'Velg omfang: periode, sammenligning, butikk, kasserer og kasse.'],
   'sjekk-kort': ['Åpnet kort for flagget bong med markører', 'Et åpnet kort i «Sjekk først».'],
+  'sjekk-kampanje': ['Spørsmål om sentral kampanje under en bong', 'Sjekk først: bongen får et notat og spørsmålet «Stemmer det?» med Ja og Nei.'],
+  'kampanje-dialog': ['Dialogen Mulige sentrale kampanjer', 'Svar nå: alle varer som kan være sentral kampanje, med svar og Angre.'],
   'ch-hours': ['Salg per time', 'Salg per time.'], 'ch-days': ['Salg per dag', 'Salg per dag.'], 'ch-cash': ['Returandel per kasserer', 'Returandel per kasserer.'],
   'ch-heat': ['Kasse mot time', 'Kasse × time.'], 'ch-benford': ['Benford', 'Benford: første siffer i totalbeløp.'], 'ch-pant': ['Pant per dag', 'Pant per dag.'],
   rapport: ['Dagsrapport', 'Rapport-fanen: dagsrapport per kasse.'],

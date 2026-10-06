@@ -2314,12 +2314,12 @@
     if (!open) return card;
 
     var body = el('div', { class: 'kvr-ck-b' });
-    var why = el('ul', { class: 'kvr-why' }, L.scoreBreakdown(rk.reasons, weights).map(function (x) {
+    var bd = L.scoreBreakdown(rk.reasons, weights), asks = L.campAsk(bd, ctlRes ? ctlRes.findings : [], id);
+    var why = el('ul', { class: 'kvr-why' }, bd.map(function (x, bi) {
       var r = x.reason, gid = L.groupForReason(r);
-      var cf = (ctlRes ? ctlRes.findings : []).filter(function (f) { return f.title === L.reasonBase(r) && f.camp && f.ids.indexOf(id) !== -1; })[0];
       return el('li', { class: x.counts ? '' : 'kvr-cov' }, [el('span', { text: L.explainReason(r, { id: id, cfg: anomCfg, ctl: ctlCfg, findings: ctlRes ? ctlRes.findings : [], rules: customRules }) + (x.counts ? '' : ' (Teller ikke: dekket av «' + L.reasonBase(x.by) + '».)') }),
         gid ? el('button', { type: 'button', class: 'kvr-ent kvr-adj', text: 'Juster', title: 'Åpne terskler og poeng for denne testen', onclick: function () { openSettings(gid); } }) : null]
-        .concat(cf ? cf.camp.map(campQuestion) : []).filter(Boolean));
+        .concat(asks[bi].map(campQuestion)).filter(Boolean));
     }));
     body.appendChild(el('div', { class: 'kvr-hint', text: 'Hvorfor flagget?' }));
     body.appendChild(why);
@@ -2884,6 +2884,9 @@
       legendRow(el('span', { class: 'kvr-sw kvr-sw-new', text: 'Ny' }), 'Flagget siden forrige analyse.'),
       legendRow(el('span', { class: 'kvr-sw kvr-sw-ent', text: 'Kasserer 12' }), 'Klikk for å se alt som gjelder kassereren eller kassen (Fokus).'),
       legendRow(el('span', { class: 'kvr-sw kvr-sw-bad', text: '−70,00' }), 'Rødt tall i tabell: over terskelen.'),
+      legendRow(el('span', { class: 'kvr-sw kvr-sw-cov', text: 'Test' }), 'Overstrøket årsak: dekket av en høyere test på samme forhold, teller ikke i poengene.'),
+      legendRow(el('span', { class: 'kvr-sw kvr-sw-new', text: 'Kampanje?' }), 'Rabatten kan være en sentral kampanje. Svar Ja eller Nei under bongen; svaret gjelder varen på alle flaggede bonger.'),
+      legendRow(el('span', { class: 'kvr-sw', text: '⤢' }), 'Panelstørrelse: Vanlig, Stor (dokket til høyre) eller Full.'),
       el('b', { class: 'kvr-subh', text: 'Snarveier' }),
       el('ul', {}, [
         li('Alt+K skjuler og viser panelet. Dra i toppen for å flytte, dobbeltklikk for å nullstille plassering.'),
@@ -3168,7 +3171,7 @@
         cashiers: L.rankCashiers(R.items, R.anom, weights, C.profile, C.cashierExtra).slice(0, 10),
         compare: compareForReport(R), failedScans: failedRecs.length,
         evidence: { files: files.map(function (f) { return { id: f.id, path: f.path, hash: f.hash }; }), byId: byId, missing: missing, requested: pick.length, cappedFrom: ranked.length },
-        settingsJson: JSON.stringify({ app: 'kvitteringshenter', v: 1, ctl: R.ctl, anom: R.anomCfg, weights: weights, customRules: customRules, groups: rules, stores: manualStores, keynav: keyNav }, null, 2) + '\n'
+        settingsJson: JSON.stringify({ app: 'kvitteringshenter', v: 1, ctl: R.ctl, anom: R.anomCfg, weights: weights, customRules: customRules, groups: rules, stores: manualStores, camp: campDec, keynav: keyNav }, null, 2) + '\n'
       };
       var built = KvReport.build(model);
       var zip = new window.JSZip();
