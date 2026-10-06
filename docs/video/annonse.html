@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="nb"><head><meta charset="utf-8"><title>Kvitteringshenter – annonse</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1920px;height:1080px;overflow:hidden;background:#00281c}
+body{font-family:'Liberation Sans','Helvetica Neue',Arial,sans-serif;color:#fff}
+#stage{position:relative;width:1920px;height:1080px;overflow:hidden;background:radial-gradient(1200px 800px at 70% 20%,#00704a 0%,#004a32 45%,#00281c 100%)}
+.abs{position:absolute}
+#bg .r{position:absolute;width:150px;height:400px;background:rgba(255,255,255,.07);border-radius:6px;
+  background-image:repeating-linear-gradient(180deg,transparent 0 22px,rgba(255,255,255,.14) 22px 26px);}
+#shot{position:absolute;left:0;top:0;width:2400px;height:1350px;transform-origin:0 0;border-radius:40px;overflow:hidden;box-shadow:0 40px 120px rgba(0,0,0,.5);background:#e9eeeb}
+#shot img{display:block;width:2400px;height:1350px}
+.ring{position:absolute;border:7px solid #f6c945;border-radius:18px;box-shadow:0 0 0 0 rgba(246,201,69,.6)}
+#veil{left:0;top:0;width:1040px;height:1080px;background:linear-gradient(90deg,#00382a 0,#00382a 960px,rgba(0,56,42,0) 1040px)}
+.t{position:absolute;white-space:nowrap;font-weight:800;letter-spacing:-.02em}
+.lab{position:absolute;white-space:nowrap;font-weight:700;letter-spacing:.18em;font-size:28px;color:#f6c945}
+.card{position:absolute;width:400px;height:330px;border-radius:28px;background:rgba(255,255,255,.96);color:#073d2b;padding:34px 34px;box-shadow:0 24px 60px rgba(0,0,0,.35)}
+.card .ic{font-size:76px;line-height:1;font-family:'Noto Color Emoji',sans-serif}
+.card h3{font-size:40px;margin-top:22px;font-weight:800;letter-spacing:-.01em}
+.card p{font-size:27px;margin-top:10px;color:#3d6b59;line-height:1.3}
+.pill{position:absolute;white-space:nowrap;padding:16px 34px;border-radius:999px;background:rgba(255,255,255,.12);border:2px solid rgba(255,255,255,.35);font-size:34px;font-weight:700}
+</style></head><body>
+<div id="stage">
+  <div id="bg" class="abs" style="inset:0"></div>
+
+  <!-- scene 1 -->
+  <div id="s1">
+    <div class="t" id="n241" style="left:0;width:1920px;text-align:center;top:250px;font-size:300px;color:#f6c945">0</div>
+    <div class="t" id="s1a" style="left:0;width:1920px;text-align:center;top:560px;font-size:96px">kvitteringer.</div>
+    <div class="t" id="s1b" style="left:0;width:1920px;text-align:center;top:700px;font-size:96px;color:#9be6c3">Hvilke bør du se på?</div>
+  </div>
+
+  <!-- hero screenshot -->
+  <div id="shot"><img id="img" src="../manual/img/stor-dokket.jpg">
+    <div class="ring" id="ring1" style="left:918px;top:676px;width:336px;height:66px"></div>
+    <div class="ring" id="ring2" style="left:1676px;top:392px;width:196px;height:44px;border-radius:24px"></div>
+  </div>
+  <div id="veil" class="abs"></div>
+
+  <!-- scene 2 text -->
+  <div class="t" id="s2a" style="left:0;width:1920px;text-align:center;top:60px;font-size:104px">Kvitteringshenter</div>
+  <div class="t" id="s2b" style="left:0;width:1920px;text-align:center;top:188px;font-size:44px;font-weight:600;color:#bfe9d4;letter-spacing:0">Rangerer bongene for deg: 59 å sjekke, 12 med høy risiko.</div>
+
+  <!-- scene 3 text -->
+  <div class="lab" id="s3l" style="left:110px;top:250px">PRIORITERT LISTE</div>
+  <div class="t" id="s3a" style="left:110px;top:320px;font-size:78px">Rangert etter risiko.</div>
+  <div class="t" id="s3b" style="left:110px;top:425px;font-size:78px;color:#9be6c3">Forklart bong for bong.</div>
+  <div class="t" id="s3c" style="left:110px;top:560px;font-size:36px;font-weight:600;color:#cfe9dc;letter-spacing:0;line-height:1.35;white-space:normal;width:800px">Hver flagget bong får en begrunnelse du kan etterprøve, og et notat om det kan være en sentral kampanje.</div>
+
+  <!-- scene 4 -->
+  <div class="t" id="s4t" style="left:0;width:1920px;text-align:center;top:185px;font-size:96px">Peker ut det som skiller seg ut</div>
+  <div class="card" id="c1" style="left:115px;top:500px"><div class="ic">♻️</div><h3>Pantelapper</h3><p>manuell, maskin, slettet og gjenbrukt</p></div>
+  <div class="card" id="c2" style="left:545px;top:500px"><div class="ic">🏷️</div><h3>Rabatt</h3><p>uten årsak, svært høy og mulig kampanje</p></div>
+  <div class="card" id="c3" style="left:975px;top:500px"><div class="ic">👤</div><h3>Kasserer</h3><p>profil mot butikkens snitt</p></div>
+  <div class="card" id="c4" style="left:1405px;top:500px"><div class="ic">🧾</div><h3>Rapport</h3><p>ZIP med kontrollsummer</p></div>
+
+  <!-- scene 5 -->
+  <div class="abs" id="logo" style="left:810px;top:170px;width:300px;height:300px;border-radius:72px;background:linear-gradient(145deg,#12a36f,#00704a);box-shadow:0 30px 80px rgba(0,0,0,.45);text-align:center;font-size:170px;line-height:300px;font-family:'Noto Color Emoji',sans-serif">🧾</div>
+  <div class="t" id="s5a" style="left:0;width:1920px;text-align:center;top:520px;font-size:136px">Kvitteringshenter</div>
+  <div class="t" id="s5b" style="left:0;width:1920px;text-align:center;top:690px;font-size:56px;font-weight:600;color:#bfe9d4;letter-spacing:0">Ta kontroll på kvitteringsjournalen.</div>
+  <div class="pill" id="s5c" style="left:560px;top:812px">Ingen kall mot Lindbaks API · Alt blir lokalt</div>
+  <div class="abs" id="s5d" style="left:0;width:1920px;text-align:center;top:1020px;font-size:22px;color:#8fc4ac">Tillegg til Chrome for Lindbak Chain Web · Skjermbildene viser oppdiktede data</div>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+const cl=(x,a=0,b=1)=>Math.min(b,Math.max(a,x));
+const seg=(t,a,b)=>cl((t-a)/(b-a));
+const eo=x=>1-Math.pow(1-x,3), eio=x=>x<.5?4*x*x*x:1-Math.pow(-2*x+2,3)/2, eb=x=>{const c=1.70158;return 1+(c+1)*Math.pow(x-1,3)+c*Math.pow(x-1,2)};
+const lerp=(a,b,x)=>a+(b-a)*x;
+// kvitteringsstrimler i bakgrunnen (deterministiske)
+(function(){let s=7;const r=()=>(s=(s*16807)%2147483647)/2147483647;const bg=$('bg');
+  window.__strips=[];for(let i=0;i<11;i++){const d=document.createElement('div');d.className='r';const o={el:d,x:r()*1900-100,y:r()*1300,sp:60+r()*140,rot:(r()-.5)*24,sc:.7+r()*.9};bg.appendChild(d);window.__strips.push(o)}})();
+// vis(el, opasitet, dy)
+function show(id,a,b,dy=40,out){const e=$(id);let o=eo(seg(window.__t,a,b));let v=o;if(out){v*=1-eo(seg(window.__t,out[0],out[1]))}e.style.opacity=v;e.style.transform=`translateY(${(1-o)*dy}px)`}
+function render(t){window.__t=t;
+  // bakgrunn: strimler driver oppover, dimmes etter scene 1
+  const bgOp=lerp(1,.28,eo(seg(t,1.7,2.4)))*(1-.0);
+  window.__strips.forEach(o=>{const y=((o.y-o.sp*t)%1500+1500)%1500-250;o.el.style.opacity=bgOp;o.el.style.transform=`translate(${o.x}px,${y}px) rotate(${o.rot}deg) scale(${o.sc})`});
+  // scene 1
+  const c=Math.round(241*eo(seg(t,.1,1.0)));$('n241').textContent=c;
+  $('n241').style.opacity=eo(seg(t,0,.2))*(1-eo(seg(t,1.75,2.05)));
+  $('n241').style.transform=`scale(${lerp(.9,1,eo(seg(t,0,.5)))})`;
+  show('s1a',.35,.8,40,[1.75,2.05]);show('s1b',.95,1.45,40,[1.75,2.05]);
+  // scene 2 + hero
+  const A={x:260,y:292,k:1400/2400}, B={x:-781,y:-315,k:1.074};
+  const inA=eo(seg(t,1.95,2.75)), toB=eio(seg(t,4.15,4.95)), outS=eo(seg(t,6.25,6.7));
+  let x=A.x,y=A.y,k=A.k;
+  if(t>=4.15){x=lerp(A.x,B.x,toB);y=lerp(A.y,B.y,toB);k=lerp(A.k,B.k,toB)}
+  const yy=y+(1-inA)*620; const kk=k*lerp(.94,1,inA);
+  const sh=$('shot');sh.style.opacity=inA*(1-outS);sh.style.transform=`translate(${x}px,${yy}px) scale(${kk})`;
+  // ringer
+  const pulse=.5+.5*Math.sin(t*9);
+  const r1=eo(seg(t,3.2,3.45))*(1-eo(seg(t,4.1,4.3)));$('ring1').style.opacity=r1;$('ring1').style.boxShadow=`0 0 ${20+30*pulse}px ${6*pulse}px rgba(246,201,69,.75)`;
+  const r2=eo(seg(t,5.05,5.3))*(1-eo(seg(t,6.2,6.5)));$('ring2').style.opacity=r2;$('ring2').style.boxShadow=`0 0 ${20+30*pulse}px ${6*pulse}px rgba(246,201,69,.75)`;
+  // overskrift scene 2
+  show('s2a',2.1,2.6,-30,[4.1,4.4]);show('s2b',2.55,3.05,-20,[4.1,4.4]);
+  // veil + scene 3
+  $('veil').style.opacity=eo(seg(t,4.3,4.9))*(1-eo(seg(t,6.3,6.65)));
+  show('s3l',4.6,5.0,20,[6.25,6.6]);show('s3a',4.7,5.2,40,[6.25,6.6]);show('s3b',5.3,5.8,40,[6.25,6.6]);show('s3c',5.85,6.25,30,[6.3,6.65]);
+  // scene 4
+  show('s4t',6.75,7.2,30,[8.3,8.6]);
+  [['c1',6.95],['c2',7.12],['c3',7.29],['c4',7.46]].forEach(([id,s])=>{const e=$(id);const p=seg(t,s,s+.45);const o=eb(p);const out=1-eo(seg(t,8.3,8.6));e.style.opacity=cl(p*3)*out;e.style.transform=`translateY(${(1-o)*90}px) scale(${lerp(.85,1,o)})`});
+  // scene 5
+  const lo=eb(seg(t,8.6,9.2));$('logo').style.opacity=cl(seg(t,8.6,8.9));$('logo').style.transform=`scale(${lerp(.6,1,lo)})`;
+  show('s5a',8.85,9.3,30);show('s5b',9.1,9.5,25);show('s5c',9.3,9.7,20);show('s5d',9.5,9.9,0);
+}
+render(0);
+</script></body></html>
