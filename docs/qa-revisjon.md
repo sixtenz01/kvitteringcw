@@ -591,3 +591,23 @@ Bygget i versjon 3.12.0, med tester (`logic.test.js`, `report.test.js`, `skann.j
 | Idé 7 siste siffer, idé 5 løpenummer mot tid, idé 38 retur mot kassadifferanse | Bygget |
 
 Fortsatt ikke bygget: F5, F13 og idéene som krever bilder, OCR, HR-data eller godkjenningsflyt.
+
+## 8. Ønskeliste fra butikk (versjon 3.14.0)
+
+| Ønske | Status |
+|---|---|
+| `99 PANTELAPP` manuell, `399 PANTELAPP` maskin | Bygget: egne tellere per kasserer, test på manuell pantelapp og kasserer med høy andel manuell |
+| Pantelapp som blir slettet | Bygget: linje og motlinje med samme beløp på samme bong. Forutsetter at CW viser slettingen som motlinje |
+| Pantelapp brukt igjen, samme sum | Bygget: samme sum innen 60 min på ulike bonger, eller samme lappnummer hvis bongen viser det. Indikasjon, ikke bevis |
+| Kontant tilbake etter at varelinjer er slettet | Bygget: «Kontant tilbake uten salg» bruker varelinjer etter sletting, og nytt funn «Varelinjer slettet, pant utbetalt kontant» |
+| Eget forbruk, internt forbruk, utbetaling, finansiering, sjekk (må søkes på) | Bygget som søk under Skann og som test. Leter i betalingsmåter, linjenavn og tekstlinjer. Hvis CW viser dem som egen kvitteringstype (som kassaoppgjør), må de søkes på i Hent |
+| Rabatt med årsakskode | Fantes fra før (filter og overvåking per årsak) |
+| Rabattovervåking mellom 70 og 100 % (innstilling) | Bygget: «Høy rabattprosent» |
+| Rabatt (for eksempel 40 %) som ikke matcher andre varer, samme dag og over tid | Bygget: søk på rabatt-% under Skann, og «Rabatt uten treff på andre salg» |
+| Spør pris og EAN mot dagens salg | Bygget: sammenligner med medianpris for samme EAN samme dag. Formatet på bongen er ikke bekreftet |
+| EAN makulert fra bong: solgt innen 2 timer (innstilling) | Bygget: «Makulert vare ikke solgt på ny», 120 min som standard |
+| Gjentatte returer på kort (kortnr og leverandør) | Bygget, krever skanning versjon 6. Formatet på kortlinjen er ikke bekreftet |
+| Manuell kvittering mot andre kvitteringer og til gode-lapp | Bygget, ordbasert. Ordene er ikke bekreftet |
+| Mange rabatter tyder på sentral kampanje | Bygget: kampanjevare og kampanjedag undertrykker rabattflagg |
+
+Felles forbehold: slettede linjer, «spør pris», kortlinje, manuell kvittering og spesialbetaling er ikke sett i ekte data. Testene er skrevet etter beste gjetning om hvordan de står på bongen, og kan gi falske positive. Diagnostikk samler linjer pluginen ikke kjenner igjen, slik at ordlistene kan tilpasses.

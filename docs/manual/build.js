@@ -21,7 +21,7 @@ const IMG = {
   'filtrer-b': ['Filtrer, nederste del', 'Filtrer: sum, medlem, bong og vare, sortering og lagrede filtre.'],
   'skann-for': ['Skann-fanen med pantefilter', 'Skann: filtre for pant og rabatt, og knappene for skanning.'],
   skanner: ['Skanning pågår', 'Mens skanningen pågår ser du fremdrift og tid igjen. Du kan stoppe når som helst.'],
-  'skann-etter': ['Skann etter ferdig skanning', 'Etter skanning: «Skannet 193 av 193».'],
+  'skann-etter': ['Skann etter ferdig skanning', 'Etter skanning: «Skannet N av N» (alle skannet).'],
   'skann-grupper': ['Varegrupper', 'Varegrupper med sum per gruppe og varer uten gruppe.'],
   'sjekk-for': ['Sjekk først før analysen', 'Før analysen: Analyse-kortet og omfanget.'],
   'sjekk-etter': ['Sjekk først etter analysen', 'Etter analysen: rangerte kasserere og flaggede bonger.'],
@@ -37,6 +37,8 @@ const IMG = {
   'd-disc': ['Rabatter og kuponger', 'Rabatter og kuponger: tabell per kasserer, per årsak og kasserer × årsak.'],
   'd-member': ['Medlemsnummer', 'Medlemsnummer: nummer med flest bonger og funn, med kasserer og andel.'],
   'd-acct': ['Bongregnskap og referanser', 'Bongregnskap og referanser: dekning og treff for linjer, betaling, MVA og betalingsreferanse.'],
+  'd-lapp': ['Pantelapper: manuell og maskin', 'Pantelapper: manuell (kode 99) mot maskin (kode 399), slettede og gjenbrukte lapper per kasserer.'],
+  'd-lines': ['Linjer, kort og spesialbetaling', 'Slettede og makulerte linjer, spesialbetalinger, spør pris, returer på samme kort og manuell kvittering.'],
   'd-misc': ['Pris, kjøpeutbytte og hendelser', 'Pris, kjøpeutbytte og hendelser: dekning, avvik og knappen Diagnostikk.'],
   'stor-dokket': ['Stor: panelet dokket til høyre', 'Stor: panelet dokkes til høyre, og Lindbak-lista står synlig til venstre.'], 'stor-full': ['Full: panelet over hele skjermen', 'Full: hele skjermen, med kortene i kolonner og brede tabeller.'],
   'd-custom': ['Egne avviksregler', 'Egne avviksregler.'], 'd-tasks': ['Arbeidsoppgaver', 'Arbeidsoppgaver.'], 'd-notes': ['Oppfølging og tastatur', 'Oppfølging og tastatur.'],
@@ -98,7 +100,7 @@ ${wrows ? `<h4>Poeng i risikoscore</h4><div class="tw"><table class="ref"><thead
 }
 
 const DIA = { patterns: ['tSmall'], falseRet: ['tFalse', 'tFalse2'], afterSettle: ['tAfter'], deleted: ['tGap'], diff: ['tDiff'], numbers: ['tBenford'], pant: ['tPant'] };
-const SCOPE_OF = { bong: ['Delvis', 'Bong'], patterns: ['Delvis', 'Bong'], falseRet: ['Ja', 'Bong'], afterSettle: ['Nei', 'Bong'], deleted: ['Nei', 'Bong'], diff: ['Ja (oppgjør)', 'Bong (oppgjør)'], numbers: ['Nei', 'Kasserer'], disc: ['Ja', 'Bong og kasserer'], pant: ['Ja', 'Bong'], hours: ['Nei', 'Bong'], profile: ['Delvis', 'Kasserer'], rules: ['Delvis', 'Bong'], ledger: ['Ja', 'Bong'], member: ['Nei', 'Bong'], price: ['Ja', 'Bong og kasserer'], ku: ['Ja', 'Bong'], events: ['Ja', 'Bong'] };
+const SCOPE_OF = { bong: ['Delvis', 'Bong'], patterns: ['Delvis', 'Bong'], falseRet: ['Ja', 'Bong'], afterSettle: ['Nei', 'Bong'], deleted: ['Nei', 'Bong'], diff: ['Ja (oppgjør)', 'Bong (oppgjør)'], numbers: ['Nei', 'Kasserer'], disc: ['Ja', 'Bong og kasserer'], pant: ['Ja', 'Bong'], hours: ['Nei', 'Bong'], profile: ['Delvis', 'Kasserer'], rules: ['Delvis', 'Bong'], ledger: ['Ja', 'Bong'], lapp: ['Ja', 'Bong og kasserer'], voids: ['Ja', 'Bong og kasserer'], special: ['Ja', 'Bong og kasserer'], ask: ['Ja', 'Bong og kasserer'], card: ['Ja (versjon 6)', 'Bong'], manual: ['Ja', 'Bong'], member: ['Nei', 'Bong'], price: ['Ja', 'Bong og kasserer'], ku: ['Ja', 'Bong'], events: ['Ja', 'Bong'] };
 
 function testsHtml() {
   const overview = `<div class="tw"><table><thead><tr><th>Test</th><th>Finner</th><th>Krever skanning</th><th>Poeng til</th></tr></thead><tbody>${L.SETTING_GROUPS.map((g) => `<tr><td><a href="#test-${g.id}">${esc(g.title)}</a></td><td>${esc(H.groups[g.id].flags.join('; '))}</td><td>${SCOPE_OF[g.id][0]}</td><td>${SCOPE_OF[g.id][1]}</td></tr>`).join('')}</tbody></table></div>`;

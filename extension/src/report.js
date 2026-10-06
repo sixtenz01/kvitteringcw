@@ -2,7 +2,7 @@
   'use strict';
 
   var L = typeof module !== 'undefined' && module.exports ? require('./logic.js') : root.KvLogic;
-  var VERSION = '3.13.0';
+  var VERSION = '3.14.0';
 
   // ---- SHA-256 (ren JS, så rapporten ikke avhenger av crypto.subtle) -------------------
   var K256 = [
@@ -147,6 +147,7 @@
       salesDisc: sales.filter(function (it) { return L.hasDisc(m.scan[it.transactionId]); }).length,
       salesV4: sales.filter(function (it) { return L.hasV4(m.scan[it.transactionId]); }).length,
       salesV5: sales.filter(function (it) { return L.hasV5(m.scan[it.transactionId]); }).length,
+      salesV6: sales.filter(function (it) { return L.hasV6(m.scan[it.transactionId]); }).length,
       settle: settle.length, settleScanned: settle.filter(has).length,
       other: m.items.length - sales.length - settle.length
     };
@@ -161,10 +162,14 @@
     if (cov.sales && cov.salesDisc < cov.sales) out.push('Rabattanalysen dekker ' + cov.salesDisc + ' av ' + cov.sales + ' salg (eldre skanninger mangler rabattdata).');
     if (cov.sales && cov.salesV4 < cov.sales) out.push('Pris per vare, kjøpeutbytte og hendelsesord dekker ' + cov.salesV4 + ' av ' + cov.sales + ' salg (eldre skanninger mangler enhetspris, kjøpeutbytte og hendelsesord).');
     if (cov.sales && cov.salesV5 < cov.sales) out.push('Bongregnskap (Totalt, MVA, betalingsreferanse) dekker ' + cov.salesV5 + ' av ' + cov.sales + ' salg (eldre skanninger mangler disse feltene).');
+    if (cov.sales && cov.salesV6 < cov.sales) out.push('Gjentatte returer på samme kort bygger på kortdata fra skanning versjon 6 og dekker ' + cov.salesV6 + ' av ' + cov.sales + ' salg.');
+    var vd = m.checks && m.checks.voids;
+    if (vd && !vd.applicable && cov.sales) out.push('«Makulert vare ikke solgt på ny» ble ikke vurdert: bare ' + pctText(vd.coverage) + ' av salgene i datagrunnlaget er skannet (minst 80 % kreves).');
     var lg = m.checks && m.checks.ledger;
     if (lg) [['lines', 'Linjer mot Totalt'], ['pay', 'Betaling mot Totalt'], ['vat', 'MVA-tabell']].forEach(function (x) {
       if (lg[x[0]] && !lg[x[0]].applicable && cov.salesV5) out.push(x[1] + ' ble ikke vurdert: ' + lg[x[0]].n + ' bonger lest, ' + (lg[x[0]].n ? pctText(lg[x[0]].ok / lg[x[0]].n) : '–') + ' stemte (minst 10 bonger og 80 % kreves for at avvik regnes som funn).');
     });
+    out.push('Pantelapper skilles på kode: 99 er lagt inn manuelt og 399 kommer fra pantemaskinen. Slettet pantelapp og slettede varelinjer forutsetter at CW viser slettingen som en linje med motlinje. Spesialbetaling, spør pris, kort og manuell kvittering leter etter ord og felt som ikke er bekreftet i ekte data; testene fanger dem når de dukker opp.');
     out.push('Medlemsnummertestene bruker alle innlastede bonger i valgte butikker. Mange bruk av ett nummer kan være en trofast kunde; resultatet avhenger av hvor lang periode som er lastet.');
     out.push('Annullert, manuell pris, parkert bong og spør pris er ikke observert i ekte data. «Hendelsesord» leter etter slike ord på tekstlinjer, men det er ikke bekreftet at CW viser dem på bongen. Kjøpeutbytte-tabellen er heller ikke bekreftet; testene kalibrerer seg mot det som finnes.');
     if (m.checks && m.checks.skippedGaps) out.push(m.checks.skippedGaps + ' store hull i bongnummer er ikke tolket som slettede bonger (over grensen for maks hull).');
@@ -248,6 +253,7 @@
       { cells: ['Salg med skannet innhold', { t: cov.salesScanned, n: true }, { t: cov.sales, n: true }, { t: cov.sales ? pctText(cov.salesScanned / cov.sales) : '–', n: true }] },
       { cells: ['Salg med rabattdata', { t: cov.salesDisc, n: true }, { t: cov.sales, n: true }, { t: cov.sales ? pctText(cov.salesDisc / cov.sales) : '–', n: true }] },
       { cells: ['Salg med Totalt, MVA og betalingsreferanse (ny skanning)', { t: cov.salesV5, n: true }, { t: cov.sales, n: true }, { t: cov.sales ? pctText(cov.salesV5 / cov.sales) : '–', n: true }] },
+      { cells: ['Salg med kortdata (skanning versjon 6)', { t: cov.salesV6, n: true }, { t: cov.sales, n: true }, { t: cov.sales ? pctText(cov.salesV6 / cov.sales) : '–', n: true }] },
       { cells: ['Salg med enhetspris og kjøpeutbytte (ny skanning)', { t: cov.salesV4, n: true }, { t: cov.sales, n: true }, { t: cov.sales ? pctText(cov.salesV4 / cov.sales) : '–', n: true }] },
       { cells: ['Kassaoppgjør lest', { t: cov.settleScanned, n: true }, { t: cov.settle, n: true }, { t: cov.settle ? pctText(cov.settleScanned / cov.settle) : '–', n: true }] }
     ]));

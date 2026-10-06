@@ -126,6 +126,27 @@ function build(scale) {
     push(1001, 1, '2026-10-01', { m: 20 * 60 + 40, type: 1, cashier: '4101', lines, total: r2(s.total + 18), pay: s.pay }); }
   // L: samme TransId på to bonger i ulike kasser (dobbeltregistrert kortbetaling)
   [[1, 12 * 60 + 5], [2, 12 * 60 + 9]].forEach((x) => { const s = saleLines({ items: [CATALOG[2]], noCoupons: true, pay: 'Bank', transId: 'DK7DUPLIKAT01' }); push(1001, x[0], '2026-09-29', { m: x[1], type: 1, cashier: x[0] === 1 ? '4101' : '4103', lines: s.lines, total: s.total, pay: s.pay }); });
+  // M: manuelt innlagt pantelapp (kode 99) hos 4102, kasse 1, mot pantemaskin (kode 399) hos de andre
+  [['2026-09-30', 17 * 60 + 10, 60], ['2026-10-01', 15 * 60 + 20, 45], ['2026-10-01', 19 * 60 + 5, 80]].forEach((x) =>
+    push(1001, 1, x[0], { m: x[1], type: 1, cashier: '4102', lines: [T('RETUR VARE', ''), T('99 PANTELAPP', f2(-x[2])), TOT(f2(-x[2])), kt(x[2])], total: -x[2], pay: 'Kontant tilbake', ret: x[2] }));
+  [['2026-09-30', 12 * 60 + 40, 45, 3], ['2026-09-30', 13 * 60 + 5, 45, 2]].forEach((x) =>
+    push(1001, x[3], x[0], { m: x[1], type: 1, cashier: x[3] === 3 ? '4101' : '4103', lines: [T('RETUR VARE', ''), T('399 PANTELAPP', f2(-x[2])), TOT(f2(-x[2])), kt(x[2])], total: -x[2], pay: 'Kontant tilbake', ret: x[2] }));
+  // N: slettet pantelapp (linje og motlinje) på et vanlig salg hos 4101, kasse 3
+  { const s = saleLines({ items: [CATALOG[0]], noCoupons: true, pay: 'Bank' }); const at = s.lines.findIndex((l) => l.indexOf('Totalt') !== -1);
+    s.lines.splice(at, 0, T('399 PANTELAPP', '-40.00'), T('399 PANTELAPP', '40.00')); push(1001, 3, '2026-09-30', { m: 16 * 60 + 30, type: 1, cashier: '4101', lines: s.lines, total: s.total, pay: s.pay }); }
+  // O: kunde handler for 150 kr og betaler med pantelapp 150 kr; varelinjene slettes og pantelappen utbetales kontant (4103, kasse 2)
+  { const it = CATALOG[5]; push(1001, 2, '2026-10-01', { m: 15 * 60 + 50, type: 1, cashier: '4103', lines: [T(`${it[0]} ${it[1]}`, f2(it[2])), T(`${it[0]} ${it[1]}`, f2(-it[2])), T('399 PANTELAPP', '-101.90'), TOT('-101.90'), kt(101.9)], total: -101.9, pay: 'Kontant tilbake', ret: 101.9 }); }
+  // P: eget forbruk (betaling) hos 4101, kasse 3
+  { const s = saleLines({ items: [CATALOG[3]], noCoupons: true, pay: 'Eget forbruk' }); push(1001, 3, '2026-10-01', { m: 21 * 60 + 15, type: 1, cashier: '4101', lines: s.lines, total: s.total, pay: 'Bank' }); }
+  // Q: høy rabatt (80 %) uten årsak og uten treff på andre salg (4101)
+  { const s = saleLines({ items: [CATALOG[10]], discount: { pct: 80, reason: '' }, noCoupons: true }); push(1001, 1, '2026-10-01', { m: 14 * 60 + 25, type: 1, cashier: '4101', lines: s.lines, total: s.total, pay: s.pay }); }
+  // R: tre returer på samme Visa-kort (kasserer 4103 to av dem)
+  [['2026-09-29', 11 * 60 + 15, '4103', 1], ['2026-09-30', 18 * 60 + 5, '4101', 3], ['2026-10-01', 12 * 60 + 40, '4103', 2]].forEach((x) => {
+    const it = CATALOG[8]; push(1001, x[3], x[0], { m: x[1], type: 1, cashier: x[2], lines: [T('RETUR VARE', '')].concat(retItem(it), [TOT(f2(-it[2])), T('Visa:', f2(-it[2])), SPAN('Kort: ************4417')]), total: -it[2], pay: 'Bank' });
+  });
+  // S: spør pris på Pepsi Max hos 4102 (28,00 mot vanlig 32,90)
+  { const it = CATALOG[1]; push(1001, 2, '2026-09-30', { m: 20 * 60 + 40, type: 1, cashier: '4102', lines: [T('0 SPØR PRIS', '0.00'), T(`${it[0]} ${it[1]}`, '28.00'), T('Antall: 1 stk à Kr 28.00', ''), TOT('28.00'), T('Bank:', '28.00')], total: 28, pay: 'Bank' }); }
+
   // Kjøpeutbytte-tabell på medlemsbonger (sist på bongen)
   Object.keys(events).forEach((k) => events[k].forEach((e) => {
     if (e.type !== 1 || !e.member || !(e.total > 0)) return;

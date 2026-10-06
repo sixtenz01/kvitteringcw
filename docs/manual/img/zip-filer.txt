@@ -1,8 +1,8 @@
 KONTROLLSUM.txt
-bevis/01_1001-2-2132.png
-bevis/02_1001-2-2118.png
-bevis/03_1001-2-2116.png
-bevis/04_1001-1-2124.png
+bevis/01_1001-2-2058.png
+bevis/02_1001-2-2037.png
+bevis/03_1001-2-2035.png
+bevis/04_1001-2-2052.png
 data/flaggede_bonger.csv
 data/funn.csv
 data/innhold.json

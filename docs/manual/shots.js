@@ -96,7 +96,14 @@ async function main() {
   };
   const go = async (main, sub) => { await page.click(`.kvr-tab:has-text("${main}")`); if (sub) await page.click(`.kvr-sub:text-is("${sub}")`); await page.evaluate(() => { document.querySelector('.kvr-scroll').scrollTop = 0; }); };
   const scrollTo = (y) => page.evaluate((y) => { document.querySelector('.kvr-scroll').scrollTop = y; }, y);
-  const cardShot = async (name, sel, pad) => { const h = await page.$(sel); await h.scrollIntoViewIfNeeded(); await save(name, h, pad); };
+  const cardShot = async (name, sel, pad) => {
+    const h = await page.$(sel); await h.scrollIntoViewIfNeeded();
+    const need = await h.evaluate((e) => e.getBoundingClientRect().height), vh = page.viewportSize().height;
+    const tall = need > vh - 300;
+    if (tall) { await page.setViewportSize({ width: 1100, height: Math.ceil(need + 360) }); await page.waitForTimeout(250); await h.scrollIntoViewIfNeeded(); }
+    await save(name, h, pad);
+    if (tall) { await page.setViewportSize({ width: 1100, height: vh }); await page.waitForTimeout(150); }
+  };
   const unfold = async (id) => { if (await page.$eval(`[data-sec=${id}]`, (n) => n.classList.contains('kvr-folded'))) await page.click(`[data-sec=${id}] > h4`); };
   const c = { page, go, save, scrollTo, cardShot, unfold, view, browser, annotate: (m) => annotate(page, m), un: () => unannotate(page) };
   const want = (n) => !only.length || only.indexOf(n) !== -1;
@@ -179,9 +186,11 @@ async function main() {
   if (want('detaljer')) {
     await go('Analyse', 'Detaljer'); await view(1000);
     await save('detaljer-topp');
-    for (const id of ['profile', 'findings', 'pantbal', 'recon', 'diff', 'numbers', 'disc', 'member', 'misc', 'acct']) { await unfold(id); }
-    for (const id of ['profile', 'findings', 'pantbal', 'recon', 'diff', 'numbers', 'disc', 'member', 'misc', 'acct']) await cardShot('d-' + id, `[data-sec=${id}]`);
+    await page.evaluate(() => { document.getElementById('kvr-panel').style.width = '860px'; });
+    for (const id of ['profile', 'findings', 'pantbal', 'recon', 'diff', 'numbers', 'disc', 'member', 'misc', 'lapp', 'lines', 'acct']) { await unfold(id); }
+    for (const id of ['profile', 'findings', 'pantbal', 'recon', 'diff', 'numbers', 'disc', 'member', 'misc', 'lapp', 'lines', 'acct']) await cardShot('d-' + id, `[data-sec=${id}]`);
     await cardShot('d-anom', '[data-sec=anom]'); await cardShot('d-custom', '[data-sec=custom]'); await cardShot('d-tasks', '[data-sec=tasks]'); await cardShot('d-notes', '[data-sec=notes]');
+    await page.evaluate(() => { document.getElementById('kvr-panel').style.width = ''; });
   }
 
   if (want('stor')) {

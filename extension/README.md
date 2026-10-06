@@ -86,6 +86,19 @@ Skanner fra tidligere versjoner (v2) har ikke rabattdata. «Skann synlige» skan
 
 Ikke verifisert: om kvitteringen skriver årsaken som nummer eller tekst (begge håndteres), og hvordan lokale kampanjer ser ut. Dette trenger eksempler fra ekte kvitteringer.
 
+## Pantelapper, slettede linjer, spesialbetaling, rabatt og kort (versjon 3.14.0)
+
+Alt bygger på skannet innhold og lager funn i samme avviksliste, med innstillinger og poeng per test. Skanning versjon 6 leser i tillegg kortlinjer (`cd`: kortleverandør, siste fire siffer, evt. utstedernr).
+
+- **Pantelapper:** `99 PANTELAPP` er manuell, `399 PANTELAPP` kommer fra pantemaskinen. Funn: manuell pantelapp over beløpsgrensen, kasserer med mange manuelle (andel mot butikken), pantelapp slettet (linje + motlinje med samme beløp), og samme pantelapp innløst flere ganger (lappnr hvis bongen viser det, ellers samme sum innen 60 min). Kortet «Pantelapper: manuell og maskin».
+- **Slettede linjer:** en linje og en motlinje (samme kode, motsatt beløp) regnes som slettet. «Kontant tilbake uten salg» bruker nå varelinjer etter sletting. Nytt funn når varelinjer er slettet og bare pant og kontant tilbake står igjen. Makulert vare (EAN) som ikke er solgt på ny i butikken innen 120 min (krever 80 % skannet).
+- **Spesialbetaling:** ordlisten (eget forbruk, internt forbruk, utbetaling, finansiering, sjekk) leses i betalingsmåter, linjenavn og tekstlinjer, som funn og som søk under Skann.
+- **Rabatt:** høy rabattprosent (standard 70–100 %), rabatt uten treff på andre salg (samme vare og rabatt samme dag i butikken, standard ≥ 30 % og bare uten årsak), kampanjegjenkjenning (≥ 10 bonger med samme vare og rabatt, eller en dag der ≥ 40 % av minst 30 salg har rabatt, undertrykker flaggene), og søk på rabatt-% under Skann.
+- **Spør pris:** linjen under «SPØR PRIS» sammenlignes med medianprisen for samme EAN samme dag.
+- **Kort:** tre returer på samme kort (leverandør + kortnr) innen 30 dager.
+- **Manuell kvittering / til gode-lapp:** ordliste; flagges når en annen bong i butikken har samme beløp innen 3 dager.
+- Ikke bekreftet i ekte data: hvordan slettede linjer, spør pris, kortlinje, manuell kvittering og spesialbetaling står på bongen. Testene bruker motlinjer, ord og maskerte kortnumre; Diagnostikk samler det som ikke kjennes igjen.
+
 ## Kontroll-fanen
 
 - **Arbeidsoppgaver:** lagre filter + datovalg (i går, i dag, siste 7 dager, forrige uke) + skanning + kontroller + sammendrag som én knapp. «Morgenkontroll (i går)» er innebygd: henter gårsdagen fra CW, skanner, kjører alle kontroller og viser et sammendrag som kan kopieres som tekst. Lagrede filtre (Filter-fanen) setter bare filter.
@@ -176,6 +189,7 @@ Fem faner: **Hent** (søk i hele journalen via CW), **Filtrer** (butikk som søk
 
 ```
 node test/logic.test.js
+node test/linjer.test.js                              # pantelapper, slettede linjer, spesialbetaling, rabatt, spør pris, kort, manuell kvittering
 NODE_PATH=<global node_modules> node test/smoke.js   # Playwright, fiktivt grid
 NODE_PATH=<global node_modules> node test/audit.js   # revisjonstester og omfang, eget datasett
 NODE_PATH=<global node_modules> node test/settings.js # innstillinger, hjelp, bekreftelser, import/eksport, piltaster
@@ -187,6 +201,7 @@ NODE_PATH=<global node_modules> node test/skann.js     # feil bong i visningsfel
 NODE_PATH=<global node_modules> node test/regnskap.js  # Totalt, betaling, MVA, referanser, omskanning, CSV
 NODE_PATH=<global node_modules> node test/rapport.js  # lager rapport i panelet, pakker ut ZIP og verifiserer alle kontrollsummer
 node test/docs.test.js                               # dekning av innstillinger, vekter, faner og kort i brukerveiledningen
+NODE_PATH=<global node_modules> node test/linjer.js    # samme funn i panelet: kort, søk på spesialbetaling og rabatt-%
 NODE_PATH=<global node_modules> node test/stor.js  # panelstørrelse: Vanlig/Stor/Full, dokking, kolonner, husking
 TOUR=<mappe> NODE_PATH=<global node_modules> node test/tour.js  # skjermbilder av alle faner (valgfritt)
 ```

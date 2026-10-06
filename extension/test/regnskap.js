@@ -106,7 +106,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   assert.match(acct2, /Linjer mot Totalt: 0 bonger vurdert, – stemmer\. Kontrollen er ikke aktiv/);
   assert.ok(!/Regnskap: Linjer stemmer/.test(await txt('[data-sec=findings]')), 'ingen regnskapsfunn uten data');
   await page.click('[data-sec=acct] button:has-text("Skann på nytt (18 eldre)")');
-  assert.match(await txt('.kvr-dlg'), /18 bonger har eldre skanning uten Totalt, MVA og betalingsreferanse\. Skanner dem på nytt \(ca\. 20 s\)/);
+  assert.match(await txt('.kvr-dlg'), /18 bonger har eldre skanning uten kortdata, Totalt, MVA og betalingsreferanse\. Skanner dem på nytt \(ca\. 20 s\)/);
   await page.click('.kvr-dlg button:text-is("Skann på nytt")');
   await page.waitForFunction(() => /Ferdig\. Skannet 18/.test(document.getElementById('kvr-panel').innerText), null, { timeout: 60000 });
   await analyse();

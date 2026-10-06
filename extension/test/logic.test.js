@@ -478,7 +478,7 @@ const dsc = L.parseReceipt([
   ['TransId: DK7TVRW5F2PC5'],
   ['35.49', '25 %', '8.87', '44.36', '']
 ]);
-assert.strictEqual(dsc.v, 5);
+assert.strictEqual(dsc.v, 6);
 assert.deepStrictEqual([dsc.items[3].p, dsc.ku, dsc.ev, dsc.unk], [39.9, undefined, undefined, undefined]);
 assert.strictEqual(dsc.items.length, 4);
 assert.deepStrictEqual([dsc.items[0].d, dsc.items[0].dp, dsc.items[0].dr], [4.36, 50, '']);
@@ -512,7 +512,7 @@ const dsFo = L.focusStats(ditems, dmm);
 assert.deepStrictEqual([dsFo.disc, dsFo.discN, dsFo.discNR, dsFo.cpn, dsFo.discScanned], [9.36, 2, 1, 2, 3]);
 
 // discounts(): rabatt uten årsak og kasserer-sammenligning
-const dbase = Object.assign({}, C2, { discPct: '30', discCash: '1', profMin: '5', profFactor: '1.5' });
+const dbase = Object.assign({}, C2, { discPct: '30', discCash: '1', profMin: '5', profFactor: '1.5', discHiFrom: '', discMatchPct: '' });
 const ddd = L.discounts(ditems, dmm, dbase);
 assert.strictEqual(ddd.scanned, 3);
 assert.strictEqual(ddd.sales, 4);
@@ -604,7 +604,7 @@ const v4p = L.parseReceipt([
   ['Parkert bong gjenopptatt'], ['Linje annullert av kasserer', '', '-10.00'], ['Referanse: 4411'],
   ['Grunnlag', 'Kjøpeutbytte', 'MVA bonus'], ['100.00', '2.00', '0.40'], ['Bank:', '', '100.00'], ['Merkelig linje 77']
 ]);
-assert.strictEqual(v4p.v, 5);
+assert.strictEqual(v4p.v, 6);
 assert.deepStrictEqual(v4p.ku, { g: 100, k: 2, m: 0.4 });
 assert.deepStrictEqual(v4p.ev.map(e => e.k), ['parker', 'annull']);
 assert.deepStrictEqual(v4p.unk, ['Parkert bong gjenopptatt', 'Linje annullert av kasserer', 'Merkelig linje #']);
