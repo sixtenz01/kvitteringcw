@@ -270,15 +270,16 @@
   <tbody>
     <tr><td>Høy rabattprosent</td><td>Rabattlinjer mellom to grenser (standard 70 til 100 %), med eller uten årsak. Overvåker rabatter som nesten gir varen bort.</td></tr>
     <tr><td>Rabatt uten treff på andre salg</td><td>En vare med minst 30 % rabatt der ingen andre bonger i butikken samme dag har samme vare med samme rabatt. Samme rabatt på andre dager står i forklaringen. Kan være feil eller underslag. Standard er bare rabatt uten årsak.</td></tr>
-    <tr><td>Mulig sentral kampanje</td><td>Samme vare med samme rabatt på minst 3 bonger hos minst 2 kasserere, over alle dager og butikker. Bongene tas med i analysen, men får et notat, og du blir spurt om det er en kampanje fra sentralt hold.</td></tr>
+    <tr><td>Mulig sentral kampanje</td><td>Samme vare med rabatt (hvilken som helst prosent) på minst 3 bonger hos minst 2 kasserere, over alle dager og butikker. Bongene tas med i analysen, men får et notat, og du blir spurt om det er en kampanje fra sentralt hold.</td></tr>
 
   </tbody></table></div>
 <h3>Kan det være en sentral kampanje?</h3>
-<p>Rabatt uten årsak kan skyldes en kampanje fra sentralt hold. Er samme vare solgt med samme rabatt på flere bonger hos flere kasserere, er det trolig en kampanje og ikke én person som gir rabatt. Pluginen gjør slik:</p>
+<p>Rabatt uten årsak kan skyldes en kampanje fra sentralt hold. Er samme vare solgt med rabatt på flere bonger hos flere kasserere, er det trolig en kampanje og ikke én person som gir rabatt. Pluginen gjør slik:</p>
 <ul>
-  <li><strong>Bongen tas med.</strong> Rabatten flagges som vanlig, men får et notat: «Kan være sentral kampanje: Kaffe 40 % er på 14 bonger hos 5 kasserere».</li>
+  <li><strong>Bongen tas med.</strong> Rabatten flagges som vanlig, men får et notat: «Kan være sentral kampanje: «Kaffe» med 40 % og 33 % rabatt er på 14 bonger hos 5 kasserere».</li>
   <li><strong>Du blir spurt.</strong> Under bongen i Sjekk først står <em>Ja, kampanje</em> og <em>Nei, ikke kampanje</em>. Et varsel i Analyse-kortet og kortet Rabatter og kuponger har knappen <em>Svar nå</em>, som åpner en liste med alle mulige kampanjer.</li>
-  <li><strong>Ja:</strong> rabatten på den varen (med den prosenten) flagges ikke lenger, og telles ikke mot kassereren. <strong>Nei:</strong> den flagges som vanlig, uten notat. <strong>Angre</strong> setter den tilbake.</li>
+  <li><strong>Svaret gjelder varen, uansett rabattprosent.</strong> Svarer du på én bong, oppdateres alle flaggede bonger med samme vare, også de med en annen prosent, og statuslinjen viser hvor mange flaggede bonger det ble før og etter.</li>
+  <li><strong>Ja:</strong> rabatten på varen flagges ikke lenger, og telles ikke mot kassereren. <strong>Nei:</strong> den flagges som vanlig, uten notat. <strong>Angre</strong> setter den tilbake.</li>
   <li><strong>Svarene huskes</strong> i nettleseren, følger med Eksporter og Importer innstillinger, og står i revisjonsrapporten, slik at ingen rabatter forsvinner uten at det kan etterprøves.</li>
   <li>En dag der svært mange salg har rabatt (standard 40 % av minst 30 salg) får bare et notat om mulig kampanjedag.</li>
 </ul>

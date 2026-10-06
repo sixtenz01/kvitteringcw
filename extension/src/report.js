@@ -2,7 +2,7 @@
   'use strict';
 
   var L = typeof module !== 'undefined' && module.exports ? require('./logic.js') : root.KvLogic;
-  var VERSION = '3.18.0';
+  var VERSION = '3.19.0';
 
   // ---- SHA-256 (ren JS, så rapporten ikke avhenger av crypto.subtle) -------------------
   var K256 = [
@@ -168,7 +168,7 @@
     var cg = m.checks && m.checks.campaign;
     if (cg && cg.items.length) {
       var yes = cg.items.filter(function (e) { return e.status === 'kampanje'; }), no = cg.items.filter(function (e) { return e.status === 'ikke'; });
-      var nm = function (e) { return e.name + ' ' + e.rate + ' % (' + e.n + ' bonger)'; };
+      var nm = function (e) { return (e.name || e.c) + (e.rateText ? ' ' + e.rateText : '') + ' (' + e.n + ' bonger)'; };
       if (yes.length) out.push('Rabatt på ' + yes.length + (yes.length === 1 ? ' vare' : ' varer') + ' er etter brukerens svar regnet som sentral kampanje og ikke flagget: ' + yes.slice(0, 8).map(nm).join('; ') + (yes.length > 8 ? ' m.fl.' : '') + '.');
       if (no.length) out.push('Brukeren har avvist kampanje for ' + no.length + (no.length === 1 ? ' vare' : ' varer') + ': ' + no.slice(0, 8).map(nm).join('; ') + (no.length > 8 ? ' m.fl.' : '') + '.');
     }

@@ -210,16 +210,30 @@ const mapOf = (pairs) => pairs.reduce((m, [it, s]) => (m[it.transactionId] = s, 
   const asked = L.discounts(cit, cm, cfgOf(Object.assign({ campBongs: '3', campCashiers: '2' }, three)));
   const nr = asked.findings.filter((f) => f.code === 'discNoReason');
   assert.strictEqual(nr.length, 12, 'bongene tas fortsatt med');
-  assert.ok(nr.every((f) => f.flag && f.camp.length === 1 && f.camp[0].key === L.campKey(EAN, 40)));
+  assert.ok(nr.every((f) => f.flag && f.camp.length === 1 && f.camp[0].key === L.campKey(EAN)));
   assert.match(nr[0].detail, /Kan være sentral kampanje: «KAMPANJEVARE» med 40 % rabatt er på 12 bonger hos 3 kasserere\. Bekreft eller avvis\./);
   assert.deepStrictEqual([asked.camp.items.length, asked.camp.items[0].n, asked.camp.items[0].cashierN, asked.camp.items[0].dayN, asked.camp.pending, asked.camp.confirmed], [1, 12, 3, 2, 1, 0]);
   assert.ok(asked.findings.filter((f) => /^disc(High|NoReason)$/.test(f.code)).every((f) => f.camp), 'alle tre testene får notatet');
   // brukeren bekrefter: rabatten flagges ikke lenger, og telles ikke mot kassereren
-  const yes = L.discounts(cit, cm, cfgOf(Object.assign({ campBongs: '3', campCashiers: '2' }, three)), cit, { [L.campKey(EAN, 40)]: 'kampanje' });
+  const yes = L.discounts(cit, cm, cfgOf(Object.assign({ campBongs: '3', campCashiers: '2' }, three)), cit, { [L.campKey(EAN)]: 'kampanje' });
   assert.strictEqual(yes.findings.filter((f) => /^disc(NoMatch|High|NoReason)$/.test(f.code)).length, 0);
   assert.deepStrictEqual([yes.camp.pending, yes.camp.confirmed, yes.camp.skipped >= 12, yes.total.withNR], [0, 1, true, 0]);
+  // svaret gjelder varen, uansett rabattprosent: andre flaggede bonger med samme vare (annen prosent) oppdateres også
+  const mixed = camp.concat(Array.from({ length: 3 }, (_, i) => day('v-' + i, '13:' + (10 + i), 'Z' + i, [dl('KAMPANJEVARE', 13.4, 6.6, 33)])));
+  const mit2 = mixed.map((x) => x[0]), mm2 = mapOf(mixed), mcfg = cfgOf(Object.assign({ campBongs: '3', campCashiers: '2' }, three));
+  const mx0 = L.discounts(mit2, mm2, mcfg);
+  assert.strictEqual(mx0.camp.items.length, 1, 'én vare, to rabattprosenter');
+  assert.deepStrictEqual([mx0.camp.items[0].n, mx0.camp.items[0].rateText, mx0.camp.items[0].rates.map((r) => [r.rate, r.n])], [15, '40 % og 33 %', [[40, 12], [33, 3]]]);
+  assert.ok(mx0.findings.filter((f) => f.code === 'discNoReason').every((f) => f.camp && f.camp.length === 1 && f.camp[0].key === EAN));
+  assert.match(mx0.findings.find((f) => f.code === 'discNoReason').detail, /«KAMPANJEVARE» med 40 % og 33 % rabatt er på 15 bonger hos 6 kasserere/);
+  assert.strictEqual(mx0.findings.filter((f) => f.code === 'discNoReason').length, 15);
+  const mx1 = L.discounts(mit2, mm2, mcfg, mit2, { [EAN]: 'kampanje' });
+  assert.strictEqual(mx1.findings.filter((f) => /^disc(NoMatch|High|NoReason)$/.test(f.code)).length, 0, 'alle 15 bonger oppdateres, også de med 33 %');
+  assert.deepStrictEqual([mx1.camp.confirmed, mx1.camp.pending, mx1.total.withNR], [1, 0, 0]);
+  // eldre svar («ean|prosent») gjelder nå varen
+  assert.deepStrictEqual(L.sanitizeCamp({ [EAN + '|40']: 'kampanje', [EAN2]: 'ikke', '123': 'ja', [EAN3 + '|9']: 'tull' }), { [EAN]: 'kampanje', [EAN2]: 'ikke' });
   // brukeren avviser: flagges som vanlig, uten notat
-  const no = L.discounts(cit, cm, cfgOf(Object.assign({ campBongs: '3', campCashiers: '2' }, three)), cit, { [L.campKey(EAN, 40)]: 'ikke' });
+  const no = L.discounts(cit, cm, cfgOf(Object.assign({ campBongs: '3', campCashiers: '2' }, three)), cit, { [L.campKey(EAN)]: 'ikke' });
   assert.ok(no.findings.length > 0 && no.findings.every((f) => !f.camp && !/Kan være sentral kampanje/.test(f.detail)));
   assert.deepStrictEqual([no.camp.pending, no.camp.denied], [0, 1]);
   assert.strictEqual(no.camp.items[0].possible, false);
@@ -230,7 +244,7 @@ const mapOf = (pairs) => pairs.reduce((m, [it, s]) => (m[it.transactionId] = s, 
   // for få bonger
   assert.strictEqual(L.discounts(cit.slice(0, 2), cm, cfgOf(Object.assign({ campBongs: '3', campCashiers: '2' }, three))).camp.items.length, 0);
   // svar på vare som ikke finnes i dataene kan angres
-  assert.deepStrictEqual(L.discounts([], {}, cfgOf({}), [], { [L.campKey(EAN2, 30)]: 'kampanje' }).camp.items.map((e) => [e.c, e.rate, e.status, e.n]), [[EAN2, 30, 'kampanje', 0]]);
+  assert.deepStrictEqual(L.discounts([], {}, cfgOf({}), [], { [L.campKey(EAN2)]: 'kampanje' }).camp.items.map((e) => [e.c, e.status, e.n]), [[EAN2, 'kampanje', 0]]);
   // kampanjedag: mange bonger med rabatt samme dag (minst 30 salg) gir notat, ikke skjuling
   const dayMany = Array.from({ length: 40 }, (_, i) => day('k-' + i, '09:' + (10 + (i % 50)), 'A', i % 2 ? [dl('VARE' + i, 6, 4, 40)] : [{ c: EAN2, n: 'X', a: 5 }]));
   dayMany.forEach((x, i) => { if (i % 2) x[1].items[0].c = String(7038010100000 + i); });

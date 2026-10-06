@@ -88,10 +88,11 @@ Ikke verifisert: om kvitteringen skriver årsaken som nummer eller tekst (begge 
 
 ## Mulig sentral kampanje: notat og spørsmål (versjon 3.18.0)
 
-- Samme vare (EAN) med samme rabatt (avrundet %) på minst `campBongs` (3) bonger hos minst `campCashiers` (2) kasserere, over alle innlastede dager og butikker, regnes som **mulig sentral kampanje** (`campaigns()` i `logic.js`). Én kassereres gjentakelser er ikke kampanje. Den gamle regelen (10 bonger samme dag og butikk, som skjulte rabatten) er fjernet.
+- Samme vare (EAN) med rabatt (hvilken som helst prosent) på minst `campBongs` (3) bonger hos minst `campCashiers` (2) kasserere, over alle innlastede dager og butikker, regnes som **mulig sentral kampanje** (`campaigns()` i `logic.js`). Én kassereres gjentakelser er ikke kampanje. Den gamle regelen (10 bonger samme dag og butikk, som skjulte rabatten) er fjernet.
 - **Bongen tas med**: «Rabatt uten årsak», «Høy rabattprosent» og «Rabatt uten treff» flagges som før, men får notatet «Kan være sentral kampanje: … Bekreft eller avvis.» (`finding.camp`). En kampanjedag (≥ 40 % av minst 30 salg har rabatt) gir bare notat.
 - **Brukeren spørres**: *Ja, kampanje* / *Nei, ikke kampanje* under bongen i Sjekk først, i Rabatt-kortet (tabell med Angre) og i dialogen «Mulige sentrale kampanjer» (varsel i Analyse-kortet). Ja: rabatten flagges ikke og telles ikke mot kassereren. Nei: flagges som vanlig, uten notat.
-- Svarene (`kvr.camp.v1`, nøkkel `ean|prosent`) lagres i IndexedDB, følger Eksporter/Importer innstillinger, og står i revisjonsrapporten (bekreftet, avvist og ikke avklart).
+- **Svaret gjelder varen, uansett rabattprosent**, så alle flaggede bonger med varen oppdateres (statuslinjen viser «6 → 0 flaggede bonger»). Eldre svar med `ean|prosent` gjelder nå varen.
+- Svarene (`kvr.camp.v1`, nøkkel `ean`) lagres i IndexedDB, følger Eksporter/Importer innstillinger, og står i revisjonsrapporten (bekreftet, avvist og ikke avklart).
 
 ## Samlet utseende og butikknavn (versjon 3.16.0)
 

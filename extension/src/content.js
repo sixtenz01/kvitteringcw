@@ -1420,29 +1420,33 @@
   }
 
   // ---- mulig sentral kampanje: spør brukeren ------------------------------------------------
-  async function setCamp(key, status) {
+  // Svaret gjelder varen (alle rabattprosenter) på alle bonger i datagrunnlaget, så alle flaggede bonger med varen oppdateres.
+  async function setCamp(key, status, n) {
     if (status) campDec[key] = status; else delete campDec[key];
     store(K.camp, campDec);
+    var before = Object.keys(anomMap).length;
     if (ctlRes) { await runChecks(lastMode); if (checkState.at) renderCheck(); }
     if (document.querySelector('.kvr-camp-dlg')) openCampDialog();
-    say(status === 'kampanje' ? 'Merket som sentral kampanje. Rabatten flagges ikke lenger.' : status === 'ikke' ? 'Merket som ikke kampanje.' : 'Svaret er angret.');
+    var bongs = n ? ' Gjelder alle ' + n + ' bongene med varen' + (before !== Object.keys(anomMap).length ? ' (' + before + ' → ' + Object.keys(anomMap).length + ' flaggede bonger)' : '') + '.' : '';
+    say(status === 'kampanje' ? 'Merket som sentral kampanje, uansett rabattprosent. Rabatten flagges ikke lenger.' + bongs : status === 'ikke' ? 'Merket som ikke kampanje.' + bongs : 'Svaret er angret.');
   }
 
-  function campText(c) { return '«' + c.name + '» med ' + c.rate + ' % rabatt'; }
+  function campText(c) { return '«' + c.name + '» med ' + c.rateText + ' rabatt'; }
 
   // Spørsmålet under en flagget bong: kan det være en sentral kampanje?
   function campQuestion(c) {
     return el('div', { class: 'kvr-camp' }, [
       el('span', { text: 'Kan være sentral kampanje: ' + campText(c) + ' er på ' + c.n + ' bonger hos ' + c.cashiers + ' kasserere. Stemmer det?' }),
-      el('div', { class: 'kvr-row' }, [btn('Ja, kampanje', function () { setCamp(c.key, 'kampanje'); }, 'kvr-sm kvr-primary'), btn('Nei, ikke kampanje', function () { setCamp(c.key, 'ikke'); }, 'kvr-sm')])
+      el('div', { class: 'kvr-row' }, [btn('Ja, kampanje', function () { setCamp(c.key, 'kampanje', c.n); }, 'kvr-sm kvr-primary'), btn('Nei, ikke kampanje', function () { setCamp(c.key, 'ikke', c.n); }, 'kvr-sm')]),
+      el('span', { class: 'kvr-hint', text: 'Svaret gjelder varen, uansett rabattprosent, og oppdaterer alle flaggede bonger med den.' })
     ]);
   }
 
   function campTable(list) {
     return tbl(['Vare', 'Rabatt', 'Bonger', 'Kasserere', 'Butikker', 'Dager', 'Svar'], list.map(function (c) {
-      var ans = !c.status ? el('span', { class: 'kvr-row' }, [btn('Ja', function () { setCamp(c.key, 'kampanje'); }, 'kvr-sm kvr-primary'), btn('Nei', function () { setCamp(c.key, 'ikke'); }, 'kvr-sm')])
-        : el('span', {}, [document.createTextNode((c.status === 'kampanje' ? 'Kampanje ' : 'Ikke kampanje ')), btn('Angre', function () { setCamp(c.key, ''); }, 'kvr-sm')]);
-      return [{ node: el('span', { title: 'EAN ' + c.c }, [document.createTextNode(c.name || c.c)]) }, c.rate + ' %', c.n, c.cashierN, c.storeN, c.dayN, { node: ans }];
+      var ans = !c.status ? el('span', { class: 'kvr-row' }, [btn('Ja', function () { setCamp(c.key, 'kampanje', c.n); }, 'kvr-sm kvr-primary'), btn('Nei', function () { setCamp(c.key, 'ikke', c.n); }, 'kvr-sm')])
+        : el('span', {}, [document.createTextNode((c.status === 'kampanje' ? 'Kampanje ' : 'Ikke kampanje ')), btn('Angre', function () { setCamp(c.key, '', c.n); }, 'kvr-sm')]);
+      return [{ node: el('span', { title: 'EAN ' + c.c }, [document.createTextNode(c.name || c.c)]) }, c.rateText || '–', c.n, c.cashierN, c.storeN, c.dayN, { node: ans }];
     }));
   }
 
@@ -1450,7 +1454,7 @@
     var D = ctlRes && ctlRes.disc;
     var list = D && D.camp ? D.camp.items : [];
     var body = el('div', { class: 'kvr-camp-dlg kvr-secbody' }, [
-      hintEl('Samme vare med samme rabatt på flere bonger hos flere kasserere kan bety en kampanje fra sentralt hold. Bongene er tatt med i analysen. Svarer du Ja, flagges rabatten ikke lenger. Svarer du Nei, flagges den som vanlig, uten notat. Svarene huskes og er med i revisjonsrapporten.')
+      hintEl('Samme vare med rabatt på flere bonger hos flere kasserere kan bety en kampanje fra sentralt hold. Bongene er tatt med i analysen. Svaret gjelder varen, uansett rabattprosent, og oppdaterer alle flaggede bonger med den. Svarer du Ja, flagges rabatten ikke lenger. Svarer du Nei, flagges den som vanlig, uten notat. Svarene huskes og er med i revisjonsrapporten.')
     ]);
     if (!list.length) body.appendChild(hintEl('Ingen mulige kampanjer akkurat nå.'));
     else body.appendChild(campTable(list));
@@ -1491,7 +1495,7 @@
       if (D.camp.pending) box.appendChild(el('div', { class: 'kvr-notice' }, [el('span', { text: D.camp.pending + (D.camp.pending === 1 ? ' vare venter' : ' varer venter') + ' på svar: er det en kampanje fra sentralt hold?' }), btn('Svar nå', openCampDialog, 'kvr-sm kvr-primary')]));
       if (D.camp.items.length) box.appendChild(campTable(D.camp.items.slice(0, 12)));
       if (D.camp.days.length) box.appendChild(tbl(['Kampanjedag', 'Butikk', 'Dag', 'Andel', 'Bonger'], D.camp.days.slice(0, 8).map(function (d) { return ['Mange bonger med rabatt', sLabel(d.store), d.day, pct(d.share), d.withDisc + ' av ' + d.n]; })));
-      box.appendChild(hintEl('Samme vare og rabatt på minst ' + (ctlCfg.campBongs || '–') + ' bonger hos minst ' + ctlCfg.campCashiers + ' kasserere (over alle dager og butikker) kan være en kampanje fra sentralt hold. Bongene tas med i analysen med et notat, og du blir spurt. Svar Ja: rabatten flagges ikke lenger og telles ikke mot kassereren (' + D.camp.confirmed + ' bekreftet). Svar Nei: flagges som vanlig (' + D.camp.denied + ' avvist). En dag der minst ' + (ctlCfg.campDay || '–') + ' % av minst 30 salg har rabatt får bare notat.'));
+      box.appendChild(hintEl('Samme vare med rabatt på minst ' + (ctlCfg.campBongs || '–') + ' bonger hos minst ' + ctlCfg.campCashiers + ' kasserere (over alle dager og butikker) kan være en kampanje fra sentralt hold. Bongene tas med i analysen med et notat, og du blir spurt. Svaret gjelder varen, uansett rabattprosent. Svar Ja: rabatten flagges ikke lenger og telles ikke mot kassereren (' + D.camp.confirmed + ' bekreftet). Svar Nei: flagges som vanlig (' + D.camp.denied + ' avvist). En dag der minst ' + (ctlCfg.campDay || '–') + ' % av minst 30 salg har rabatt får bare notat.'));
     }
     box.appendChild(hintEl('Rabatt = linjen «Rabatt: Kr x (y %)» på en vare med årsak 1 Datovare, 2 Feil pris, 3 Prisløfte, 4 Reserveløsning kupong, 5 Annen rabattårsak eller 6 Best før (tom = ingen årsak valgt). Klikk en årsak for å filtrere listen. Kupong = linjen «Kupong (id - navn)», antatt lagt inn sentralt (CN/VPI); beløpet er ofte 0,00, så den viser at kampanjen er knyttet til bongen, ikke at den er innløst. Rødt = andel bonger med rabatt uten årsak er minst ' + ctlCfg.profFactor + '× butikkens (minst ' + ctlCfg.profMin + ' bonger). Funn «Rabatt uten årsak» krever minst ' + (ctlCfg.discPct || '–') + ' % rabatt. «Høy rabattprosent» flagger ' + (ctlCfg.discHiFrom ? ctlCfg.discHiFrom + '–' + ctlCfg.discHiTo + ' %' : 'ingenting (av)') + '. «Rabatt uten treff» krever minst ' + (ctlCfg.discMatchPct || '–') + ' % og at ingen andre bonger samme dag har varen med samme rabatt. Søk på rabatt-prosent under Skann.'));
   }
@@ -3159,7 +3163,7 @@
         scope: { text: R.scopeText, mode: R.mode, filters: R.filters, coverageText: R.coverageText, compare: R.compare },
         items: R.items, pop: R.pop, scan: R.scan, storeLabels: R.storeLabels,
         settings: { ctl: R.ctl, anom: R.anomCfg, weights: weights, currentDiffers: KvReport.stable([R.ctl, R.anomCfg]) !== KvReport.stable([ctlCfg, anomCfg]) },
-        checks: { falseRet: { coverage: C.falseRet.coverage, lineCheck: C.falseRet.lineCheck }, voids: C.voids ? { applicable: C.voids.applicable, coverage: C.voids.coverage } : null, campaign: C.disc && C.disc.camp ? { pending: C.disc.camp.pending, items: C.disc.camp.items.filter(function (e) { return e.status; }).map(function (e) { return { c: e.c, name: e.name, rate: e.rate, n: e.n, status: e.status }; }) } : null, skippedGaps: C.seq.skippedGaps || 0, numbers: C.numbers, ledger: C.ledger ? { lines: C.ledger.lines, pay: C.ledger.pay, vat: C.ledger.vat, refs: C.ledger.refs } : null },
+        checks: { falseRet: { coverage: C.falseRet.coverage, lineCheck: C.falseRet.lineCheck }, voids: C.voids ? { applicable: C.voids.applicable, coverage: C.voids.coverage } : null, campaign: C.disc && C.disc.camp ? { pending: C.disc.camp.pending, items: C.disc.camp.items.filter(function (e) { return e.status; }).map(function (e) { return { c: e.c, name: e.name, rateText: e.rateText, n: e.n, status: e.status }; }) } : null, skippedGaps: C.seq.skippedGaps || 0, numbers: C.numbers, ledger: C.ledger ? { lines: C.ledger.lines, pay: C.ledger.pay, vat: C.ledger.vat, refs: C.ledger.refs } : null },
         findings: C.findings, ranked: ranked, explain: explain, notes: noteSub,
         cashiers: L.rankCashiers(R.items, R.anom, weights, C.profile, C.cashierExtra).slice(0, 10),
         compare: compareForReport(R), failedScans: failedRecs.length,

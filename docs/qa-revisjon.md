@@ -640,3 +640,5 @@ Overlapp med ulike signaler er beholdt (for eksempel medlemsnr flere ganger samm
 | Etterprøvbarhet | Svarene lagres, eksporteres og står i revisjonsrapporten |
 
 Ikke gjort: kobling mellom kupongnavn og varenavn på bongen. Det trenger en ekte bong der kampanjerabatt og kupong står sammen.
+
+Oppdatering 3.19.0: svaret gjelder varen (EAN), uansett rabattprosent, slik at alle flaggede bonger med varen oppdateres når brukeren svarer på én bong. Statuslinjen viser antall flaggede bonger før og etter. Risiko: en manuell rabatt med annen prosent på en bekreftet kampanjevare flagges ikke lenger. Tabellen viser alle prosentene, og Angre setter varen tilbake.

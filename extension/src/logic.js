@@ -665,11 +665,12 @@
     return rule.conds.every(function (c) { return condTrue(c, item, scan, groups); });
   }
 
-  // Brukerens svar om sentral kampanje: «ean|prosent» → 'kampanje' | 'ikke'.
+  // Brukerens svar om sentral kampanje: EAN → 'kampanje' | 'ikke'. Eldre svar («ean|prosent») gjelder nå varen.
   function sanitizeCamp(raw) {
     var out = {};
     if (raw && typeof raw === 'object') Object.keys(raw).forEach(function (k) {
-      if (/^\d{8,14}\|\d{1,3}$/.test(k) && (raw[k] === 'kampanje' || raw[k] === 'ikke')) out[k] = raw[k];
+      var m = /^(\d{8,14})(?:\|\d{1,3})?$/.exec(k);
+      if (m && (raw[k] === 'kampanje' || raw[k] === 'ikke')) out[m[1]] = raw[k];
     });
     return out;
   }
@@ -1899,10 +1900,16 @@
     return base > 0 ? round2(l.d / base * 100) : null;
   }
 
-  // Mulig sentral kampanje: samme vare (EAN) med samme rabatt (avrundet %) på flere bonger hos flere kasserere, over alle innlastede
-  // dager og butikker. Bongen flagges som før, men får notat om mulig kampanje. Brukerens svar avgjør: decisions[nøkkel] er
-  // «kampanje» (rabatten flagges ikke lenger) eller «ikke» (aldri notat om kampanje). En dag der svært mange salg har rabatt får også notat.
-  function campKey(c, rate) { return c + '|' + Math.round(rate); }
+  // Mulig sentral kampanje: samme vare (EAN) med rabatt på flere bonger hos flere kasserere, over alle innlastede dager og butikker.
+  // Svaret gjelder varen, uansett rabattprosent, så det oppdaterer alle flaggede bonger med den varen. Bongen flagges som før, men får notat
+  // om mulig kampanje. Brukerens svar avgjør: decisions[EAN] er «kampanje» (rabatten flagges ikke lenger) eller «ikke» (aldri notat om kampanje).
+  // En dag der svært mange salg har rabatt får også notat.
+  function campKey(c) { return String(c); }
+
+  function ratesText(rates) {
+    var t = rates.map(function (r) { return r.rate + ' %'; });
+    return t.length < 2 ? t.join('') : t.slice(0, -1).join(', ') + ' og ' + t[t.length - 1];
+  }
 
   function campaigns(pop, scanMap, cfg, decisions) {
     var nB = cnum(cfg.campBongs, null), nC = cnum(cfg.campCashiers, 2), dShare = cnum(cfg.campDay, null), dMin = 30, dec = decisions || {};
@@ -1917,20 +1924,24 @@
       sc.items.forEach(function (l) {
         var r = discRate(l);
         if (r === null || !isEan(l.c)) return;
-        var k = campKey(l.c, r), e = item[k] || (item[k] = { key: k, c: l.c, name: l.n, rate: Math.round(r), bongs: {}, cashiers: {}, stores: {}, days: {} });
+        var k = campKey(l.c), e = item[k] || (item[k] = { key: k, c: l.c, name: l.n, rateBongs: {}, bongs: {}, cashiers: {}, stores: {}, days: {} });
+        var rr = Math.round(r);
+        (e.rateBongs[rr] = e.rateBongs[rr] || {})[it.transactionId] = 1;
         e.bongs[it.transactionId] = 1; e.cashiers[it.cashierNumber] = 1; e.stores[it.storeNumber] = 1; e.days[dayOf(it)] = 1;
       });
     });
     var rows = Object.keys(item).map(function (k) {
       var e = item[k];
+      e.rates = Object.keys(e.rateBongs).map(function (r) { return { rate: Number(r), n: Object.keys(e.rateBongs[r]).length }; }).sort(function (a, b) { return b.n - a.n || a.rate - b.rate; });
+      e.rate = e.rates[0].rate; e.rateText = ratesText(e.rates);
       e.n = Object.keys(e.bongs).length; e.cashierN = Object.keys(e.cashiers).length; e.storeN = Object.keys(e.stores).length; e.dayN = Object.keys(e.days).length;
-      delete e.bongs; delete e.cashiers; delete e.stores; delete e.days;
+      delete e.rateBongs; delete e.bongs; delete e.cashiers; delete e.stores; delete e.days;
       e.status = dec[k] || '';
       e.possible = e.status !== 'ikke' && nB !== null && e.n >= nB && e.cashierN >= nC;
       return e;
     });
     // svar på varer som ikke finnes i dataene nå, så de kan angres
-    Object.keys(dec).forEach(function (k) { if (!item[k]) rows.push({ key: k, c: k.split('|')[0], name: '', rate: Number(k.split('|')[1]), n: 0, cashierN: 0, storeN: 0, dayN: 0, status: dec[k], possible: false }); });
+    Object.keys(dec).forEach(function (k) { if (!item[k]) rows.push({ key: k, c: k, name: '', rate: 0, rates: [], rateText: '', n: 0, cashierN: 0, storeN: 0, dayN: 0, status: dec[k], possible: false }); });
     var itemRows = rows.filter(function (e) { return e.possible || e.status; })
       .sort(function (a, b) { return (a.status ? 1 : 0) - (b.status ? 1 : 0) || b.n - a.n || String(a.c).localeCompare(String(b.c)); });
     var dayRows = Object.keys(day).map(function (k) {
@@ -1946,14 +1957,12 @@
       day: function (it) { var d = day[it.storeNumber + '|' + dayOf(it)]; return d && d.flag ? d : null; },
       // '' = ingen kampanje, 'mulig' = kan være kampanje (ikke avgjort), 'kampanje' = bekreftet av brukeren
       line: function (it, l) {
-        var r = discRate(l);
-        if (r === null || !isEan(l.c)) return '';
-        var k = campKey(l.c, r);
-        if (dec[k] === 'kampanje') return 'kampanje';
-        var e = byKey[k];
+        if (discRate(l) === null || !isEan(l.c)) return '';
+        if (dec[campKey(l.c)] === 'kampanje') return 'kampanje';
+        var e = byKey[campKey(l.c)];
         return e && e.possible ? 'mulig' : '';
       },
-      entry: function (l) { var r = discRate(l); return r === null ? null : byKey[campKey(l.c, r)] || null; }
+      entry: function (l) { return discRate(l) === null ? null : byKey[campKey(l.c)] || null; }
     };
   }
 
@@ -2025,8 +2034,8 @@
           if (camp.line(it, l) !== 'mulig') return;
           var e = camp.entry(l);
           if (!e || keys.some(function (k) { return k.key === e.key; })) return;
-          keys.push({ key: e.key, c: e.c, name: e.name, rate: e.rate, n: e.n, cashiers: e.cashierN, stores: e.storeN });
-          parts.push('«' + e.name + '» med ' + e.rate + ' % rabatt er på ' + e.n + ' bonger hos ' + e.cashierN + ' kasserere' + (e.storeN > 1 ? ' i ' + e.storeN + ' butikker' : ''));
+          keys.push({ key: e.key, c: e.c, name: e.name, rate: e.rate, rateText: e.rateText, n: e.n, cashiers: e.cashierN, stores: e.storeN });
+          parts.push('«' + e.name + '» med ' + e.rateText + ' rabatt er på ' + e.n + ' bonger hos ' + e.cashierN + ' kasserere' + (e.storeN > 1 ? ' i ' + e.storeN + ' butikker' : ''));
         });
         var txt = parts.length ? ' Kan være sentral kampanje: ' + parts.join('; ') + '. Bekreft eller avvis.' : '';
         if (dayHit) txt += ' ' + Math.round(dayHit.share * 100) + ' % av salgene i butikken denne dagen har rabatt, så det kan være en kampanjedag.';
