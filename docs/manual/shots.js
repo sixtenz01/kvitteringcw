@@ -130,13 +130,12 @@ async function main() {
   await view(900);
   if (want('filtrer')) {
     await save('filtrer-a');
-    await scrollTo(760); await save('filtrer-b');
+    await scrollTo(780); await save('filtrer-b');
+    await scrollTo(1600); await save('filtrer-c');
   }
   if (want('skann')) {
     await go('Skann'); await view(900);
-    await page.selectOption('.kvr-f:has-text("Pant (krever") select', 'return');
     await save('skann-for');
-    await page.selectOption('.kvr-f:has-text("Pant (krever") select', '');
   }
 
   // ---- skanning

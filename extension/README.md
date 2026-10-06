@@ -54,7 +54,7 @@ Skanningen leser nå to ting fra kvitteringen (skannepost v3):
 Bruk:
 
 - **Rabattårsaker** (tekstnr i Lindbak): 1 Datovare, 2 Feil pris, 3 Prisløfte, 4 Reserveløsning kupong, 5 Annen rabattårsak, 6 Best før. Pluginen kjenner igjen både nummer og tekst på kvitteringen; ukjent tekst vises som den står.
-- **Filter:** «Rabatt (krever skanning)» under Skann: har rabatt, uten årsak, med årsak, har kupong, eller én bestemt årsak.
+- **Filter:** «Rabatt» under Filtrer → Innhold (krever skanning): har rabatt, uten årsak, med årsak, har kupong, eller én bestemt årsak.
 - **Analyse → Detaljer → Rabatter og kuponger:** per kasserer antall bonger med rabatt, rabatt i kr, uten årsak, kuponger; butikksum; tabell «Rabatt per årsak» (klikk en årsak for å filtrere listen) og matrisen «Kasserer × årsak»; de vanligste kampanjene. Test «Rabatt uten årsak» flagger rabattlinjer på minst 30 % uten årsak (terskel kan endres, tom = av). «Mange rabatter uten årsak» flagger kasserere som ligger minst 1,5× butikkens andel.
 - **Overvåkede rabattårsaker:** test «Rabatt med overvåket årsak» flagger bonger med rabattlinje der årsaken står på en liste (standard 2 Feil pris, 4 Reserveløsning kupong, 5 Annen rabattårsak). Terskler under Mer → Innstillinger → Rabatt: årsaker (tekstnr, komma; tom = av), rabatt minst x % og y kr (standard 0), og «Mange rabatter med overvåket årsak» når en kasserer har minst 3 bonger (tom = av). Egen vekt for begge (standard 3), justerbar under Innstillinger. Kassererfunnet gir poeng på kassereren, ikke på bongene.
 - **Egne regler:** felt for rabatt (kr), høyeste rabatt (%), rabattårsak, rabattlinjer uten årsak, antall kuponger og kupong (id/navn).
@@ -86,6 +86,12 @@ Skanner fra tidligere versjoner (v2) har ikke rabattdata. «Skann synlige» skan
 
 Ikke verifisert: om kvitteringen skriver årsaken som nummer eller tekst (begge håndteres), og hvordan lokale kampanjer ser ut. Dette trenger eksempler fra ekte kvitteringer.
 
+## Samlet utseende og butikknavn (versjon 3.16.0)
+
+- **Alle filter under Filtrer.** Innholdsfiltrene (vare, varegruppe, pant, rabatt, rabatt-%, spesialbetaling) ligger i kortet «Innhold» og er merket *skanning*. Skann har bare skanning (knapper og cache) og varegrupper. Sortering og lagrede filtre er ett kort.
+- **Butikknavn og nummer overalt** («1005 – Coop Mega Kolbotn»). Navn hentes fra CWs butikkliste, ellers fra BUTIKK-kolonnen i listen (`storeNameFromCell`), og egne navn overstyrer. Butikker uten navn får «Gi butikken navn» direkte under butikklisten.
+- **Felles design:** alle farger, radier og kontrollhøyder kommer fra tokens i `panel.css` (`--kv-*`) og brukes likt i panel og dialoger. Samme overskriftsstil på kort og innstillingsgrupper, ett utseende på varsler, like høye felt og knapper.
+
 ## Pantelapper, slettede linjer, spesialbetaling, rabatt og kort (versjon 3.14.0)
 
 Alt bygger på skannet innhold og lager funn i samme avviksliste, med innstillinger og poeng per test. Skanning versjon 6 leser i tillegg kortlinjer (`cd`: kortleverandør, siste fire siffer, evt. utstedernr).
@@ -93,7 +99,7 @@ Alt bygger på skannet innhold og lager funn i samme avviksliste, med innstillin
 - **Ingen dobbelttelling (3.15.0):** tester som måler samme forhold teller bare det høyeste poenget per bong (`FAMILIES` i `logic.js`: pant og kontant tilbake, rabatt, regnskap, pris, kassadifferanse). Årsaker som ikke teller vises overstrøket i Sjekk først. «Samme pantebeløp utbetalt flere ganger» er slått sammen med «Pantelapp innløst flere ganger» (samme kasse samme dag, eller innen tidsrommet på tvers av kasser, og bongsum for bonger med flere pantelapper). Prisavviks-testen hopper over spør pris-linjer, og Hendelsesord utelater «manuell» og «spør pris» på bonger som allerede er flagget av de egne testene.
 - **Pantelapper:** `99 PANTELAPP` er manuell, `399 PANTELAPP` kommer fra pantemaskinen. Funn: manuell pantelapp over beløpsgrensen, kasserer med mange manuelle (andel mot butikken), pantelapp slettet (linje + motlinje med samme beløp), og samme pantelapp innløst flere ganger (lappnr hvis bongen viser det, ellers samme sum innen 60 min eller på samme kasse samme dag). Kortet «Pantelapper: manuell og maskin».
 - **Slettede linjer:** en linje og en motlinje (samme kode, motsatt beløp) regnes som slettet. «Kontant tilbake uten salg» bruker nå varelinjer etter sletting. Nytt funn når varelinjer er slettet og bare pant og kontant tilbake står igjen. Makulert vare (EAN) som ikke er solgt på ny i butikken innen 120 min (krever 80 % skannet).
-- **Spesialbetaling:** ordlisten (eget forbruk, internt forbruk, utbetaling, finansiering, sjekk) leses i betalingsmåter, linjenavn og tekstlinjer, som funn og som søk under Skann.
+- **Spesialbetaling:** ordlisten (eget forbruk, internt forbruk, utbetaling, finansiering, sjekk) leses i betalingsmåter, linjenavn og tekstlinjer, som funn og som søk under Filtrer → Innhold.
 - **Rabatt:** høy rabattprosent (standard 70–100 %), rabatt uten treff på andre salg (samme vare og rabatt samme dag i butikken, standard ≥ 30 % og bare uten årsak), kampanjegjenkjenning (≥ 10 bonger med samme vare og rabatt, eller en dag der ≥ 40 % av minst 30 salg har rabatt, undertrykker flaggene), og søk på rabatt-% under Skann.
 - **Spør pris:** linjen under «SPØR PRIS» sammenlignes med medianprisen for samme EAN samme dag.
 - **Kort:** tre returer på samme kort (leverandør + kortnr) innen 30 dager.
@@ -202,6 +208,7 @@ NODE_PATH=<global node_modules> node test/skann.js     # feil bong i visningsfel
 NODE_PATH=<global node_modules> node test/regnskap.js  # Totalt, betaling, MVA, referanser, omskanning, CSV
 NODE_PATH=<global node_modules> node test/rapport.js  # lager rapport i panelet, pakker ut ZIP og verifiserer alle kontrollsummer
 node test/docs.test.js                               # dekning av innstillinger, vekter, faner og kort i brukerveiledningen
+NODE_PATH=<global node_modules> node test/butikk.js    # butikknavn fra BUTIKK-kolonnen, redigering, filter samlet under Filtrer
 NODE_PATH=<global node_modules> node test/linjer.js    # samme funn i panelet: kort, søk på spesialbetaling og rabatt-%
 NODE_PATH=<global node_modules> node test/stor.js  # panelstørrelse: Vanlig/Stor/Full, dokking, kolonner, husking
 TOUR=<mappe> NODE_PATH=<global node_modules> node test/tour.js  # skjermbilder av alle faner (valgfritt)

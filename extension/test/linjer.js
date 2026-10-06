@@ -118,15 +118,15 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
 
   // søk: spesialbetaling og rabatt-prosent
   const viser = async () => (await txt('.kvr-tiles')).match(/^(\d+) \/ (\d+)/)[1];
-  await go('Skann');
-  await page.selectOption('.kvr-f:has-text("Spesialbetaling") select', '*');
+  await go('Filtrer');
+  await page.selectOption('select[aria-label="Spesialbetaling"]', '*');
   assert.strictEqual(await viser(), '1');
   assert.match(await txt('.kvr-chipsrow'), /Spesial: alle ord/);
-  await page.selectOption('.kvr-f:has-text("Spesialbetaling") select', 'eget forbruk');
+  await page.selectOption('select[aria-label="Spesialbetaling"]', 'eget forbruk');
   assert.strictEqual(await viser(), '1');
-  await page.selectOption('.kvr-f:has-text("Spesialbetaling") select', 'sjekk');
+  await page.selectOption('select[aria-label="Spesialbetaling"]', 'sjekk');
   assert.strictEqual(await viser(), '0');
-  await page.selectOption('.kvr-f:has-text("Spesialbetaling") select', '');
+  await page.selectOption('select[aria-label="Spesialbetaling"]', '');
   await page.fill('input[placeholder="fra %"]', '70');
   assert.strictEqual(await viser(), '1', 'bare 80 %-rabatten');
   await page.fill('input[placeholder="fra %"]', '40');

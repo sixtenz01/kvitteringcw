@@ -817,6 +817,18 @@
     return /^\s*\d+\s*[-–]/.test(n) ? n : num + ' – ' + n;
   }
 
+  // Butikknavn fra cellen i gridets BUTIKK-kolonne: «1005 Coop Mega», «1005 – Coop Mega», «Coop Mega (1005)» eller bare «Coop Mega».
+  // Cellen som bare er nummeret gir ikke noe navn.
+  function storeNameFromCell(text, number) {
+    var t = String(text === null || text === undefined ? '' : text).replace(/\s+/g, ' ').trim(), n = String(number);
+    if (!t || t === n || t.length > 60 || !/[A-Za-zÆØÅæøå]{2}/.test(t)) return '';
+    var m = /^(\d+)\s*[-–:.]?\s*(.+)$/.exec(t);
+    if (m) return m[1] === n && /[A-Za-zÆØÅæøå]{2}/.test(m[2]) ? m[2].trim() : '';
+    m = /^(.+?)\s*[(\[]\s*(\d+)\s*[)\]]$/.exec(t);
+    if (m) return m[2] === n ? m[1].trim() : '';
+    return /^\d/.test(t) ? '' : t;
+  }
+
   function parseStoreText(text) {
     var out = {};
     String(text || '').split(/\r?\n/).forEach(function (line) {
@@ -2923,6 +2935,7 @@
     anomalies: anomalies,
     storeLabel: storeLabel,
     parseStoreText: parseStoreText,
+    storeNameFromCell: storeNameFromCell,
     toCsv: toCsv,
     parseAmount: parseAmount,
     sumPant: sumPant,

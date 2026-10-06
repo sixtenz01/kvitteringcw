@@ -982,4 +982,13 @@ assert.strictEqual(L.groupForReason('Mange avvikende priser'), 'price');
   assert.strictEqual(L.retDiffCorr(cItems.filter((i) => i.receiptType !== 2), cScan, L.defaultControl()).rows.length, 0, 'uten oppgjør ingen punkter');
 }
 
+// butikknavn fra cellen i BUTIKK-kolonnen
+assert.strictEqual(L.storeNameFromCell('1005', 1005), '');
+assert.strictEqual(L.storeNameFromCell('1005 Coop Mega', 1005), 'Coop Mega');
+assert.strictEqual(L.storeNameFromCell('1005 – Coop Mega Kolbotn', 1005), 'Coop Mega Kolbotn');
+assert.strictEqual(L.storeNameFromCell('Coop Mega (1005)', 1005), 'Coop Mega');
+assert.strictEqual(L.storeNameFromCell('Coop Mega', 1005), 'Coop Mega');
+assert.strictEqual(L.storeNameFromCell('1006 Coop Mega', 1005), '', 'navn som hører til en annen butikk brukes ikke');
+assert.strictEqual(L.storeNameFromCell('', 1005) + L.storeNameFromCell(null, 1005) + L.storeNameFromCell('12', 1005), '');
+
 console.log('logic: ok');

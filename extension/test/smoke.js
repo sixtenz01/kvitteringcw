@@ -83,7 +83,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
     if (m[1]) await page.click(`.kvr-sub:text-is("${m[1]}")`);
   };
   const grp = async (name) => {
-    const box = '[data-sec=groups] .kvr-pills';
+    const box = '[data-sec=content] .kvr-pills';
     for (const p of await page.$$(box + ' .kvr-pill.kvr-on')) await p.click();
     if (name) await page.click(`${box} .kvr-pill:text-is("${name}")`);
   };
@@ -198,39 +198,42 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   await page.click('text=Skann innhold (synlige)');
   await page.waitForFunction(() => /Ferdig\. Skannet/.test(document.getElementById('kvr-panel').innerText), null, { timeout: 15000 });
   assert.match(await page.textContent('#kvr-panel'), /Skannet 5/);
-  await page.selectOption('.kvr-f:has-text("Pant (krever") select', 'return');
+  await tab('Filter');   // innholdsfiltrene ligger under Filtrer
+  await page.selectOption('select[aria-label="Pant"]', 'return');
   assert.deepStrictEqual(await vis(), ['t-1']);
-  await page.selectOption('.kvr-f:has-text("Pant (krever") select', 'sale');
+  await page.selectOption('select[aria-label="Pant"]', 'sale');
   assert.deepStrictEqual(await vis(), ['t-3']);
-  const dsel = (v) => page.selectOption('.kvr-f:has-text("Rabatt (krever") select', v);
+  const dsel = (v) => page.selectOption('select[aria-label="Rabatt"]', v);
   await dsel('noreason'); assert.deepStrictEqual(await vis(), ['t-3']);
   assert.match(await page.innerText('.kvr-chipsrow'), /Rabatt: uten årsak/);
   await dsel('coupon'); assert.deepStrictEqual(await vis(), ['t-3']);
   await dsel('reason'); assert.deepStrictEqual(await vis(), []);
   await dsel('any'); assert.deepStrictEqual(await vis(), ['t-3']);
   await wipe();
-  assert.strictEqual(await page.inputValue('.kvr-f:has-text("Rabatt (krever") select'), '');
+  assert.strictEqual(await page.inputValue('select[aria-label="Rabatt"]'), '');
 
   // varevarsøk og varegrupper
   await tab('Filter');
   await page.fill('input[placeholder="EAN eller varenavn (skannede)"]', 'banan');
   assert.deepStrictEqual(await vis(), ['t-5']);
   await wipe();
-  await tab('Innhold');
   await grp('Tobakk'); assert.deepStrictEqual(await vis(), ['t-3']);
   await grp('Meieri'); assert.deepStrictEqual(await vis(), ['t-4']);
   await grp('Frukt'); assert.deepStrictEqual(await vis(), ['t-5']);
   await grp(''); await wipe();
-  // lær opp: REGAL HVETEMEL uten gruppe -> Bakeri
+  // lær opp: REGAL HVETEMEL uten gruppe -> Bakeri (varer uten gruppe ligger under Skann)
+  await tab('Innhold');
   assert.match(await page.innerText('#kvr-panel'), /REGAL HVETEMEL 1KG/);
   await page.click('.kvr-um button:text-is("Legg til")');
   assert.match(await page.innerText('#kvr-panel'), /REGAL HVETEMEL 1KG/, 'uten valgt gruppe skjer ingenting');
   await page.selectOption('.kvr-um select', 'Bakeri');
   await page.click('.kvr-um button:text-is("Legg til")');
+  await tab('Filter');
   await grp('Bakeri'); assert.deepStrictEqual(await vis(), ['t-4']);
   await grp(''); await wipe();
   await page.waitForTimeout(300);
   assert.ok((await idbGet('kv', 'kvr.rules.v1')).find(r => r.name === 'Bakeri').include.includes('REGAL HVETEMEL 1KG'));
+  await tab('Innhold');
   await page.click('button:text-is("Velg alle")');
   assert.match(await page.innerText('.kvr-table'), /Tobakk/);
 
@@ -264,8 +267,9 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   // skanning via visningsfeltet
   await tab('Innhold');
   await page.click('text=Tøm cache');
+  await tab('Filter');
   // skanne-fella: filter som krever skanning før noe er skannet skjuler alt, men viser hva som mangler
-  await page.selectOption('.kvr-f:has-text("Pant (krever") select', 'sale');
+  await page.selectOption('select[aria-label="Pant"]', 'sale');
   assert.deepStrictEqual(await vis(), []);
   assert.match(await page.innerText('.kvr-scanwarn'), /5 kvitteringer er ikke skannet/);
   assert.match(await page.innerText('.kvr-scanrow'), /Skannet 0 av 5/);

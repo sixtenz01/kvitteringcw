@@ -91,16 +91,18 @@
 
 <h3 id="filtrer">Filtrer</h3>
 {{shots:filtrer-a,filtrer-b}}
+{{shot:filtrer-c}}
+<p>Alle filtre ligger samlet under Filtrer. Filtre som leser innholdet på bongene er merket <em>skanning</em>: de krever at bongene er skannet.</p>
 <p>Filtrene virker på bongene som allerede er listet. Ingenting hentes på nytt. Alle valg du gjør vises som piller under tallene øverst. Klikk <strong>✕</strong> på en pille for å fjerne den, eller <strong>Nullstill alt</strong> for å tømme alt, også valg og markeringer.</p>
 <div class="tw"><table>
   <thead><tr><th>Kort</th><th>Innhold</th></tr></thead>
   <tbody>
-    <tr><td>Butikk</td><td>Søkbar liste med navn og antall bonger. «Velg viste» krysser av alle i søket, «Fjern butikkvalg» tømmer.</td></tr>
+    <tr><td>Butikk</td><td>Søkbar liste med butikknummer og navn («1005 – Coop Mega Kolbotn») og antall bonger. Navnet hentes fra CWs butikkliste, ellers fra BUTIKK-kolonnen i listen. Mangler navnet, kan du skrive det inn under «Gi butikken navn», og det vises da overalt. «Velg viste» krysser av alle i søket, «Fjern butikkvalg» tømmer.</td></tr>
     <tr><td>Dato og tid</td><td>Hurtigknapper (I dag, I går, Siste 24 t, Natt 00–06, Dag 06–18, Kveld 18–24) og fritt valg av dato og klokkeslett. Tidsrom over midnatt fungerer (for eksempel 22:00 til 02:00).</td></tr>
     <tr><td>Kasse, kasserer og type</td><td>Piller du slår av og på. Type er 1 Salg og 2 Kassaoppgjør.</td></tr>
-    <tr><td>Sum, medlem, bong og vare</td><td>Sum fra og til, bare negative summer (retur/panteretur), medlemssøk, bare med medlem, bare mulige duplikater (samme beløp, butikk, kasse og tid), bongnummer, vare (krever skanning) og notat/status.</td></tr>
-    <tr><td>Sortering</td><td>Standard, sum høyest eller lavest først, nyeste eller eldste først.</td></tr>
-    <tr><td>Lagrede filtre</td><td>Gi filteret et navn og trykk Lagre. Last eller slett fra rullegardinen.</td></tr>
+    <tr><td>Sum, medlem og bong</td><td>Sum fra og til, bare negative summer (retur/panteretur), medlemssøk, bare med medlem, bare mulige duplikater (samme beløp, butikk, kasse og tid), bongnummer og notat/status.</td></tr>
+    <tr><td>Innhold <em>skanning</em></td><td>Vare (EAN eller navn), varegruppe, pant (har pant eller panteretur, har pant, har panteretur), rabatt (har rabatt, uten årsak, med årsak, har kupong, eller én bestemt årsak), rabatt-prosent fra og til (for eksempel 40 til 40 for alle med 40 % rabatt) og spesialbetaling (eget forbruk, internt forbruk, utbetaling, finansiering, sjekk, eller alle ordene i listen under Innstillinger → Spesialbetalinger).</td></tr>
+    <tr><td>Sortering og lagrede filtre</td><td>Standard, sum høyest eller lavest først, nyeste eller eldste først. Gi filteret et navn og trykk Lagre; last eller slett fra rullegardinen.</td></tr>
   </tbody></table></div>
 
 <h3 id="skann">Skann</h3>
@@ -113,14 +115,10 @@
     <tr><td>Stopp</td><td>Avbryter skanningen. Det som er ferdig beholdes.</td></tr>
     <tr><td>Prøv feilede på nytt</td><td>Kjører bare de bongene som feilet sist.</td></tr>
     <tr><td>Tøm cache</td><td>Sletter alt skannet innhold og alle avviksmarkeringer. Innstillinger og notater beholdes.</td></tr>
-    <tr><td>Pant</td><td>Filter: har pant eller panteretur, har pant (salg), har panteretur. Krever skanning.</td></tr>
-    <tr><td>Rabatt</td><td>Filter: har rabatt, uten årsak, med årsak, har kupong, eller én bestemt årsak. Krever skanning.</td></tr>
-    <tr><td>Rabatt % fra / til</td><td>Filter: viser bonger med minst én rabattlinje i prosentintervallet, for eksempel 40 til 40 for alle med 40 % rabatt. Krever skanning.</td></tr>
-    <tr><td>Spesialbetaling</td><td>Filter: eget forbruk, internt forbruk, utbetaling, finansiering, sjekk eller alle ordene i listen. Søker i betalingsmåter, linjenavn og tekstlinjer. Ordlisten endrer du under Innstillinger → Spesialbetalinger. Krever skanning.</td></tr>
-    <tr><td>Varegrupper</td><td>Gruppér varer med nøkkelord (se under).</td></tr>
+    <tr><td>Varegrupper</td><td>Gruppér varer med nøkkelord (se under). Filteret på varegruppe ligger under Filtrer → Innhold.</td></tr>
   </tbody></table></div>
 <div class="callout"><b>Den gule stripen</b>
-  <p>Hvis du bruker et filter som krever skanning (pant, rabatt, spesialbetaling, vare eller varegruppe) og noen bonger ikke er skannet, vises en gul stripe med antallet som er skjult. <strong>Skann nå</strong> løser det. Statuslinjen øverst viser alltid «Skannet X av Y».</p>
+  <p>Hvis du bruker et filter merket <em>skanning</em> (pant, rabatt, spesialbetaling, vare eller varegruppe) og noen bonger ikke er skannet, vises en gul stripe med antallet som er skjult. <strong>Skann nå</strong> løser det. Statuslinjen øverst viser alltid «Skannet X av Y».</p>
 </div>
 <h4>Varegrupper</h4>
 <p>Pluginen har en startpakke med grupper (Pant, Tobakk, Brus, Energidrikk, Frukt, Grønt, Bakeri, Meieri, Kjøtt og pålegg, Ferdigmat, Snacks og godteri, Kaffe og te). Grupperingen bygger på nøkkelord i varenavnet og skjer bare i pluginen, siden Lindbak ikke har varegrupper på kvitteringen.</p>
@@ -274,10 +272,10 @@
     <tr><td>Rabatt uten treff på andre salg</td><td>En vare med minst 30 % rabatt der ingen andre bonger i butikken samme dag har samme vare med samme rabatt. Samme rabatt på andre dager står i forklaringen. Kan være feil eller underslag. Standard er bare rabatt uten årsak.</td></tr>
     <tr><td>Kampanje</td><td>Samme vare med samme rabatt på minst 10 bonger samme dag og butikk er en sentral kampanje, og en dag der minst 40 % av minst 30 salg har rabatt er en kampanjedag. Rabattene flagges da ikke.</td></tr>
   </tbody></table></div>
-<p>Du kan også søke etter rabatt under Skann: skriv for eksempel 40 i både «Rabatt % fra» og «til» for å se alle bonger med 40 % rabatt. Kortet Rabatter og kuponger viser de mulige kampanjene.</p>
+<p>Du kan også søke etter rabatt under Filtrer → Innhold: skriv for eksempel 40 i både «Rabatt % fra» og «til» for å se alle bonger med 40 % rabatt. Kortet Rabatter og kuponger viser de mulige kampanjene.</p>
 <h3>Hvor du finner rabatt</h3>
 <ul>
-  <li><strong>Filter:</strong> Skann → Rabatt (krever skanning).</li>
+  <li><strong>Filter:</strong> Filtrer → Innhold → Rabatt og Rabatt % fra/til (krever skanning).</li>
   <li><strong>Analyse → Detaljer → Rabatter og kuponger:</strong> tabell per kasserer, tabellen «Rabatt per årsak» (klikk en årsak for å filtrere listen), matrisen «Kasserer × årsak», de vanligste kupongene og tabellen «Mulige sentrale kampanjer» (vare og rabatt på mange bonger, og kampanjedager).</li>
   <li><strong>Egne regler og Fokus:</strong> rabatt, prosent, årsak og kuponger finnes som felt.</li>
 </ul>
@@ -335,7 +333,7 @@
   <li><strong>Mange makulerte varelinjer:</strong> kassereren markeres ved minst 5 slettede linjer.</li>
 </ul>
 <h3>Spesialbetalinger</h3>
-<p>Ordene <em>eget forbruk</em>, <em>internt forbruk</em>, <em>utbetaling</em>, <em>finansiering</em> og <em>sjekk</em> søkes i betalingsmåter, linjenavn og tekstlinjer. De samme ordene finnes som søk under Skann → Spesialbetaling, og hver bong med treff flagges som «Spesialbetaling på bong». Ordlisten kan utvides under Innstillinger.</p>
+<p>Ordene <em>eget forbruk</em>, <em>internt forbruk</em>, <em>utbetaling</em>, <em>finansiering</em> og <em>sjekk</em> søkes i betalingsmåter, linjenavn og tekstlinjer. De samme ordene finnes som søk under Filtrer → Innhold → Spesialbetaling, og hver bong med treff flagges som «Spesialbetaling på bong». Ordlisten kan utvides under Innstillinger.</p>
 <h3>Spør pris</h3>
 <p>En vare som er lagt inn med «spør pris» sammenlignes med medianprisen for samme vare (EAN) samme dag i butikken. Linjen under «SPØR PRIS» leses som varen. Avviker prisen med minst 5 %, flagges bongen. Kassereren markeres ved minst 5 bonger med spør pris.</p>
 <h3>Returer på samme kort</h3>
