@@ -173,7 +173,7 @@ const mapOf = (pairs) => pairs.reduce((m, [it, s]) => (m[it.transactionId] = s, 
   const CODES = { KAFFE: EAN2, SMØR: EAN3, OST: EAN4, JUICE: '7038010000058' };
   const dl = (name, a, d, dp, dr) => ({ c: CODES[name] || EAN, n: name, a, d, dp, dr });
   const day = (id, time, cashier, lines, d) => { const it = bong({ transactionId: id, endDateTime: (d || '2026-10-05') + ' ' + time, cashierNumber: cashier }); return [it, sc(lines, { v: 6, disc: lines.reduce((x, l) => x + (l.d || 0), 0), discN: lines.filter((l) => l.d).length, discNR: lines.filter((l) => l.d && !l.dr).length, discNRsum: 0, coupons: [] })]; };
-  const base = { discPct: '', discHiFrom: '', discMatchPct: '', campN: '', campDay: '', discWatch: '', discCash: '' };
+  const base = { discPct: '', discHiFrom: '', discMatchPct: '', campBongs: '', campDay: '', discWatch: '', discCash: '' };
   const cfgOf = (o) => Object.assign(CT(), base, o);
   // høy rabatt
   const h1 = day('h-1', '10:00', 'A', [dl('MELK', 3, 7, 70)]), h2 = day('h-2', '10:10', 'A', [dl('MELK', 0, 10, 100, '1')]), h3 = day('h-3', '10:20', 'A', [dl('MELK', 4, 6, 60)]), h4 = day('h-4', '10:30', 'A', [dl('MELK', 2, 10)]);
@@ -201,22 +201,45 @@ const mapOf = (pairs) => pairs.reduce((m, [it, s]) => (m[it.transactionId] = s, 
   assert.match(nf.find((f) => f.ids[0] === 'm-4').detail, /Ingen andre bonger i butikken samme dag/);
   assert.ok(L.discounts(mit, mm, cfgOf({ discMatchPct: '30', discMatchNR: '' })).findings.some((f) => f.ids[0] === 'm-6' && f.code === 'discNoMatch'), 'alle rabatter når «bare uten årsak» er av');
   assert.strictEqual(L.discounts(mit, mm, cfgOf({ discMatchPct: '' })).findings.length, 0);
-  // kampanje: samme vare og rabatt på mange bonger samme dag undertrykker flagg
-  const camp = Array.from({ length: 12 }, (_, i) => day('c-' + i, '12:' + (10 + i), 'A' + (i % 3), [dl('KAMPANJEVARE', 12, 8, 40)]));
+  // mulig sentral kampanje: samme vare og rabatt hos flere kasserere. Bongen tas med, med notat og spørsmål.
+  const camp = Array.from({ length: 12 }, (_, i) => day('c-' + i, '12:' + (10 + i), 'A' + (i % 3), [dl('KAMPANJEVARE', 12, 8, 40)], i < 6 ? '2026-10-05' : '2026-10-06'));
   const cit = camp.map((x) => x[0]), cm = mapOf(camp);
-  const noCamp = L.discounts(cit, cm, cfgOf({ discMatchPct: '30', discPct: '30', discHiFrom: '30', discHiTo: '50' }));
-  assert.ok(noCamp.findings.length > 0, 'uten kampanjeregel flagges vanlige rabatter');
-  const withCamp = L.discounts(cit, cm, cfgOf({ discMatchPct: '30', discPct: '30', discHiFrom: '30', discHiTo: '50', campN: '10' }));
-  assert.strictEqual(withCamp.findings.filter((f) => /^disc(NoMatch|High|NoReason)$/.test(f.code)).length, 0, 'kampanje undertrykker alle tre');
-  assert.deepStrictEqual([withCamp.camp.items.length, withCamp.camp.items[0].n, withCamp.camp.items[0].rate, withCamp.camp.skipped], [1, 12, 40, 12]);
-  // kampanjedag: mange bonger med rabatt samme dag (minst 30 salg)
+  const three = { discMatchPct: '30', discPct: '30', discHiFrom: '30', discHiTo: '50' };
+  const off = L.discounts(cit, cm, cfgOf(three));
+  assert.ok(off.findings.length > 0 && off.findings.every((f) => !f.camp && !/Kan være sentral kampanje/.test(f.detail)), 'uten kampanjeregel: ingen notat');
+  const asked = L.discounts(cit, cm, cfgOf(Object.assign({ campBongs: '3', campCashiers: '2' }, three)));
+  const nr = asked.findings.filter((f) => f.code === 'discNoReason');
+  assert.strictEqual(nr.length, 12, 'bongene tas fortsatt med');
+  assert.ok(nr.every((f) => f.flag && f.camp.length === 1 && f.camp[0].key === L.campKey(EAN, 40)));
+  assert.match(nr[0].detail, /Kan være sentral kampanje: «KAMPANJEVARE» med 40 % rabatt er på 12 bonger hos 3 kasserere\. Bekreft eller avvis\./);
+  assert.deepStrictEqual([asked.camp.items.length, asked.camp.items[0].n, asked.camp.items[0].cashierN, asked.camp.items[0].dayN, asked.camp.pending, asked.camp.confirmed], [1, 12, 3, 2, 1, 0]);
+  assert.ok(asked.findings.filter((f) => /^disc(High|NoReason)$/.test(f.code)).every((f) => f.camp), 'alle tre testene får notatet');
+  // brukeren bekrefter: rabatten flagges ikke lenger, og telles ikke mot kassereren
+  const yes = L.discounts(cit, cm, cfgOf(Object.assign({ campBongs: '3', campCashiers: '2' }, three)), cit, { [L.campKey(EAN, 40)]: 'kampanje' });
+  assert.strictEqual(yes.findings.filter((f) => /^disc(NoMatch|High|NoReason)$/.test(f.code)).length, 0);
+  assert.deepStrictEqual([yes.camp.pending, yes.camp.confirmed, yes.camp.skipped >= 12, yes.total.withNR], [0, 1, true, 0]);
+  // brukeren avviser: flagges som vanlig, uten notat
+  const no = L.discounts(cit, cm, cfgOf(Object.assign({ campBongs: '3', campCashiers: '2' }, three)), cit, { [L.campKey(EAN, 40)]: 'ikke' });
+  assert.ok(no.findings.length > 0 && no.findings.every((f) => !f.camp && !/Kan være sentral kampanje/.test(f.detail)));
+  assert.deepStrictEqual([no.camp.pending, no.camp.denied], [0, 1]);
+  assert.strictEqual(no.camp.items[0].possible, false);
+  // én kasserer alene er ikke kampanje
+  const solo = Array.from({ length: 12 }, (_, i) => day('s-' + i, '12:' + (10 + i), 'A', [dl('SOLOVARE', 12, 8, 40)]));
+  const sr = L.discounts(solo.map((x) => x[0]), mapOf(solo), cfgOf(Object.assign({ campBongs: '3', campCashiers: '2' }, three)));
+  assert.ok(sr.findings.length > 0 && sr.findings.every((f) => !f.camp) && sr.camp.items.length === 0, 'samme vare og rabatt hos bare én kasserer gir ingen kampanje');
+  // for få bonger
+  assert.strictEqual(L.discounts(cit.slice(0, 2), cm, cfgOf(Object.assign({ campBongs: '3', campCashiers: '2' }, three))).camp.items.length, 0);
+  // svar på vare som ikke finnes i dataene kan angres
+  assert.deepStrictEqual(L.discounts([], {}, cfgOf({}), [], { [L.campKey(EAN2, 30)]: 'kampanje' }).camp.items.map((e) => [e.c, e.rate, e.status, e.n]), [[EAN2, 30, 'kampanje', 0]]);
+  // kampanjedag: mange bonger med rabatt samme dag (minst 30 salg) gir notat, ikke skjuling
   const dayMany = Array.from({ length: 40 }, (_, i) => day('k-' + i, '09:' + (10 + (i % 50)), 'A', i % 2 ? [dl('VARE' + i, 6, 4, 40)] : [{ c: EAN2, n: 'X', a: 5 }]));
   dayMany.forEach((x, i) => { if (i % 2) x[1].items[0].c = String(7038010100000 + i); });
   const dit = dayMany.map((x) => x[0]), dm = mapOf(dayMany);
   const dflag = L.discounts(dit, dm, cfgOf({ discPct: '30', campDay: '' }));
-  assert.ok(dflag.findings.some((f) => f.code === 'discNoReason'));
+  assert.ok(dflag.findings.some((f) => f.code === 'discNoReason') && dflag.findings.every((f) => !/kampanjedag/.test(f.detail)));
   const dCamp = L.discounts(dit, dm, cfgOf({ discPct: '30', campDay: '40' }));
-  assert.strictEqual(dCamp.findings.filter((f) => f.code === 'discNoReason').length, 0, '50 % av bongene har rabatt: kampanjedag');
+  assert.strictEqual(dCamp.findings.filter((f) => f.code === 'discNoReason').length, 20, 'bongene tas fortsatt med');
+  assert.ok(dCamp.findings.filter((f) => f.code === 'discNoReason').every((f) => /50 % av salgene i butikken denne dagen har rabatt, så det kan være en kampanjedag/.test(f.detail)));
   assert.strictEqual(dCamp.camp.days.length, 1);
   assert.strictEqual(dCamp.camp.days[0].n, 40);
   assert.strictEqual(L.discounts(dit.slice(0, 20), dm, cfgOf({ discPct: '30', campDay: '40' })).camp.days.length, 0, 'under 30 salg');
@@ -308,7 +331,7 @@ const mapOf = (pairs) => pairs.reduce((m, [it, s]) => (m[it.transactionId] = s, 
   assert.strictEqual(L.groupForReason('Pantelapp slettet'), 'lapp');
   assert.strictEqual(L.groupForReason('Høy rabattprosent'), 'disc');
   const dc = L.defaultControl();
-  assert.deepStrictEqual([dc.lappManualMin, dc.lappReuseMin, dc.voidResaleMin, dc.discHiFrom, dc.discHiTo, dc.campN, dc.campDay, dc.askDevPct, dc.cardRetN], ['50', '60', '120', '70', '100', '10', '40', '5', '3']);
+  assert.deepStrictEqual([dc.lappManualMin, dc.lappReuseMin, dc.voidResaleMin, dc.discHiFrom, dc.discHiTo, dc.campBongs, dc.campCashiers, dc.campDay, dc.askDevPct, dc.cardRetN], ['50', '60', '120', '70', '100', '3', '2', '40', '5', '3']);
   assert.strictEqual(dc.specialWords, 'eget forbruk, internt forbruk, utbetaling, finansiering, sjekk');
   assert.ok(L.rrs(L.riskScore(['Pantelapp slettet', 'Varelinjer slettet, pant utbetalt kontant'])) > 50);
 }

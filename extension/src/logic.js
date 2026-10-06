@@ -665,6 +665,15 @@
     return rule.conds.every(function (c) { return condTrue(c, item, scan, groups); });
   }
 
+  // Brukerens svar om sentral kampanje: «ean|prosent» → 'kampanje' | 'ikke'.
+  function sanitizeCamp(raw) {
+    var out = {};
+    if (raw && typeof raw === 'object') Object.keys(raw).forEach(function (k) {
+      if (/^\d{8,14}\|\d{1,3}$/.test(k) && (raw[k] === 'kampanje' || raw[k] === 'ikke')) out[k] = raw[k];
+    });
+    return out;
+  }
+
   function sanitizeCustom(raw) {
     if (!Array.isArray(raw)) return [];
     return raw.filter(function (r) { return r && typeof r.name === 'string'; }).map(function (r, i) {
@@ -928,7 +937,7 @@
     ['specialWords', 'Spesialbetaling: ord (komma, tom = av)', DEFAULT_SPECIAL], ['specialN', 'Spesialbetaling: kasserer ved ≥ antall bonger (tom = av)', '3'],
     ['discHiFrom', 'Høy rabatt fra % (tom = av)', '70'], ['discHiTo', 'Høy rabatt til %', '100'],
     ['discMatchPct', 'Rabatt uten treff på andre salg: fra % (tom = av)', '30'], ['discMatchNR', 'Treff-test: bare rabatt uten årsak (tom = alle)', '1'],
-    ['campN', 'Kampanje: samme vare og rabatt på ≥ antall bonger (tom = av)', '10'], ['campDay', 'Kampanjedag: andel bonger med rabatt ≥ % (tom = av)', '40'],
+    ['campBongs', 'Mulig kampanje: samme vare og rabatt på ≥ antall bonger (tom = av)', '3'], ['campCashiers', 'Mulig kampanje: hos ≥ antall kasserere', '2'], ['campDay', 'Kampanjedag: andel bonger med rabatt ≥ % (tom = av)', '40'],
     ['askDevPct', 'Spør pris avviker fra dagens salg ≥ % (tom = av)', '5'], ['askMinN', 'Spør pris: minst antall salg av varen samme dag', '3'], ['askN', 'Spør pris: kasserer ved ≥ antall bonger (tom = av)', '5'],
     ['cardRetN', 'Returer på samme kort ≥ antall (tom = av)', '3'], ['cardRetDays', 'Returer på samme kort innen dager', '30'],
     ['manualWords', 'Manuell kvittering: ord (komma, tom = av)', 'manuell kvittering, manuell bong, til gode, tilgode'], ['manualDays', 'Manuell kvittering: match innen dager', '3']
@@ -994,8 +1003,9 @@
       sf('discHiTo', 'ctl', 'num', 'Høy rabatt: overvåk til', '%'),
       sf('discMatchPct', 'ctl', 'num', 'Rabatt uten treff på andre salg: fra', '%', 'Varen har rabatt på denne bongen, men ingen andre bonger i butikken samme dag har varen med samme rabatt.', true),
       sf('discMatchNR', 'ctl', 'flag', 'Treff-testen gjelder bare rabatt uten årsak', '', 'Av = alle rabatter, også med årsak.'),
-      sf('campN', 'ctl', 'num', 'Kampanje: samme vare og rabatt på minst', 'bonger', 'Samme butikk og dag. Slike rabatter regnes som sentral kampanje og flagges ikke.', true),
-      sf('campDay', 'ctl', 'num', 'Kampanjedag: andel bonger med rabatt over', '%', 'Minst 30 salg den dagen. Rabattflagg uten årsak undertrykkes på kampanjedager.', true)
+      sf('campBongs', 'ctl', 'num', 'Mulig kampanje: samme vare og rabatt på minst', 'bonger', 'Over alle innlastede dager og butikker. Bongen flagges med notat om mulig sentral kampanje, og du blir spurt om det stemmer.', true),
+      sf('campCashiers', 'ctl', 'num', 'Mulig kampanje: hos minst', 'kasserere', 'Samme vare og rabatt hos flere kasserere tyder på kampanje fra sentralt hold, ikke på én person.'),
+      sf('campDay', 'ctl', 'num', 'Kampanjedag: andel bonger med rabatt over', '%', 'Minst 30 salg den dagen. Rabatter den dagen får notat om mulig kampanjedag.', true)
     ], weights: ['Rabatt uten årsak', 'Mange rabatter uten årsak', 'Rabatt med overvåket årsak', 'Mange rabatter med overvåket årsak', 'Høy rabattprosent', 'Rabatt uten treff på andre salg'] },
     { id: 'member', title: 'Medlemsnummer', text: 'Misbruk av medlemsnummer, for eksempel at en ansatt taster sitt eget på kunders kjøp. Bruker bare listen fra CW og trenger ikke skanning. Gjelder alle innlastede bonger i valgte butikker.', fields: [
       sf('memberStoreMin', 'ctl', 'num', 'Samme medlemsnr i to butikker innen', 'min', 'Samme nummer i ulike butikker så tett i tid at det er usannsynlig.', true),
@@ -1889,9 +1899,13 @@
     return base > 0 ? round2(l.d / base * 100) : null;
   }
 
-  // Sentral kampanje: samme vare med samme rabatt på mange bonger samme dag og butikk, eller en dag der svært mange salg har rabatt.
-  function campaigns(pop, scanMap, cfg) {
-    var nItem = cnum(cfg.campN, null), dShare = cnum(cfg.campDay, null), dMin = 30;
+  // Mulig sentral kampanje: samme vare (EAN) med samme rabatt (avrundet %) på flere bonger hos flere kasserere, over alle innlastede
+  // dager og butikker. Bongen flagges som før, men får notat om mulig kampanje. Brukerens svar avgjør: decisions[nøkkel] er
+  // «kampanje» (rabatten flagges ikke lenger) eller «ikke» (aldri notat om kampanje). En dag der svært mange salg har rabatt får også notat.
+  function campKey(c, rate) { return c + '|' + Math.round(rate); }
+
+  function campaigns(pop, scanMap, cfg, decisions) {
+    var nB = cnum(cfg.campBongs, null), nC = cnum(cfg.campCashiers, 2), dShare = cnum(cfg.campDay, null), dMin = 30, dec = decisions || {};
     var item = {}, day = {};
     (pop || []).forEach(function (it) {
       if (!isSale(it)) return;
@@ -1900,43 +1914,55 @@
       var dk = it.storeNumber + '|' + dayOf(it), d = day[dk] || (day[dk] = { store: it.storeNumber, day: dayOf(it), n: 0, withDisc: 0 });
       d.n++;
       if (sc.discN) d.withDisc++;
-      if (nItem === null) return;
       sc.items.forEach(function (l) {
         var r = discRate(l);
         if (r === null || !isEan(l.c)) return;
-        var k = dk + '|' + l.c + '|' + Math.round(r);
-        var e = item[k] || (item[k] = { store: it.storeNumber, day: dayOf(it), c: l.c, name: l.n, rate: Math.round(r), bongs: {} });
-        e.bongs[it.transactionId] = true;
+        var k = campKey(l.c, r), e = item[k] || (item[k] = { key: k, c: l.c, name: l.n, rate: Math.round(r), bongs: {}, cashiers: {}, stores: {}, days: {} });
+        e.bongs[it.transactionId] = 1; e.cashiers[it.cashierNumber] = 1; e.stores[it.storeNumber] = 1; e.days[dayOf(it)] = 1;
       });
     });
-    var itemRows = [], dayRows = [];
-    Object.keys(item).forEach(function (k) { var e = item[k]; e.n = Object.keys(e.bongs).length; delete e.bongs; if (nItem !== null && e.n >= nItem) itemRows.push(e); });
-    Object.keys(day).forEach(function (k) {
+    var rows = Object.keys(item).map(function (k) {
+      var e = item[k];
+      e.n = Object.keys(e.bongs).length; e.cashierN = Object.keys(e.cashiers).length; e.storeN = Object.keys(e.stores).length; e.dayN = Object.keys(e.days).length;
+      delete e.bongs; delete e.cashiers; delete e.stores; delete e.days;
+      e.status = dec[k] || '';
+      e.possible = e.status !== 'ikke' && nB !== null && e.n >= nB && e.cashierN >= nC;
+      return e;
+    });
+    // svar på varer som ikke finnes i dataene nå, så de kan angres
+    Object.keys(dec).forEach(function (k) { if (!item[k]) rows.push({ key: k, c: k.split('|')[0], name: '', rate: Number(k.split('|')[1]), n: 0, cashierN: 0, storeN: 0, dayN: 0, status: dec[k], possible: false }); });
+    var itemRows = rows.filter(function (e) { return e.possible || e.status; })
+      .sort(function (a, b) { return (a.status ? 1 : 0) - (b.status ? 1 : 0) || b.n - a.n || String(a.c).localeCompare(String(b.c)); });
+    var dayRows = Object.keys(day).map(function (k) {
       var d = day[k];
       d.share = d.n ? d.withDisc / d.n : 0;
       d.flag = dShare !== null && d.n >= dMin && d.share * 100 >= dShare;
-      if (d.flag) dayRows.push(d);
-    });
-    itemRows.sort(function (a, b) { return b.n - a.n || String(a.c).localeCompare(String(b.c)); });
-    dayRows.sort(function (a, b) { return a.day < b.day ? -1 : a.day > b.day ? 1 : numCmp(a.store, b.store); });
+      return d;
+    }).filter(function (d) { return d.flag; }).sort(function (a, b) { return a.day < b.day ? -1 : a.day > b.day ? 1 : numCmp(a.store, b.store); });
+    var byKey = {};
+    rows.forEach(function (e) { byKey[e.key] = e; });
     return {
       itemRows: itemRows, dayRows: dayRows,
-      day: function (it) { var d = day[it.storeNumber + '|' + dayOf(it)]; return !!(d && d.flag); },
+      day: function (it) { var d = day[it.storeNumber + '|' + dayOf(it)]; return d && d.flag ? d : null; },
+      // '' = ingen kampanje, 'mulig' = kan være kampanje (ikke avgjort), 'kampanje' = bekreftet av brukeren
       line: function (it, l) {
         var r = discRate(l);
-        if (r === null || nItem === null) return false;
-        var e = item[it.storeNumber + '|' + dayOf(it) + '|' + l.c + '|' + Math.round(r)];
-        return !!(e && e.n >= nItem);
-      }
+        if (r === null || !isEan(l.c)) return '';
+        var k = campKey(l.c, r);
+        if (dec[k] === 'kampanje') return 'kampanje';
+        var e = byKey[k];
+        return e && e.possible ? 'mulig' : '';
+      },
+      entry: function (l) { var r = discRate(l); return r === null ? null : byKey[campKey(l.c, r)] || null; }
     };
   }
 
-  function discounts(items, scanMap, cfg, popArg) {
+  function discounts(items, scanMap, cfg, popArg, decisions) {
     var pctMin = cnum(cfg.discPct, null), cashCmp = hasNum(cfg.discCash), f = cnum(cfg.profFactor, 1.5), minN = cnum(cfg.profMin, 5);
     var watch = watchReasons(cfg), wPct = cnum(cfg.discWatchPct, 0), wKr = cnum(cfg.discWatchKr, 0), wN = cnum(cfg.discWatchN, null);
     var fresh = function () { return { n: 0, withDisc: 0, disc: 0, withNR: 0, nr: 0, withCpn: 0, cpn: 0, cpnSum: 0, withW: 0 }; };
     var acc = {}, tot = fresh(), camps = {}, findings = [], scannedSales = 0, sales = 0, reasons = {}, matrix = {};
-    var pop = popArg || items, camp = campaigns(pop, scanMap, cfg);
+    var pop = popArg || items, camp = campaigns(pop, scanMap, cfg, decisions);
     var hiFrom = cnum(cfg.discHiFrom, null), hiTo = cnum(cfg.discHiTo, 100), matchPct = cnum(cfg.discMatchPct, null), matchNR = hasNum(cfg.discMatchNR);
     var rateIdx = {};
     if (matchPct !== null) {
@@ -1958,10 +1984,13 @@
       if (!hasDisc(sc)) return;
       scannedSales++;
       var a = acc[it.cashierNumber] || (acc[it.cashierNumber] = fresh());
+      // rabatt uten årsak som brukeren har bekreftet som kampanje, teller ikke mot kassereren
+      var nrL = sc.items.filter(function (l) { return l.d && !l.dr && camp.line(it, l) !== 'kampanje'; });
+      var nrSum = round2(nrL.reduce(function (x, l) { return x + l.d; }, 0));
       [a, tot].forEach(function (x) {
         x.n++;
         if (sc.discN) { x.withDisc++; x.disc += sc.disc; }
-        if (sc.discNR) { x.withNR++; x.nr += sc.discNRsum; }
+        if (nrL.length) { x.withNR++; x.nr += nrSum; }
         if (sc.coupons.length) { x.withCpn++; x.cpn += sc.coupons.length; x.cpnSum += couponSum(sc); }
       });
       sc.items.forEach(function (l) {
@@ -1987,37 +2016,53 @@
             ids: [it.transactionId] });
         }
       }
-      var inCamp = function (l) { return camp.day(it) || camp.line(it, l); };
+      // bekreftet kampanje: rabatten flagges ikke. Mulig kampanje (ikke avgjort) eller kampanjedag: flagges med notat og spørsmål.
+      var sure = function (l) { return camp.line(it, l) === 'kampanje'; };
+      var dayHit = camp.day(it);
+      var noteFor = function (lines) {
+        var keys = [], parts = [];
+        lines.forEach(function (l) {
+          if (camp.line(it, l) !== 'mulig') return;
+          var e = camp.entry(l);
+          if (!e || keys.some(function (k) { return k.key === e.key; })) return;
+          keys.push({ key: e.key, c: e.c, name: e.name, rate: e.rate, n: e.n, cashiers: e.cashierN, stores: e.storeN });
+          parts.push('«' + e.name + '» med ' + e.rate + ' % rabatt er på ' + e.n + ' bonger hos ' + e.cashierN + ' kasserere' + (e.storeN > 1 ? ' i ' + e.storeN + ' butikker' : ''));
+        });
+        var txt = parts.length ? ' Kan være sentral kampanje: ' + parts.join('; ') + '. Bekreft eller avvis.' : '';
+        if (dayHit) txt += ' ' + Math.round(dayHit.share * 100) + ' % av salgene i butikken denne dagen har rabatt, så det kan være en kampanjedag.';
+        return { keys: keys, text: txt };
+      };
+      var withCamp = function (f, lines) { var n = noteFor(lines); if (n.keys.length) f.camp = n.keys; f.detail += n.text; findings.push(f); };
       if (hiFrom !== null) {
         var hi = sc.items.filter(function (l) { var r = discRate(l); return r !== null && r >= hiFrom && r <= hiTo; });
-        var hiK = hi.filter(function (l) { return !inCamp(l); });
+        var hiK = hi.filter(function (l) { return !sure(l); });
         skipped += hi.length - hiK.length;
-        if (hiK.length) findings.push({ kind: 'Rabatt', code: 'discHigh', title: 'Høy rabattprosent', flag: true,
-          detail: whereText(it) + ': ' + hiK.map(function (l) { return l.n + ' −' + l.d + ' kr (' + String(discRate(l)).replace('.', ',') + ' %)' + (l.dr ? ', årsak ' + reasonName(l.dr) : ', uten årsak'); }).join(', ') + ' (grense ' + hiFrom + '–' + hiTo + ' %)',
-          ids: [it.transactionId] });
+        if (hiK.length) withCamp({ kind: 'Rabatt', code: 'discHigh', title: 'Høy rabattprosent', flag: true,
+          detail: whereText(it) + ': ' + hiK.map(function (l) { return l.n + ' −' + l.d + ' kr (' + String(discRate(l)).replace('.', ',') + ' %)' + (l.dr ? ', årsak ' + reasonName(l.dr) : ', uten årsak'); }).join(', ') + ' (grense ' + hiFrom + '–' + hiTo + ' %).',
+          ids: [it.transactionId] }, hiK);
       }
       if (matchPct !== null) {
-        var un = [];
+        var un = [], unLines = [];
         sc.items.forEach(function (l) {
           var r = discRate(l);
-          if (r === null || r < matchPct || !isEan(l.c) || (matchNR && l.dr) || inCamp(l)) return;
+          if (r === null || r < matchPct || !isEan(l.c) || (matchNR && l.dr) || sure(l)) return;
           var oth = (rateIdx[l.c] || []).filter(function (x) { return x.id !== it.transactionId && Math.abs(x.rate - r) <= 1; });
           if (oth.some(function (x) { return x.store === it.storeNumber && x.day === dayOf(it); })) return;
           var days = {};
           oth.forEach(function (x) { days[x.day] = true; });
+          unLines.push(l);
           un.push(l.n + ' −' + String(r).replace('.', ',') + ' % (' + (Object.keys(days).length ? 'samme rabatt på varen ' + Object.keys(days).length + (Object.keys(days).length === 1 ? ' annen dag' : ' andre dager') : 'ingen andre dager heller') + ')');
         });
-        if (un.length) findings.push({ kind: 'Rabatt', code: 'discNoMatch', title: 'Rabatt uten treff på andre salg', flag: true,
-          detail: whereText(it) + ': ' + un.join('; ') + '. Ingen andre bonger i butikken samme dag har varen med samme rabatt', ids: [it.transactionId] });
+        if (un.length) withCamp({ kind: 'Rabatt', code: 'discNoMatch', title: 'Rabatt uten treff på andre salg', flag: true,
+          detail: whereText(it) + ': ' + un.join('; ') + '. Ingen andre bonger i butikken samme dag har varen med samme rabatt.', ids: [it.transactionId] }, unLines);
       }
       if (pctMin !== null) {
-        var hits = sc.items.filter(function (l) { return l.d && !l.dr && (l.dp || 0) >= pctMin && !inCamp(l); });
-        if (hits.length) {
-          findings.push({ kind: 'Rabatt', code: 'discNoReason', title: 'Rabatt uten årsak', flag: true,
-            detail: 'Kasse ' + it.workstationNumber + ' ' + parseDT(it.endDateTime).time + ' kasserer ' + it.cashierNumber + ': ' +
-              hits.map(function (l) { return l.n + ' −' + l.d + ' kr (' + (l.dp || '?') + ' %)'; }).join(', ') + ' uten rabattårsak',
-            ids: [it.transactionId] });
-        }
+        var hits = sc.items.filter(function (l) { return l.d && !l.dr && (l.dp || 0) >= pctMin && !sure(l); });
+        skipped += sc.items.filter(function (l) { return l.d && !l.dr && (l.dp || 0) >= pctMin && sure(l); }).length;
+        if (hits.length) withCamp({ kind: 'Rabatt', code: 'discNoReason', title: 'Rabatt uten årsak', flag: true,
+          detail: 'Kasse ' + it.workstationNumber + ' ' + parseDT(it.endDateTime).time + ' kasserer ' + it.cashierNumber + ': ' +
+            hits.map(function (l) { return l.n + ' −' + l.d + ' kr (' + (l.dp || '?') + ' %)'; }).join(', ') + ' uten rabattårsak.',
+          ids: [it.transactionId] }, hits);
       }
     });
     var shareOf = function (x) { return x.n ? x.withNR / x.n : 0; };
@@ -2051,7 +2096,7 @@
     var matrixRows = Object.keys(matrix).sort(numCmp).map(function (id) { return { id: id, counts: matrix[id] }; });
     var campRows = Object.keys(camps).map(function (k) { return camps[k]; }).sort(function (a, b) { return b.n - a.n || String(a.id).localeCompare(String(b.id)); });
     return { rows: rows, total: { n: tot.n, withDisc: tot.withDisc, disc: round2(tot.disc), withW: tot.withW, withNR: tot.withNR, nr: round2(tot.nr), withCpn: tot.withCpn, cpn: tot.cpn, cpnSum: round2(tot.cpnSum), share: storeShare },
-      camp: { items: camp.itemRows, days: camp.dayRows, skipped: skipped }, watch: watch, campaigns: campRows, reasons: reasonRows, matrix: { cols: cols, rows: matrixRows }, findings: findings, coverage: sales ? scannedSales / sales : 1, sales: sales, scanned: scannedSales };
+      camp: { items: camp.itemRows, days: camp.dayRows, skipped: skipped, pending: camp.itemRows.filter(function (e) { return !e.status; }).length, confirmed: camp.itemRows.filter(function (e) { return e.status === 'kampanje'; }).length, denied: camp.itemRows.filter(function (e) { return e.status === 'ikke'; }).length }, watch: watch, campaigns: campRows, reasons: reasonRows, matrix: { cols: cols, rows: matrixRows }, findings: findings, coverage: sales ? scannedSales / sales : 1, sales: sales, scanned: scannedSales };
   }
 
   // ---- medlemsnummer, pris per vare, kjøpeutbytte og hendelsesord ----------------------------
@@ -2885,6 +2930,8 @@
     lappKind: lappKind,
     discRate: discRate,
     campaigns: campaigns,
+    campKey: campKey,
+    sanitizeCamp: sanitizeCamp,
     wordList: wordList,
     DEFAULT_SPECIAL: DEFAULT_SPECIAL,
     ledger: ledger,

@@ -2,7 +2,7 @@
   'use strict';
 
   var L = typeof module !== 'undefined' && module.exports ? require('./logic.js') : root.KvLogic;
-  var VERSION = '3.17.0';
+  var VERSION = '3.18.0';
 
   // ---- SHA-256 (ren JS, så rapporten ikke avhenger av crypto.subtle) -------------------
   var K256 = [
@@ -165,6 +165,14 @@
     if (cov.sales && cov.salesV6 < cov.sales) out.push('Gjentatte returer på samme kort bygger på kortdata fra skanning versjon 6 og dekker ' + cov.salesV6 + ' av ' + cov.sales + ' salg.');
     var vd = m.checks && m.checks.voids;
     if (vd && !vd.applicable && cov.sales) out.push('«Makulert vare ikke solgt på ny» ble ikke vurdert: bare ' + pctText(vd.coverage) + ' av salgene i datagrunnlaget er skannet (minst 80 % kreves).');
+    var cg = m.checks && m.checks.campaign;
+    if (cg && cg.items.length) {
+      var yes = cg.items.filter(function (e) { return e.status === 'kampanje'; }), no = cg.items.filter(function (e) { return e.status === 'ikke'; });
+      var nm = function (e) { return e.name + ' ' + e.rate + ' % (' + e.n + ' bonger)'; };
+      if (yes.length) out.push('Rabatt på ' + yes.length + (yes.length === 1 ? ' vare' : ' varer') + ' er etter brukerens svar regnet som sentral kampanje og ikke flagget: ' + yes.slice(0, 8).map(nm).join('; ') + (yes.length > 8 ? ' m.fl.' : '') + '.');
+      if (no.length) out.push('Brukeren har avvist kampanje for ' + no.length + (no.length === 1 ? ' vare' : ' varer') + ': ' + no.slice(0, 8).map(nm).join('; ') + (no.length > 8 ? ' m.fl.' : '') + '.');
+    }
+    if (cg && cg.pending) out.push(cg.pending + (cg.pending === 1 ? ' vare' : ' varer') + ' med samme rabatt hos flere kasserere kan være sentral kampanje og er ikke avklart. Bongene er flagget med notat.');
     var lg = m.checks && m.checks.ledger;
     if (lg) [['lines', 'Linjer mot Totalt'], ['pay', 'Betaling mot Totalt'], ['vat', 'MVA-tabell']].forEach(function (x) {
       if (lg[x[0]] && !lg[x[0]].applicable && cov.salesV5) out.push(x[1] + ' ble ikke vurdert: ' + lg[x[0]].n + ' bonger lest, ' + (lg[x[0]].n ? pctText(lg[x[0]].ok / lg[x[0]].n) : '–') + ' stemte (minst 10 bonger og 80 % kreves for at avvik regnes som funn).');

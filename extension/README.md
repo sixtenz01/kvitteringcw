@@ -86,6 +86,13 @@ Skanner fra tidligere versjoner (v2) har ikke rabattdata. «Skann synlige» skan
 
 Ikke verifisert: om kvitteringen skriver årsaken som nummer eller tekst (begge håndteres), og hvordan lokale kampanjer ser ut. Dette trenger eksempler fra ekte kvitteringer.
 
+## Mulig sentral kampanje: notat og spørsmål (versjon 3.18.0)
+
+- Samme vare (EAN) med samme rabatt (avrundet %) på minst `campBongs` (3) bonger hos minst `campCashiers` (2) kasserere, over alle innlastede dager og butikker, regnes som **mulig sentral kampanje** (`campaigns()` i `logic.js`). Én kassereres gjentakelser er ikke kampanje. Den gamle regelen (10 bonger samme dag og butikk, som skjulte rabatten) er fjernet.
+- **Bongen tas med**: «Rabatt uten årsak», «Høy rabattprosent» og «Rabatt uten treff» flagges som før, men får notatet «Kan være sentral kampanje: … Bekreft eller avvis.» (`finding.camp`). En kampanjedag (≥ 40 % av minst 30 salg har rabatt) gir bare notat.
+- **Brukeren spørres**: *Ja, kampanje* / *Nei, ikke kampanje* under bongen i Sjekk først, i Rabatt-kortet (tabell med Angre) og i dialogen «Mulige sentrale kampanjer» (varsel i Analyse-kortet). Ja: rabatten flagges ikke og telles ikke mot kassereren. Nei: flagges som vanlig, uten notat.
+- Svarene (`kvr.camp.v1`, nøkkel `ean|prosent`) lagres i IndexedDB, følger Eksporter/Importer innstillinger, og står i revisjonsrapporten (bekreftet, avvist og ikke avklart).
+
 ## Samlet utseende og butikknavn (versjon 3.16.0)
 
 - **Alle filter under Filtrer.** Innholdsfiltrene (vare, varegruppe, pant, rabatt, rabatt-%, spesialbetaling) ligger i kortet «Innhold» og er merket *skanning*. Skann har bare skanning (knapper og cache) og varegrupper. Sortering og lagrede filtre er ett kort.
@@ -101,7 +108,7 @@ Alt bygger på skannet innhold og lager funn i samme avviksliste, med innstillin
 - **Pantelapper:** `99 PANTELAPP` er manuell, `399 PANTELAPP` kommer fra pantemaskinen. Funn: manuell pantelapp over beløpsgrensen, kasserer med mange manuelle (andel mot butikken), pantelapp slettet (linje + motlinje med samme beløp), og samme pantelapp innløst flere ganger (lappnr hvis bongen viser det, ellers samme sum innen 60 min eller på samme kasse samme dag). Kortet «Pantelapper: manuell og maskin».
 - **Slettede linjer:** en linje og en motlinje (samme kode, motsatt beløp) regnes som slettet. «Kontant tilbake uten salg» bruker nå varelinjer etter sletting. Nytt funn når varelinjer er slettet og bare pant og kontant tilbake står igjen. Makulert vare (EAN) som ikke er solgt på ny i butikken innen 120 min (krever 80 % skannet).
 - **Spesialbetaling:** ordlisten (eget forbruk, internt forbruk, utbetaling, finansiering, sjekk) leses i betalingsmåter, linjenavn og tekstlinjer, som funn og som søk under Filtrer → Innhold.
-- **Rabatt:** høy rabattprosent (standard 70–100 %), rabatt uten treff på andre salg (samme vare og rabatt samme dag i butikken, standard ≥ 30 % og bare uten årsak), kampanjegjenkjenning (≥ 10 bonger med samme vare og rabatt, eller en dag der ≥ 40 % av minst 30 salg har rabatt, undertrykker flaggene), og søk på rabatt-% under Skann.
+- **Rabatt:** høy rabattprosent (standard 70–100 %), rabatt uten treff på andre salg (samme vare og rabatt samme dag i butikken, standard ≥ 30 % og bare uten årsak), mulig kampanje (samme vare og rabatt hos flere kasserere: notat og spørsmål), og søk på rabatt-% under Skann.
 - **Spør pris:** linjen under «SPØR PRIS» sammenlignes med medianprisen for samme EAN samme dag.
 - **Kort:** tre returer på samme kort (leverandør + kortnr) innen 30 dager.
 - **Manuell kvittering / til gode-lapp:** ordliste; flagges når en annen bong i butikken har samme beløp innen 3 dager.
@@ -209,6 +216,7 @@ NODE_PATH=<global node_modules> node test/skann.js     # feil bong i visningsfel
 NODE_PATH=<global node_modules> node test/regnskap.js  # Totalt, betaling, MVA, referanser, omskanning, CSV
 NODE_PATH=<global node_modules> node test/rapport.js  # lager rapport i panelet, pakker ut ZIP og verifiserer alle kontrollsummer
 node test/docs.test.js                               # dekning av innstillinger, vekter, faner og kort i brukerveiledningen
+NODE_PATH=<global node_modules> node test/kampanje.js   # mulig sentral kampanje: notat, spørsmål, Ja/Nei/Angre, husket svar
 NODE_PATH=<global node_modules> node test/avdeling.js  # butikknummer = nivå + avdeling: gruppert liste, søk, valg av nivå, navn
 NODE_PATH=<global node_modules> node test/butikk.js    # butikknavn fra BUTIKK-kolonnen, redigering, filter samlet under Filtrer
 NODE_PATH=<global node_modules> node test/linjer.js    # samme funn i panelet: kort, søk på spesialbetaling og rabatt-%

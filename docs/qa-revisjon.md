@@ -629,3 +629,14 @@ Kontroll mot alle 237 demobonger viste at samme forhold ofte ga poeng flere gang
 | Felles kode og knapper | Én `isEan` og `unitPrice`, én Diagnostikk-knapp, én «Skann på nytt», kupongtabellen heter «Kuponger» |
 
 Overlapp med ulike signaler er beholdt (for eksempel medlemsnr flere ganger samme dag og nesten bare hos én kasserer).
+
+## 10. Sentral kampanje: notat og spørsmål (versjon 3.18.0)
+
+| Punkt | Tiltak |
+|---|---|
+| Rabatt uten årsak kan skyldes sentral kampanje | Samme vare og rabatt hos minst 2 kasserere på minst 3 bonger (alle dager og butikker) gir notat «Kan være sentral kampanje». Bongen tas fortsatt med |
+| Brukeren avgjør | Ja/Nei/Angre i Sjekk først, Rabatt-kortet og en dialog. Ja: ikke flagget og ikke talt mot kassereren. Nei: flagges som vanlig |
+| Gammel regel kunne skjule feil | Den fjernet rabatten fra flagg når 10 bonger samme dag og butikk delte vare og prosent, også hos én kasserer. Erstattet av regelen over, som krever flere kasserere og aldri skjuler uten svar |
+| Etterprøvbarhet | Svarene lagres, eksporteres og står i revisjonsrapporten |
+
+Ikke gjort: kobling mellom kupongnavn og varenavn på bongen. Det trenger en ekte bong der kampanjerabatt og kupong står sammen.

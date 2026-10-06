@@ -309,3 +309,11 @@ tr.kvr-follow>td.kvr-cb-cell::after{color:#e37400}
 #kvr-panel .kvr-lvl:first-child{border-top:0;margin-top:0}
 #kvr-panel .kvr-lvl b{color:var(--kv-muted);text-transform:uppercase;letter-spacing:.04em;font-size:11px}
 #kvr-panel .kvr-lvl .kvr-hint{flex:1}
+#kvr-panel .kvr-camp,.kvr-modal .kvr-camp{display:flex;flex-direction:column;gap:6px;margin:6px 0 2px;padding:8px 10px;border:1px solid var(--kv-note-bd);background:var(--kv-note-bg);border-radius:var(--kv-r);color:var(--kv-note-fg);font-size:12px;list-style:none}
+#kvr-panel .kvr-camp .kvr-row,.kvr-modal .kvr-camp .kvr-row{gap:6px}
+#kvr-panel .kvr-camp .kvr-row>*{flex:0 0 auto}
+.kvr-modal .kvr-table{width:100%;border-collapse:collapse;font-size:12px}
+.kvr-modal .kvr-table th{text-align:left;color:var(--kv-muted);font-weight:600;font-size:11px;border-bottom:1px solid var(--kv-line);padding:4px}
+.kvr-modal .kvr-table td{padding:4px;border-bottom:1px solid var(--kv-soft)}
+.kvr-modal .kvr-table td:not(:first-child),.kvr-modal .kvr-table th:not(:first-child){text-align:right}
+.kvr-modal .kvr-table .kvr-row{justify-content:flex-end}
