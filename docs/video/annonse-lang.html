@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="nb"><head><meta charset="utf-8"><title>Kvitteringshenter – lang annonse</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1920px;height:1080px;overflow:hidden;background:#00281c}
+body{font-family:'Liberation Sans','Helvetica Neue',Arial,sans-serif;color:#fff}
+#stage{position:relative;width:1920px;height:1080px;overflow:hidden;background:radial-gradient(1200px 800px at 70% 20%,#00704a 0%,#004a32 45%,#00281c 100%)}
+.abs{position:absolute}
+#bg .r{position:absolute;width:150px;height:400px;background:rgba(255,255,255,.07);border-radius:6px;background-image:repeating-linear-gradient(180deg,transparent 0 22px,rgba(255,255,255,.14) 22px 26px)}
+.t{position:absolute;white-space:nowrap;font-weight:800;letter-spacing:-.02em}
+.title{left:0;width:1920px;text-align:center;top:64px;font-size:84px}
+.lab{position:absolute;white-space:nowrap;font-weight:700;letter-spacing:.18em;font-size:28px;color:#f6c945}
+.ci{position:absolute;overflow:hidden;border-radius:24px;background:#fff;box-shadow:0 30px 80px rgba(0,0,0,.45)}
+.ci .nat{position:absolute;left:0;top:0;transform-origin:0 0}
+.ci img{display:block}
+.ring{position:absolute;border:7px solid #f6c945;border-radius:18px}
+.badge{position:absolute;width:76px;height:76px;border-radius:50%;background:#f6c945;color:#073d2b;font-size:46px;font-weight:800;text-align:center;line-height:76px;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+.bi{display:inline-block;width:54px;height:54px;border-radius:50%;background:#f6c945;color:#073d2b;font-weight:800;text-align:center;line-height:54px;margin-right:16px;font-size:34px}
+.cap{position:absolute;white-space:nowrap;font-size:34px;font-weight:700;color:#d6f1e3;text-align:center}
+.pill{position:absolute;white-space:nowrap;padding:14px 30px;border-radius:999px;background:rgba(255,255,255,.12);border:2px solid rgba(255,255,255,.35);font-size:30px;font-weight:700}
+.chip{position:absolute;white-space:nowrap;padding:16px 28px;border-radius:18px;background:rgba(255,255,255,.95);color:#073d2b;font-size:30px;font-weight:800;box-shadow:0 14px 40px rgba(0,0,0,.3)}
+#shot{position:absolute;left:0;top:0;width:2400px;height:1350px;transform-origin:0 0;border-radius:40px;overflow:hidden;box-shadow:0 40px 120px rgba(0,0,0,.5);background:#e9eeeb}
+#shot img{display:block;width:2400px;height:1350px}
+#veil{left:0;top:0;width:1040px;height:1080px;background:linear-gradient(90deg,#00382a 0,#00382a 960px,rgba(0,56,42,0) 1040px)}
+</style></head><body>
+<div id="stage">
+  <div id="bg" class="abs" style="inset:0"></div>
+
+  <!-- S1 -->
+  <div class="t" id="n241" style="left:0;width:1920px;text-align:center;top:250px;font-size:300px;color:#f6c945">0</div>
+  <div class="t" id="s1a" style="left:0;width:1920px;text-align:center;top:560px;font-size:96px">kvitteringer.</div>
+  <div class="t" id="s1b" style="left:0;width:1920px;text-align:center;top:700px;font-size:96px;color:#9be6c3">Hvilke bør du se på?</div>
+
+  <!-- S2: tre steg -->
+  <div class="t title" id="s2t">Hent. Filtrer. Skann.</div>
+  <div class="abs" id="st1"><div class="ci" style="left:130px;top:230px;width:520px;height:660px"><div class="nat" id="p1" style="width:633px;height:1140px;transform:scale(.8215)"><img src="../manual/img/hent.jpg" width="633" height="1140"></div></div><div class="cap" style="left:130px;width:520px;top:915px"><span class="bi">1</span>Søk i hele journalen</div></div>
+  <div class="abs" id="st2"><div class="ci" style="left:700px;top:230px;width:520px;height:660px"><div class="nat" id="p2" style="width:633px;height:1320px;transform:scale(.8215)"><img src="../manual/img/filtrer-a.jpg" width="633" height="1320"></div></div><div class="cap" style="left:700px;width:520px;top:915px"><span class="bi">2</span>Snevre inn listen</div></div>
+  <div class="abs" id="st3"><div class="ci" style="left:1270px;top:230px;width:520px;height:660px"><div class="nat" id="p3" style="width:633px;height:750px;transform:scale(.8215)"><img src="../manual/img/skanner.jpg" width="633" height="750"></div></div><div class="cap" style="left:1270px;width:520px;top:915px"><span class="bi">3</span>Les innholdet i bongene</div></div>
+
+  <!-- S3/S4: analyse -->
+  <div id="shot"><img src="../manual/img/stor-dokket.jpg">
+    <div class="ring" id="ring1" style="left:918px;top:676px;width:336px;height:66px"></div>
+    <div class="ring" id="ring2" style="left:1676px;top:392px;width:196px;height:44px;border-radius:24px"></div>
+  </div>
+  <div id="veil" class="abs"></div>
+  <div class="t" id="s3a" style="left:0;width:1920px;text-align:center;top:60px;font-size:104px">Kjør analysen.</div>
+  <div class="t" id="s3b" style="left:0;width:1920px;text-align:center;top:188px;font-size:44px;font-weight:600;color:#bfe9d4;letter-spacing:0">Bongene rangeres: 59 å sjekke, 12 med høy risiko.</div>
+  <div class="lab" id="s4l" style="left:110px;top:250px">PRIORITERT LISTE</div>
+  <div class="t" id="s4a" style="left:110px;top:320px;font-size:78px">Rangert etter risiko.</div>
+  <div class="t" id="s4b" style="left:110px;top:425px;font-size:78px;color:#9be6c3">Forklart bong for bong.</div>
+  <div class="t" id="s4c" style="left:110px;top:560px;font-size:36px;font-weight:600;color:#cfe9dc;letter-spacing:0;line-height:1.35;white-space:normal;width:800px">Hver flagget bong får en begrunnelse du kan etterprøve, og et notat om det kan være en sentral kampanje.</div>
+
+  <!-- S5: pant og kasserer -->
+  <div class="t title" id="s5t">Pantelapper og kassererprofil</div>
+  <div class="ci" id="c5a" style="left:340px;top:230px;width:1240px;height:359px"><div class="nat" style="width:1254px;height:363px;transform:scale(.9888)"><img src="../manual/img/d-lapp.jpg" width="1254" height="363"></div></div>
+  <div class="ci" id="c5b" style="left:340px;top:630px;width:1240px;height:401px"><div class="nat" style="width:1254px;height:405px;transform:scale(.9888)"><img src="../manual/img/d-profile.jpg" width="1254" height="405"></div></div>
+
+  <!-- S6: kampanje -->
+  <div class="ci" id="k1" style="left:130px;top:150px;width:560px;height:790px"><div class="nat" id="kp" style="width:627px;height:1059px;transform:scale(.893)"><img src="../manual/img/sjekk-kampanje.jpg" width="627" height="1059"><div class="ring" id="kring" style="left:66px;top:454px;width:176px;height:50px;border-radius:14px"></div></div></div>
+  <div class="lab" id="k2" style="left:800px;top:170px">MULIG SENTRAL KAMPANJE?</div>
+  <div class="t" id="k3" style="left:800px;top:225px;font-size:100px">Du bestemmer.</div>
+  <div class="t" id="k4" style="left:800px;top:375px;font-size:38px;font-weight:600;color:#cfe9dc;letter-spacing:0;line-height:1.35;white-space:normal;width:980px">Samme vare med rabatt hos flere kasserere? Svar Ja eller Nei. Svaret gjelder varen på alle flaggede bonger.</div>
+  <div class="ci" id="k5" style="left:800px;top:600px;width:1000px;height:323px"><div class="nat" style="width:1170px;height:378px;transform:scale(.8547)"><img src="../manual/img/kampanje-dialog.jpg" width="1170" height="378"></div></div>
+  <div class="chip" id="k6" style="left:800px;top:965px;background:#f6c945">✓ Svaret huskes og står i rapporten</div>
+
+  <!-- S7: diagrammer -->
+  <div class="t title" id="s7t">Se mønstrene</div>
+  <div class="abs" id="d1"><div class="ci" style="left:40px;top:370px;width:580px;height:278px"><div class="nat" style="width:594px;height:285px;transform:scale(.9764)"><img src="../manual/img/ch-heat.jpg" width="594" height="285"></div></div><div class="cap" style="left:40px;width:580px;top:740px">Når skjer det?</div></div>
+  <div class="abs" id="d2"><div class="ci" style="left:670px;top:345px;width:580px;height:328px"><div class="nat" style="width:594px;height:336px;transform:scale(.9764)"><img src="../manual/img/ch-hours.jpg" width="594" height="336"></div></div><div class="cap" style="left:670px;width:580px;top:740px">Salg per time</div></div>
+  <div class="abs" id="d3"><div class="ci" style="left:1300px;top:320px;width:580px;height:381px"><div class="nat" style="width:594px;height:390px;transform:scale(.9764)"><img src="../manual/img/ch-cash.jpg" width="594" height="390"></div></div><div class="cap" style="left:1300px;width:580px;top:740px">Returandel per kasserer</div></div>
+  <div class="t" id="s7s" style="left:0;width:1920px;text-align:center;top:880px;font-size:44px;font-weight:600;color:#bfe9d4;letter-spacing:0">Klikk i et diagram for å filtrere listen.</div>
+
+  <!-- S8: rapport -->
+  <div class="t title" id="s8t" style="top:44px;font-size:78px">Revisjonsrapport i én ZIP</div>
+  <div class="ci" id="r1" style="left:190px;top:170px;width:700px;height:850px"><div class="nat" id="rp1" style="width:1500px;height:2129px;transform:scale(.4667)"><img src="../manual/img/rapport-forside.jpg" width="1500" height="2129"></div></div>
+  <div class="ci" id="r2" style="left:980px;top:200px;width:760px;height:540px"><div class="nat" id="rp2" style="width:1500px;height:1170px;transform:scale(.5067)"><img src="../manual/img/rapport-funn.jpg" width="1500" height="1170"></div></div>
+  <div class="chip" id="q1" style="left:980px;top:790px">SHA-256 på hver fil</div>
+  <div class="chip" id="q2" style="left:1370px;top:790px">Bevisbilder av bongene</div>
+  <div class="chip" id="q3" style="left:980px;top:880px">Notatlogg med hash-kjede</div>
+  <div class="chip" id="q4" style="left:1425px;top:880px">Gjenta analysen senere</div>
+
+  <!-- S9 -->
+  <div class="abs" id="logo" style="left:810px;top:170px;width:300px;height:300px;border-radius:72px;background:linear-gradient(145deg,#12a36f,#00704a);box-shadow:0 30px 80px rgba(0,0,0,.45);text-align:center;font-size:170px;line-height:300px;font-family:'Noto Color Emoji',sans-serif">🧾</div>
+  <div class="t" id="e1" style="left:0;width:1920px;text-align:center;top:520px;font-size:136px">Kvitteringshenter</div>
+  <div class="t" id="e2" style="left:0;width:1920px;text-align:center;top:690px;font-size:56px;font-weight:600;color:#bfe9d4;letter-spacing:0">Ta kontroll på kvitteringsjournalen.</div>
+  <div class="pill" id="e3" style="left:560px;top:812px;font-size:34px;padding:16px 34px">Ingen kall mot Lindbaks API · Alt blir lokalt</div>
+  <div class="abs" id="e4" style="left:0;width:1920px;text-align:center;top:1020px;font-size:22px;color:#8fc4ac">Tillegg til Chrome for Lindbak Chain Web · Skjermbildene viser oppdiktede data</div>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+const cl=(x,a=0,b=1)=>Math.min(b,Math.max(a,x));
+const seg=(t,a,b)=>cl((t-a)/(b-a));
+const eo=x=>1-Math.pow(1-x,3), eio=x=>x<.5?4*x*x*x:1-Math.pow(-2*x+2,3)/2, eb=x=>{const c=1.70158;return 1+(c+1)*Math.pow(x-1,3)+c*Math.pow(x-1,2)};
+const lerp=(a,b,x)=>a+(b-a)*x;
+(function(){let s=7;const r=()=>(s=(s*16807)%2147483647)/2147483647;const bg=$('bg');
+  window.__strips=[];for(let i=0;i<11;i++){const d=document.createElement('div');d.className='r';const o={el:d,x:r()*1900-100,y:r()*1300,sp:60+r()*140,rot:(r()-.5)*24,sc:.7+r()*.9};bg.appendChild(d);window.__strips.push(o)}})();
+// an(id, inn0, inn1, [ut0, ut1], {dy,dx,s,pop,dyo})
+function an(id,a,b,out,o={}){const e=$(id),t=window.__t;const p0=seg(t,a,b);const p=o.pop?eb(p0):eo(p0);const q=out?eo(seg(t,out[0],out[1])):0;
+  e.style.opacity=cl(eo(p0)*(o.pop?1:1))*(1-q);
+  e.style.transform=`translate(${(o.dx||0)*(1-p)}px,${(o.dy||0)*(1-p)+(o.dyo||0)*q}px) scale(${lerp(o.s||1,1,p)*(1-(o.so||0)*q)})`}
+function render(t){window.__t=t;
+  // bakgrunn
+  const bgOp=lerp(1,.28,eo(seg(t,2.8,3.6)))*(1-.6*eo(seg(t,32.2,32.8))*0);
+  window.__strips.forEach(o=>{const y=((o.y-o.sp*t)%1500+1500)%1500-250;o.el.style.opacity=bgOp;o.el.style.transform=`translate(${o.x}px,${y}px) rotate(${o.rot}deg) scale(${o.sc})`});
+  // S1 0–3.2
+  const c=Math.round(241*eo(seg(t,.1,1.0)));$('n241').textContent=c;
+  $('n241').style.opacity=eo(seg(t,0,.2))*(1-eo(seg(t,2.85,3.15)));$('n241').style.transform=`scale(${lerp(.9,1,eo(seg(t,0,.5)))})`;
+  an('s1a',.35,.8,[2.85,3.15],{dy:40});an('s1b',.95,1.45,[2.85,3.15],{dy:40});
+  // S2 3.0–8.0
+  an('s2t',3.2,3.7,[7.6,7.95],{dy:-30});
+  [['st1',3.45],['st2',3.95],['st3',4.45]].forEach(([id,s])=>an(id,s,s+.55,[7.6,7.95],{dy:80,s:.92,pop:true}));
+  const pan=seg(t,3.5,7.8);
+  $('p1').style.transform=`translateY(${-70*pan}px) scale(.8215)`;$('p2').style.transform=`translateY(${-90*pan}px) scale(.8215)`;$('p3').style.transform=`translateY(${-20*pan}px) scale(.8215)`;
+  // S3/S4: hero
+  const A={x:260,y:292,k:1400/2400}, B={x:-781,y:-315,k:1.074};
+  const inA=eo(seg(t,7.9,8.7)), toB=eio(seg(t,11.5,12.25)), outS=eo(seg(t,15.3,15.75));
+  let x=A.x,y=A.y,k=A.k;if(t>=11.5){x=lerp(A.x,B.x,toB);y=lerp(A.y,B.y,toB);k=lerp(A.k,B.k,toB)}
+  const sh=$('shot');sh.style.opacity=inA*(1-outS);sh.style.transform=`translate(${x}px,${y+(1-inA)*620}px) scale(${k*lerp(.94,1,inA)})`;
+  const pulse=.5+.5*Math.sin(t*9);
+  const r1=eo(seg(t,9.5,9.75))*(1-eo(seg(t,11.25,11.5)));$('ring1').style.opacity=r1;$('ring1').style.boxShadow=`0 0 ${20+30*pulse}px ${6*pulse}px rgba(246,201,69,.75)`;
+  const r2=eo(seg(t,12.5,12.75))*(1-eo(seg(t,15.2,15.5)));$('ring2').style.opacity=r2;$('ring2').style.boxShadow=`0 0 ${20+30*pulse}px ${6*pulse}px rgba(246,201,69,.75)`;
+  an('s3a',8.1,8.6,[11.25,11.55],{dy:-30});an('s3b',8.55,9.05,[11.25,11.55],{dy:-20});
+  $('veil').style.opacity=eo(seg(t,11.7,12.3))*(1-eo(seg(t,15.3,15.65)));
+  an('s4l',12.0,12.4,[15.25,15.6],{dy:20});an('s4a',12.1,12.6,[15.25,15.6],{dy:40});an('s4b',12.7,13.2,[15.25,15.6],{dy:40});an('s4c',13.3,13.75,[15.3,15.65],{dy:30});
+  // S5 15.6–19.8
+  an('s5t',15.8,16.3,[19.4,19.8],{dy:-30});an('c5a',16.1,16.75,[19.4,19.8],{dx:-300,dy:20,s:.96});an('c5b',16.6,17.25,[19.4,19.8],{dx:300,dy:20,s:.96});
+  // S6 19.6–24.6
+  an('k1',19.9,20.6,[24.2,24.6],{dx:-200,dy:60,s:.95});
+  $('kp').style.transform=`translateY(${-lerp(0,0,seg(t,20,24))}px) scale(.893)`;
+  an('k2',20.3,20.7,[24.2,24.6],{dy:20});an('k3',20.4,20.95,[24.2,24.6],{dy:40});an('k4',21.0,21.5,[24.2,24.6],{dy:30});an('k5',21.5,22.15,[24.2,24.6],{dx:200,dy:40,s:.96});
+  const kr=eo(seg(t,22.3,22.55))*(1-eo(seg(t,23.2,23.4)));$('kring').style.opacity=kr;$('kring').style.boxShadow=`0 0 ${20+30*pulse}px ${6*pulse}px rgba(246,201,69,.8)`;
+  an('k6',23.3,23.8,[24.2,24.6],{dy:30,pop:true});
+  // S7 24.4–28.4
+  an('s7t',24.6,25.1,[28.0,28.4],{dy:-30});[['d1',24.9],['d2',25.25],['d3',25.6]].forEach(([id,s])=>an(id,s,s+.55,[28.0,28.4],{dy:80,s:.92,pop:true}));an('s7s',26.3,26.8,[28.0,28.4],{dy:25});
+  // S8 28.2–32.6
+  an('s8t',28.4,28.9,[32.2,32.6],{dy:-30});an('r1',28.7,29.4,[32.2,32.6],{dx:-250,dy:40,s:.95});an('r2',29.1,29.8,[32.2,32.6],{dx:250,dy:40,s:.95});
+  $('rp1').style.transform=`translateY(${-160*seg(t,29,32)}px) scale(.4667)`;$('rp2').style.transform=`translateY(${-60*seg(t,29.5,32)}px) scale(.5067)`;
+  [['q1',30.0],['q2',30.3],['q3',30.6],['q4',30.9]].forEach(([id,s])=>an(id,s,s+.4,[32.2,32.6],{dy:40,s:.9,pop:true}));
+  // S9 32.4–36
+  const lo=eb(seg(t,32.6,33.2));$('logo').style.opacity=cl(seg(t,32.6,32.9));$('logo').style.transform=`scale(${lerp(.6,1,lo)})`;
+  an('e1',32.85,33.3,null,{dy:30});an('e2',33.1,33.5,null,{dy:25});an('e3',33.3,33.7,null,{dy:20});an('e4',33.5,33.9,null,{});
+}
+render(0);
+</script></body></html>
