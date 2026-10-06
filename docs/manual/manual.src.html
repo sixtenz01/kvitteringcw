@@ -221,6 +221,7 @@
   <li>Hver test har et antall poeng som du kan endre (kapittel 8).</li>
   <li>Poengene summeres per bong til <strong>risikoscore</strong>. <span class="sw hi">Høy</span> er 8 poeng eller mer, <span class="sw mid">middels</span> er 4 til 7 og <span class="sw lo">lav</span> er under 4.</li>
   <li><strong>RRS (Receipt Risk Score)</strong> viser samme risikoscore på en skala fra 0 til 100: <code>100 × (1 − 2<sup>−poeng/8</sup>)</code>. 4 poeng er RRS 29, 8 poeng er 50 og 16 poeng er 75. Skalaen flater ut mot 100, så flere avvik gir stadig høyere, men aldri over 100. Den vises ved siden av poengene i listene og i rapporten, og endrer ikke nivåene.</li>
+  <li><strong>Samme forhold teller bare én gang.</strong> Når flere tester måler samme ting på samme bong, teller bare det høyeste poenget i gruppen, og de andre vises overstrøket i «Sjekk først» med forklaring. Gruppene er: <em>pant og kontant tilbake</em> (stor panteretur, mange pantelapper, kontant tilbake uten salg, flere ganger, varelinjer slettet), <em>rabatt</em> (uten årsak, overvåket årsak, høy prosent, uten treff), <em>regnskap</em> (linjer, betaling, MVA, ugyldig sats), <em>pris</em> (avvikende pris, spør pris) og <em>kassadifferanse</em> (differanse, gjentatte). Tester som ikke står i en gruppe summeres.</li>
   <li>Noen funn gjelder en <strong>kasserer</strong> og ikke en bestemt bong (Benford, runde beløp, mange rabatter, avvik i kassererprofilen). De gir poeng til kassereren, og kassererne med høyest sum vises i «Kasserere å se nærmere på».</li>
   <li><span class="sw new">Ny</span> merker bonger som ikke var flagget forrige gang du kjørte analysen.</li>
 </ul>
@@ -277,7 +278,7 @@
 <h3>Hvor du finner rabatt</h3>
 <ul>
   <li><strong>Filter:</strong> Skann → Rabatt (krever skanning).</li>
-  <li><strong>Analyse → Detaljer → Rabatter og kuponger:</strong> tabell per kasserer, tabellen «Rabatt per årsak» (klikk en årsak for å filtrere listen), matrisen «Kasserer × årsak» og de vanligste kampanjene.</li>
+  <li><strong>Analyse → Detaljer → Rabatter og kuponger:</strong> tabell per kasserer, tabellen «Rabatt per årsak» (klikk en årsak for å filtrere listen), matrisen «Kasserer × årsak», de vanligste kupongene og tabellen «Mulige sentrale kampanjer» (vare og rabatt på mange bonger, og kampanjedager).</li>
   <li><strong>Egne regler og Fokus:</strong> rabatt, prosent, årsak og kuponger finnes som felt.</li>
 </ul>
 {{shotw:d-disc}}
@@ -311,7 +312,7 @@
 {{shotw:d-misc}}
 <p>Annullert bong, manuell pris, parkert bong og spør pris er ikke observert i ekte data ennå, og vi vet ikke om Lindbak viser dem på bongen. Pluginen setter derfor ut to feller:</p>
 <ul>
-  <li><strong>Hendelsesord:</strong> tekstlinjer (ikke varenavn) med ord som annullert, makulert, parkert, på vent, manuell, spør pris, overstyr, prisendring eller kansell flagges.</li>
+  <li><strong>Hendelsesord:</strong> tekstlinjer (ikke varenavn) med ord som annullert, makulert, parkert, på vent, manuell, spør pris, overstyr, prisendring eller kansell flagges. Ordene «manuell» og «spør pris» telles ikke her på bonger som allerede er flagget av «Spør pris» eller «Manuell kvittering».</li>
   <li><strong>Ukjente linjer:</strong> linjer pluginen ikke kjenner igjen samles opp, med tall byttet mot #.</li>
 </ul>
 <p>Åpne <strong>Diagnostikk</strong> fra kortet «Pris, kjøpeutbytte og hendelser» eller fra Innstillinger → Generelt. Der ser du først en sammenligning av klokkeslettet i listen og på bongen, så hendelsesord og ukjente linjer med antall og et eksempel på bongnummer. «Kopier som tekst» gir en liste du kan dele, slik at testene kan utvides med det Lindbak faktisk viser. Listen inneholder ingen varenavn eller beløp, men bongnummer.</p>
@@ -323,7 +324,7 @@
     <tr><td>Manuell pantelapp</td><td>En bong med manuelle pantelapper (kode 99) på minst 50 kr. Kassereren har tastet beløpet selv.</td></tr>
     <tr><td>Mange manuelle pantelapper</td><td>En kasserer med minst 5 bonger med manuell pantelapp og høyere andel enn butikken.</td></tr>
     <tr><td>Pantelapp slettet</td><td>En pantelapp og en motlinje med samme beløp på samme bong.</td></tr>
-    <tr><td>Pantelapp innløst flere ganger</td><td>Samme sum (minst 20 kr) på ulike bonger innen 60 minutter, eller samme lappnummer hvis bongen viser det.</td></tr>
+    <tr><td>Pantelapp innløst flere ganger</td><td>Samme sum (minst 20 kr) på ulike bonger innen 60 minutter eller på samme kasse samme dag, eller samme lappnummer hvis bongen viser det. Bonger med flere pantelapper sammenlignes også på bongsummen. Erstatter den gamle testen «Samme pantebeløp utbetalt flere ganger».</td></tr>
   </tbody></table></div>
 {{shotw:d-lapp}}
 <h3>Slettede varelinjer og makulerte varer</h3>

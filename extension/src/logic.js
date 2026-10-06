@@ -297,6 +297,9 @@
   var QTY_ROW = /^Antall:\s*([\d.,]+)\s*\S*\s*à\s*Kr\s*([\d.,]+)/i;
 
   function round2(n) { return Math.round(n * 100) / 100; }
+  function isEan(c) { return /^(\d{8}|\d{12,14})$/.test(String(c)); }
+  // Enhetspris: oppgitt pris, ellers linjebeløpet lagt tilbake rabatten (linjebeløpet er etter rabatt).
+  function unitPrice(l) { return typeof l.p === 'number' ? l.p : round2(l.a + (l.d || 0)); }
 
   function lastAmount(cells) {
     for (var i = cells.length - 1; i > 0; i--) {
@@ -855,7 +858,7 @@
     ['closeTime', 'Stengetid (HH:MM)', '22:00'], ['closeWindow', 'Minutter før stenging', '60'],
     ['smallReturn', 'Liten retur ≤ kr', '100'], ['smallReturnN', 'Små returer ≥ antall', '3'],
     ['cashNoSaleN', 'Kontant tilbake uten salg ≥ antall', '3'], ['repeatN', 'Samme beløp ≥ antall', '3'],
-    ['repeatMin', 'Gjentatt beløp ≥ kr', '50'], ['pantRepeatN', 'Samme pantebeløp ≥ antall', '2'],
+    ['repeatMin', 'Gjentatt beløp ≥ kr', '50'],
     ['pantMin', 'Pantebeløp ≥ kr', '20'], ['pantRatio', 'Panteretur > salg ×', '1'],
     ['openFrom', 'Åpner (HH:MM)', '06:00'], ['openTo', 'Stenger (HH:MM)', '23:00'],
     ['maxGap', 'Maks hull i bongnr', '50'], ['profFactor', 'Avvik fra snitt ×', '1.5'],
@@ -1015,10 +1018,9 @@
       sf('manualDays', 'ctl', 'num', 'Samme beløp innen', 'dager')
     ], weights: ['Manuell kvittering matcher annen bong'] },
     { id: 'pant', title: 'Pant', text: 'Pantelapp-sjekk per dag og gjentatte pantebeløp.', fields: [
-      sf('pantRepeatN', 'ctl', 'num', 'Samme pantebeløp: flagg ved', 'stk', '', true),
       sf('pantMin', 'ctl', 'num', 'Pantebeløp er minst', 'kr'),
       sf('pantRatio', 'ctl', 'num', 'Panteretur over pantesalg ×', '', 'Rødt i balansen når utbetalt retur er over dette tallet ganger pantesalget.', true)
-    ], weights: ['Samme pantebeløp utbetalt flere ganger'] },
+    ], weights: [] },
     { id: 'hours', title: 'Åpningstider', text: 'Brukes til bonger utenfor åpningstid og til å avgjøre hvilken dag et kassaoppgjør hører til.', fields: [
       sf('openFrom', 'ctl', 'time', 'Åpner', 'HH:MM'),
       sf('openTo', 'ctl', 'time', 'Stenger', 'HH:MM')
@@ -1170,10 +1172,9 @@
     return out;
   }
 
-  // Pantelapp-sjekk: samme pantebeløp utbetalt flere ganger, og pantebalanse (salg mot retur) per dag og butikk.
+  // Pantelapp-sjekk: pantebalanse (salg mot retur) per dag og butikk. Gjentatte pantebeløp ligger i lappChecks.
   function pantCheck(items, scanMap, cfg) {
-    var findings = [], bal = {}, g = {};
-    var min = cnum(cfg.pantMin, 20);
+    var findings = [], bal = {};
     items.forEach(function (it) {
       if (it.receiptType !== 1) return;
       var sc = scanMap && scanMap[it.transactionId];
@@ -1181,17 +1182,7 @@
       var key = dayOf(it) + '|' + it.storeNumber;
       var b = bal[key] || (bal[key] = { day: dayOf(it), store: it.storeNumber, sale: 0, ret: 0, n: 0 });
       b.sale += sc.sale; b.ret += Math.abs(sc.ret); b.n++;
-      if (sc.ret < 0 && Math.abs(sc.ret) >= min) groupInto(g, dayOf(it) + '|' + it.workstationNumber + '|' + Math.abs(sc.ret), it);
     });
-    if (hasNum(cfg.pantRepeatN)) {
-      Object.keys(g).forEach(function (k) {
-        if (g[k].length < Number(cfg.pantRepeatN)) return;
-        var p = k.split('|');
-        findings.push({ kind: 'Pant', code: 'pantRepeat', title: 'Samme pantebeløp utbetalt flere ganger', flag: true,
-          detail: 'Kasse ' + p[1] + ' ' + p[0] + ': ' + p[2] + ' kr × ' + g[k].length,
-          ids: g[k].map(function (x) { return x.transactionId; }) });
-      });
-    }
     var ratio = cnum(cfg.pantRatio, null);
     var rows = Object.keys(bal).map(function (k) {
       var b = bal[k];
@@ -1321,7 +1312,7 @@
   var RISK_WEIGHTS = {
     'Stor panteretur': 3, 'Mange pantelapper': 3, 'Kontant tilbake uten salg': 4, 'Rundt beløp': 1, 'Kassadifferanse': 5,
     'Små returer før stenging': 4, 'Kontant tilbake uten salg flere ganger': 5, 'Samme beløp gjentatt': 3,
-    'Samme pantebeløp utbetalt flere ganger': 4, 'Bonger utenfor åpningstid': 2, 'Regel': 3,
+    'Bonger utenfor åpningstid': 2, 'Regel': 3,
     'Retur uten salg': 3, 'Kortkjøp refundert kontant': 5, 'Salg og retur av samme beløp': 4, 'Salg etter kassaoppgjør': 4,
     'Hull i bongnummer': 3, 'Bongnummer og tid stemmer ikke': 4, 'Dobbelt bongnummer': 3, 'Gjentatte kassadifferanser': 4,
     'Avvikende sifferfordeling': 2, 'Mange runde beløp': 2, 'Rabatt uten årsak': 3, 'Mange rabatter uten årsak': 2, 'Rabatt med overvåket årsak': 3, 'Mange rabatter med overvåket årsak': 3,
@@ -1352,8 +1343,30 @@
     return b in w ? cnum(w[b], 2) : 2;
   }
 
+  // Tester som måler samme forhold teller bare det høyeste poenget per bong, ellers får én hendelse poeng flere ganger.
+  var FAMILIES = {
+    kontant: ['Stor panteretur', 'Mange pantelapper', 'Kontant tilbake uten salg', 'Kontant tilbake uten salg flere ganger', 'Varelinjer slettet, pant utbetalt kontant'],
+    rabatt: ['Rabatt uten årsak', 'Rabatt med overvåket årsak', 'Høy rabattprosent', 'Rabatt uten treff på andre salg'],
+    regnskap: ['Linjer stemmer ikke med totalen', 'Betaling stemmer ikke med totalen', 'MVA stemmer ikke', 'Ugyldig MVA-sats'],
+    pris: ['Avvikende pris på vare', 'Spør pris avviker fra dagens salg'],
+    differanse: ['Kassadifferanse', 'Gjentatte kassadifferanser']
+  };
+  var FAMILY_OF = {};
+  Object.keys(FAMILIES).forEach(function (f) { FAMILIES[f].forEach(function (t) { FAMILY_OF[t] = f; }); });
+
+  function reasonFamily(r) { return FAMILY_OF[reasonBase(r)] || null; }
+
+  // Hver årsak med vekt, og om den teller. I en familie teller den med høyest vekt (først ved likt); de andre er dekket av den.
+  function scoreBreakdown(reasons, weights) {
+    var rows = (reasons || []).map(function (r) { return { reason: r, w: reasonWeight(r, weights), family: reasonFamily(r), counts: true, by: null }; });
+    var top = {};
+    rows.forEach(function (x) { if (x.family && (!top[x.family] || x.w > top[x.family].w)) top[x.family] = x; });
+    rows.forEach(function (x) { if (x.family && top[x.family] !== x) { x.counts = false; x.by = top[x.family].reason; } });
+    return rows;
+  }
+
   function riskScore(reasons, weights) {
-    return round2((reasons || []).reduce(function (a, r) { return a + reasonWeight(r, weights); }, 0));
+    return round2(scoreBreakdown(reasons, weights).reduce(function (a, x) { return a + (x.counts ? x.w : 0); }, 0));
   }
 
   // Receipt Risk Score 0–100 fra poeng: 100 × (1 − 2^(−poeng/8)). 4 poeng = 29, 8 = 50, 16 = 75.
@@ -2114,9 +2127,10 @@
       var sc = scanMap && scanMap[it.transactionId];
       if (!hasV4(sc)) return;
       res.scanned++;
+      var ask = askLines(sc);
       sc.items.forEach(function (l) {
-        if (!/^(\d{8}|\d{12,14})$/.test(l.c) || l.a <= 0 || PANT_LINE.test(l.c + ' ' + l.n)) return;
-        var price = typeof l.p === 'number' ? l.p : round2(l.a + (l.d || 0));
+        if (!isEan(l.c) || l.a <= 0 || isPantText(l) || ask.indexOf(l) !== -1 || ASK_RE.test(l.n)) return;   // spør pris har egen test
+        var price = unitPrice(l);
         if (!(price > 0)) return;
         res.lines++;
         var key = it.storeNumber + '|' + dayOf(it) + '|' + l.c;
@@ -2171,7 +2185,7 @@
       var sc = scanMap && scanMap[it.transactionId];
       if (!hasV4(sc) || !(sc.np > 0)) return;
       res.scanned++;
-      var S = round2(sc.items.reduce(function (a, l) { return a + (PANT_LINE.test(l.c + ' ' + l.n) ? 0 : l.a); }, 0));
+      var S = round2(sc.items.reduce(function (a, l) { return a + (isPantText(l) ? 0 : l.a); }, 0));
       mem.push({ it: it, sc: sc, S: S });
     });
     res.n = mem.length;
@@ -2202,8 +2216,9 @@
   }
 
   // Ord som annullert, makulert, parkert, manuell og spør pris på tekstlinjer. Ikke observert ennå.
-  function eventWords(items, scanMap, cfg) {
-    var res = { findings: [], scanned: 0, hits: 0 };
+  // covered: bonger som allerede er flagget av «spør pris» eller «manuell kvittering»; ordene deres telles ikke to ganger.
+  function eventWords(items, scanMap, cfg, covered) {
+    var res = { findings: [], scanned: 0, hits: 0, covered: 0 };
     items.forEach(function (it) {
       var sc = scanMap && scanMap[it.transactionId];
       if (!hasV4(sc)) return;
@@ -2211,21 +2226,22 @@
       if (!sc.ev || !sc.ev.length) return;
       res.hits++;
       if (!hasNum(cfg.evOn)) return;
+      var own = covered && covered[it.transactionId];
+      var evs = sc.ev.filter(function (e) { return !(own && /manuell|sp[øo]r\s*pris/i.test(e.k)); });
+      if (!evs.length) { res.covered++; return; }
       res.findings.push({ kind: 'Hendelse', code: 'event', title: 'Hendelsesord på bong', flag: true,
-        detail: whereText(it) + ': ' + sc.ev.map(function (e) { return '«' + e.t + '»'; }).join(', '), ids: [it.transactionId] });
+        detail: whereText(it) + ': ' + evs.map(function (e) { return '«' + e.t + '»'; }).join(', '), ids: [it.transactionId] });
     });
     return res;
   }
 
   // ---- pantelapper, slettede linjer, spesialbetaling, spør pris, kort og manuelle bonger ---------
-  function isEan(c) { return /^(\d{8}|\d{12,14})$/.test(String(c)); }
-  function unitPrice(l) { return typeof l.p === 'number' ? l.p : round2(l.a + (l.d || 0)); }
   function wordList(txt) { return String(txt || '').split(/[,;\n]+/).map(function (t) { return t.trim().toLowerCase(); }).filter(Boolean); }
   function inDay(d, n) { return d ? Date.parse(d + 'T00:00:00Z') / 86400000 + (n || 0) : null; }
 
   // «99 PANTELAPP» legges inn manuelt, «399 PANTELAPP» kommer fra pantemaskinen.
   function lappKind(l) {
-    if (!/PANTELAPP/i.test(l.n) || !PANT_LINE.test(l.c + ' ' + l.n)) return null;
+    if (!/PANTELAPP/i.test(l.n) || !isPantText(l)) return null;
     return String(l.c) === '99' ? 'man' : String(l.c) === '399' ? 'mach' : 'other';
   }
 
@@ -2241,7 +2257,7 @@
       var e = g[k], n = Math.min(e.pos, e.neg);
       if (!n) return;
       var rec = { c: e.l.c, n: e.l.n, a: round2(Math.abs(e.l.a)), k: n };
-      if (PANT_LINE.test(e.l.c + ' ' + e.l.n)) res.pant.push(rec);
+      if (isPantText(e.l)) res.pant.push(rec);
       else { res.items.push(rec); res.itemLines += n; res.itemSum = round2(res.itemSum + n * rec.a); }
     });
     return res;
@@ -2269,8 +2285,10 @@
         var k = lappKind(l);
         if (!k) return;
         if (l.a < 0) (k === 'man' ? man : k === 'mach' ? mach : oth).push(l);
-        if (l.a < 0 && reuseMin !== null && -l.a >= pmin) lines.push({ it: it, l: l, amt: -l.a, id: (/(\d{6,})/.exec(l.n) || [])[1] || '' });
+        if (l.a < 0 && reuseMin !== null && -l.a >= pmin) lines.push({ it: it, kind: 'l', amt: -l.a, id: (/(\d{6,})/.exec(l.n) || [])[1] || '' });
       });
+      // flere pantelinjer på bongen: summen er også en lapp-sum (samme bongsum igjen og igjen)
+      if (reuseMin !== null && sc.retLines >= 2 && -sc.ret >= pmin) lines.push({ it: it, kind: 'b', amt: -sc.ret, id: '' });
       if (!scope[it.transactionId]) return;
       var c = per[it.cashierNumber] || (per[it.cashierNumber] = { id: String(it.cashierNumber), bongs: 0, mach: { n: 0, sum: 0 }, man: { n: 0, sum: 0 }, manBongs: 0, del: 0, reuse: 0, flag: false });
       var sum = function (a) { return round2(a.reduce(function (x, l) { return x - l.a; }, 0)); };
@@ -2292,28 +2310,32 @@
       }
     });
     res.coverage = res.sales ? res.scanned / res.sales : 1;
-    // samme pantelapp innløst flere ganger: lapp-nr hvis bongen viser det, ellers samme sum innen tidsrommet
+    // Samme pantelapp innløst flere ganger: lappnr hvis bongen viser det (uten tidsgrense), ellers samme sum på ulike bonger
+    // innen tidsrommet, eller på samme kasse samme dag. Bongsummen for bonger med flere pantelinjer sammenlignes også.
     if (reuseMin !== null) {
-      var grp = {};
-      lines.forEach(function (x) { (grp[x.id ? 'id|' + x.id : 'sum|' + x.it.storeNumber + '|' + x.amt.toFixed(2)] = grp[x.id ? 'id|' + x.id : 'sum|' + x.it.storeNumber + '|' + x.amt.toFixed(2)] || []).push(x); });
-      Object.keys(grp).forEach(function (k) {
-        var g = grp[k].slice().sort(function (a, b) { return tsMin(a.it) - tsMin(b.it) || (a.it.transactionId < b.it.transactionId ? -1 : 1); });
+      var grp = {}, seen = [];
+      lines.forEach(function (x) { var k = x.id ? 'id|' + x.id : x.kind + '|' + x.it.storeNumber + '|' + x.amt.toFixed(2); var e = grp[k] || (grp[k] = {}); if (!e[x.it.transactionId]) e[x.it.transactionId] = x; });
+      var near = function (a, b) { return Math.abs(tsMin(a) - tsMin(b)) <= reuseMin || (a.workstationNumber === b.workstationNumber && dayOf(a) === dayOf(b)); };
+      var rank = function (k) { return k.indexOf('id|') === 0 ? 0 : k.indexOf('l|') === 0 ? 1 : 2; };
+      Object.keys(grp).sort(function (a, b) { return rank(a) - rank(b) || (a < b ? -1 : 1); }).forEach(function (k) {
+        var g = Object.keys(grp[k]).map(function (id) { return grp[k][id]; }).sort(function (a, b) { return tsMin(a.it) - tsMin(b.it) || (a.it.transactionId < b.it.transactionId ? -1 : 1); });
         var clusters = [], cur = null;
         g.forEach(function (x) {
-          if (cur && cur[cur.length - 1].it.transactionId !== x.it.transactionId && (k.indexOf('id|') === 0 || tsMin(x.it) - tsMin(cur[cur.length - 1].it) <= reuseMin)) cur.push(x);
+          if (cur && (k.indexOf('id|') === 0 || near(cur[cur.length - 1].it, x.it))) cur.push(x);
           else { cur = [x]; clusters.push(cur); }
         });
         clusters.forEach(function (cl) {
-          var bongs = {};
-          cl.forEach(function (x) { bongs[x.it.transactionId] = x; });
-          var ids = Object.keys(bongs);
-          if (ids.length < 2) return;
+          if (cl.length < 2) return;
+          var ids = cl.map(function (x) { return x.it.transactionId; });
+          // en bongsum som bare gjentar en lapp-sum vi allerede har meldt, regnes ikke på nytt
+          if (seen.some(function (sIds) { return ids.every(function (id) { return sIds.indexOf(id) !== -1; }); })) return;
+          seen.push(ids);
           res.reuse++;
-          var amt = cl[0].amt;
           cl.forEach(function (x) { if (scope[x.it.transactionId] && per[x.it.cashierNumber]) per[x.it.cashierNumber].reuse++; });
+          var byId = k.indexOf('id|') === 0;
           res.findings.push({ kind: 'Pantelapp', code: 'lappReuse', title: 'Pantelapp innløst flere ganger', flag: true,
-            detail: (k.indexOf('id|') === 0 ? 'Pantelapp nr ' + cl[0].id : 'Pantelapp ' + money(amt) + ' kr') + ' innløst på ' + ids.length + ' bonger' + (k.indexOf('id|') === 0 ? '' : ' innen ' + reuseMin + ' min') + ': ' +
-              ids.map(function (id) { var it = bongs[id].it; return 'kasse ' + it.workstationNumber + ' ' + parseDT(it.endDateTime).time + ' (kasserer ' + it.cashierNumber + ')'; }).join(', '),
+            detail: (byId ? 'Pantelapp nr ' + cl[0].id : (cl[0].kind === 'b' ? 'Pantelapper på til sammen ' : 'Pantelapp ') + money(cl[0].amt) + ' kr') + ' innløst på ' + cl.length + ' bonger' + (byId ? '' : ' (innen ' + reuseMin + ' min, eller samme kasse samme dag)') + ': ' +
+              cl.map(function (x) { return dayOf(x.it).slice(5) + ' ' + parseDT(x.it.endDateTime).time + ' kasse ' + x.it.workstationNumber + ' (kasserer ' + x.it.cashierNumber + ')'; }).join(', '),
             ids: ids });
         });
       });
@@ -2545,7 +2567,7 @@
     var res = { findings: [], manual: 0, scanned: 0, words: wordList(cfg.manualWords) };
     var days = cnum(cfg.manualDays, 3);
     if (!res.words.length) return res;
-    var codes = function (sc) { var o = {}; ((sc && sc.items) || []).forEach(function (l) { if (!PANT_LINE.test(l.c + ' ' + l.n)) o[l.c] = true; }); return o; };
+    var codes = function (sc) { var o = {}; ((sc && sc.items) || []).forEach(function (l) { if (!isPantText(l)) o[l.c] = true; }); return o; };
     items.forEach(function (it) {
       var sc = scanMap && scanMap[it.transactionId];
       if (!sc || typeof it.totalAmount !== 'number') return;
@@ -2870,6 +2892,9 @@
     reasonBase: reasonBase,
     reasonWeight: reasonWeight,
     riskScore: riskScore,
+    scoreBreakdown: scoreBreakdown,
+    reasonFamily: reasonFamily,
+    FAMILIES: FAMILIES,
     rrs: rrs,
     riskLevel: riskLevel,
     rankReceipts: rankReceipts,

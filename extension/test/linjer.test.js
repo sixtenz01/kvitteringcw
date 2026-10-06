@@ -43,7 +43,7 @@ const mapOf = (pairs) => pairs.reduce((m, [it, s]) => (m[it.transactionId] = s, 
 
 // ---- lappChecks
 {
-  const mk = (kasserer, time, lines, day) => { const it = bong({ cashierNumber: kasserer, endDateTime: (day || '2026-10-05') + ' ' + time, workstationNumber: kasserer === 'A' ? 1 : 2 }); return [it, sc(lines, { retLines: lines.filter((l) => l.a < 0).length })]; };
+  const mk = (kasserer, time, lines, day, ws) => { const it = bong({ cashierNumber: kasserer, endDateTime: (day || '2026-10-05') + ' ' + time, workstationNumber: ws || (kasserer === 'A' ? 1 : 2) }); return [it, sc(lines, { retLines: lines.filter((l) => l.a < 0).length, ret: lines.filter((l) => l.a < 0).reduce((a, l) => a + l.a, 0) })]; };
   const lapp = (c, a, n) => ({ c, n: n || 'PANTELAPP', a });
   const set = [
     mk('A', '10:00', [lapp('99', -30), lapp('99', -40)]),            // manuell 70
@@ -51,7 +51,7 @@ const mapOf = (pairs) => pairs.reduce((m, [it, s]) => (m[it.transactionId] = s, 
     mk('A', '11:00', [lapp('99', -5)]),                               // manuell under grensen
     mk('B', '11:10', [lapp('399', -45)]),                             // maskin 45
     mk('B', '11:40', [lapp('399', -45)]),                             // samme sum innen 60 min
-    mk('B', '15:00', [lapp('399', -45)]),                             // for sent
+    mk('B', '15:00', [lapp('399', -45)], null, 3),                    // for sent og på annen kasse
     mk('B', '16:00', [lapp('399', -25), lapp('399', 25)]),            // slettet
     mk('C', '17:00', [lapp('399', -33, 'PANTELAPP 5550001112')]),     // lappnr
     mk('C', '09:00', [lapp('399', -33, 'PANTELAPP 5550001112')], '2026-10-06')
@@ -82,6 +82,18 @@ const mapOf = (pairs) => pairs.reduce((m, [it, s]) => (m[it.transactionId] = s, 
   const small = [mk('A', '10:00', [lapp('399', -6)]), mk('B', '10:10', [lapp('399', -6)])];
   assert.strictEqual(L.lappChecks(small.map((x) => x[0]), small.map((x) => x[0]), mapOf(small), CT()).findings.length, 0);
   // bare omfanget flagges for manuell pantelapp, men referansen for gjenbruk er alle
+  // samme kasse samme dag regnes som samme pantelapp uansett tid (den gamle «samme pantebeløp»-testen)
+  const same = [mk('A', '09:00', [lapp('399', -150)]), mk('A', '17:30', [lapp('399', -150)]), mk('A', '17:40', [lapp('399', -150)], null, 4)];
+  const sr = L.lappChecks(same.map((x) => x[0]), same.map((x) => x[0]), mapOf(same), CT());
+  assert.deepStrictEqual(sr.findings.filter((x) => x.code === 'lappReuse').map((x) => x.ids.length), [3], 'to på samme kasse hele dagen, den tredje innen 60 min');
+  // bongsum: ulike lapper, samme sum, bare på bongnivå
+  const tot = [mk('A', '10:00', [lapp('399', -50), lapp('399', -50), lapp('399', -50)]), mk('A', '11:00', [lapp('399', -100), lapp('399', -30), lapp('399', -20)])];
+  const tr = L.lappChecks(tot.map((x) => x[0]), tot.map((x) => x[0]), mapOf(tot), CT()).findings.filter((x) => x.code === 'lappReuse');
+  assert.strictEqual(tr.length, 1);
+  assert.match(tr[0].detail, /Pantelapper på til sammen 150\.00 kr innløst på 2 bonger/);
+  // gjentatte like lapper på samme bong gir ikke flere funn, og bongsummen gjentar ikke lapp-funnet
+  const rep3 = [mk('A', '10:00', [lapp('399', -50), lapp('399', -50), lapp('399', -50)]), mk('A', '10:20', [lapp('399', -50), lapp('399', -50), lapp('399', -50)])];
+  assert.strictEqual(L.lappChecks(rep3.map((x) => x[0]), rep3.map((x) => x[0]), mapOf(rep3), CT()).findings.filter((x) => x.code === 'lappReuse').length, 1);
   const part = L.lappChecks([its[3]], its, map, CT());
   assert.strictEqual(part.findings.filter((x) => x.code === 'lappReuse').length, 2);
   assert.strictEqual(part.findings.filter((x) => x.code === 'lappManual').length, 0);

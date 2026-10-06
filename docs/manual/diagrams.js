@@ -195,7 +195,7 @@ function tPant() {
       const x = 8 + i * 190;
       o += rect(x, 14, 176, 100, b[2] ? 'd-badsoft' : 'd-box') + text(x + 12, 38, b[0] + ' · kasse 2', { bold: true, size: 12 }) + text(x + 12, 58, 'bare pantelapper', { size: 11, cls: 'd-muted' }) + text(x + 12, 78, 'Kontant tilbake', { size: 11, cls: 'd-muted' }) + text(x + 12, 100, b[1], { bold: true, size: 14 });
     });
-    o += text(8, 146, 'Fire slike bonger på én kasse: «Kontant tilbake uten salg flere ganger». Samme beløp to ganger samme dag: «Samme pantebeløp utbetalt flere ganger».', { size: 11, cls: 'd-muted' });
+    o += text(8, 146, 'Fire slike bonger på én kasse: «Kontant tilbake uten salg flere ganger». Samme beløp to ganger samme dag på kassen: «Pantelapp innløst flere ganger».', { size: 11, cls: 'd-muted' });
     return o;
   }, 'tpant'), 'Pantelapper kan stamme fra flasker kjøpt andre steder, så en enkelt retur er normal. Det er gjentakelsen som er mønsteret.');
 }

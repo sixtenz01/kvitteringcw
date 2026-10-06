@@ -2,7 +2,7 @@
   'use strict';
 
   var L = typeof module !== 'undefined' && module.exports ? require('./logic.js') : root.KvLogic;
-  var VERSION = '3.14.0';
+  var VERSION = '3.15.0';
 
   // ---- SHA-256 (ren JS, så rapporten ikke avhenger av crypto.subtle) -------------------
   var K256 = [
@@ -269,7 +269,7 @@
         { html: g.weights.length ? g.weights.map(function (w) { return cfgLine(w.title, String(w.value), w.changed, false); }).join('') : '<span class="off">–</span>' }
       ] };
     }), 'cfg'));
-    P('<p class="hint">Risikonivå: høy fra 8 poeng, middels fra 4. Risikoscore er summen av poeng for avvikene på en kvittering. RRS (Receipt Risk Score, 0–100) = 100 × (1 − 2^(−poeng/8)): 4 poeng = 29, 8 = 50, 16 = 75.</p>');
+    P('<p class="hint">Risikonivå: høy fra 8 poeng, middels fra 4. Risikoscore er summen av poeng for avvikene på en kvittering; tester som måler samme forhold (for eksempel pant og kontant tilbake, eller flere rabattflagg) teller bare det høyeste poenget. RRS (Receipt Risk Score, 0–100) = 100 × (1 − 2^(−poeng/8)): 4 poeng = 29, 8 = 50, 16 = 75.</p>');
 
     P('<h2>5. Funn</h2>');
     if (!m.findings.length) P('<p>Ingen funn med gjeldende terskler.</p>');

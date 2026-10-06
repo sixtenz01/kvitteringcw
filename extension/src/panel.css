@@ -196,6 +196,8 @@ tr.kvr-follow>td.kvr-cb-cell::after{color:#e37400}
 #kvr-panel .kvr-st{padding:1px 6px;border-radius:999px;background:#e3ecff;color:#1a4a9c;font-size:10px;font-weight:600}
 #kvr-panel .kvr-reasons{display:flex;flex-wrap:wrap;gap:4px;padding:0 10px 8px}
 #kvr-panel .kvr-reason{padding:2px 8px;border-radius:6px;background:var(--kv-soft);border:1px solid var(--kv-line);font-size:11px;color:#2d4338}
+#kvr-panel .kvr-reason.kvr-cov{opacity:.55;text-decoration:line-through;text-decoration-thickness:1px}
+#kvr-panel .kvr-why li.kvr-cov{opacity:.65}
 #kvr-panel .kvr-ck-b{padding:4px 10px 10px;border-top:1px solid var(--kv-line);display:flex;flex-direction:column;gap:6px}
 #kvr-panel .kvr-why{margin:0;padding-left:18px;font-size:12px}
 #kvr-panel .kvr-why li{margin-bottom:3px}

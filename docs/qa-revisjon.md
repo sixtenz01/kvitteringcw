@@ -611,3 +611,21 @@ Fortsatt ikke bygget: F5, F13 og idéene som krever bilder, OCR, HR-data eller g
 | Mange rabatter tyder på sentral kampanje | Bygget: kampanjevare og kampanjedag undertrykker rabattflagg |
 
 Felles forbehold: slettede linjer, «spør pris», kortlinje, manuell kvittering og spesialbetaling er ikke sett i ekte data. Testene er skrevet etter beste gjetning om hvordan de står på bongen, og kan gi falske positive. Diagnostikk samler linjer pluginen ikke kjenner igjen, slik at ordlistene kan tilpasses.
+
+## 9. Dobbelttelling fjernet (versjon 3.15.0)
+
+Kontroll mot alle 237 demobonger viste at samme forhold ofte ga poeng flere ganger. Rettet slik:
+
+| Dobbelt opp | Tiltak |
+|---|---|
+| Pant og kontant tilbake (stor panteretur, mange pantelapper, kontant tilbake uten salg, flere ganger, varelinjer slettet) | Én gruppe: bare høyeste poeng teller |
+| Rabatt (uten årsak, overvåket årsak, høy prosent, uten treff) | Én gruppe |
+| Linjer, betaling, MVA og ugyldig sats | Én gruppe |
+| Avvikende pris og spør pris | Én gruppe |
+| Kassadifferanse og gjentatte kassadifferanser | Én gruppe |
+| Samme pantebeløp utbetalt flere ganger og pantelapp innløst flere ganger | Slått sammen til én test (gammel test og innstilling `pantRepeatN` fjernet) |
+| Avvikende pris og spør pris på samme linje | Prisavviks-testen hopper over spør pris-linjer |
+| Hendelsesord og spør pris / manuell kvittering | Hendelsesord utelater «manuell» og «spør pris» på bonger som egne tester allerede har flagget |
+| Felles kode og knapper | Én `isEan` og `unitPrice`, én Diagnostikk-knapp, én «Skann på nytt», kupongtabellen heter «Kuponger» |
+
+Overlapp med ulike signaler er beholdt (for eksempel medlemsnr flere ganger samme dag og nesten bare hos én kasserer).

@@ -1302,6 +1302,8 @@
     // grunnlag for tester som trenger hele bildet: alle innlastede bonger i valgte butikker
     var pop = mode === 'visible' ? items : recs.filter(function (r) { return storeOK(r.item); }).map(function (r) { return r.item; });
     var keep = function (f) { return f.ids.length ? f.ids.some(function (id) { return scopeIds[id]; }) : (f.cashier ? !!scopeCash[f.cashier] : true); };
+    var ask = L.askPrice(items, pop, scanMap, ctlCfg), manual = L.manualReceipts(items, pop, scanMap, ctlCfg), covered = {};
+    ask.findings.concat(manual.findings).forEach(function (f) { if (f.flag) f.ids.forEach(function (id) { covered[id] = true; }); });
     var res = {
       at: new Date(), n: items.length, mode: mode,
       profile: L.profiles(items, scanMap, ctlCfg),
@@ -1318,15 +1320,15 @@
       member: L.memberChecks(items, pop, ctlCfg),
       price: L.priceDeviation(items, pop, scanMap, ctlCfg),
       ku: L.kuChecks(items, pop, scanMap, ctlCfg),
-      ev: L.eventWords(items, scanMap, ctlCfg),
+      ev: L.eventWords(items, scanMap, ctlCfg, covered),
       ledger: L.ledger(items, pop, scanMap, ctlCfg),
       corr: L.retDiffCorr(items, scanMap, ctlCfg),
       lapp: L.lappChecks(items, pop, scanMap, ctlCfg),
       voids: L.voidChecks(items, pop, scanMap, ctlCfg),
       special: L.specialChecks(items, scanMap, ctlCfg),
-      ask: L.askPrice(items, pop, scanMap, ctlCfg),
+      ask: ask,
       card: L.cardChecks(items, pop, scanMap, ctlCfg),
-      manual: L.manualReceipts(items, pop, scanMap, ctlCfg)
+      manual: manual
     };
     res.seq.findings = res.seq.findings.filter(function (f) { return f.code === 'hours'; });
     res.seq.skippedGaps = res.deleted.skippedGaps;
@@ -1377,7 +1379,7 @@
       })));
     }
     if (D.campaigns.length) {
-      box.appendChild(el('b', { class: 'kvr-subh', text: 'Kuponger/kampanjer (flest først)' }));
+      box.appendChild(el('b', { class: 'kvr-subh', text: 'Kuponger (flest først)' }));
       box.appendChild(tbl(['Kupong-id', 'Navn', 'Bonger', 'Sum kr'], D.campaigns.slice(0, 10).map(function (c) { return [c.id, c.name, c.n, fmt(c.sum)]; })));
     }
     if (D.camp && (D.camp.items.length || D.camp.days.length)) {
@@ -1414,7 +1416,7 @@
       (K.applicable ? 'Tabellen finnes på de fleste medlemsbonger, så fravær regnes som avvik.' : 'Tabellen finnes ikke på nok medlemsbonger (eller for få er skannet) til at fravær regnes som avvik.') +
       (K.ratio !== null ? ' Vanlig forhold grunnlag/varesum: ' + Math.round(K.ratio * 100) + ' %.' : '')));
     box.appendChild(el('b', { class: 'kvr-subh', text: 'Hendelsesord' }));
-    box.appendChild(hintEl(E.hits + ' av ' + E.scanned + ' skannede bonger har ord som annullert, parkert, manuell eller spør pris. Slike hendelser er ikke observert i ekte data ennå.'));
+    box.appendChild(hintEl(E.hits + ' av ' + E.scanned + ' skannede bonger har ord som annullert, parkert, manuell eller spør pris. Slike hendelser er ikke observert i ekte data ennå.' + (E.covered ? ' ' + E.covered + ' av dem har bare ord som allerede har egne tester (spør pris, manuell kvittering) og flagges der.' : '')));
     box.appendChild(el('div', { class: 'kvr-row' }, [btn('Diagnostikk: ukjente linjer…', openDiag)]));
   }
 
@@ -1486,9 +1488,7 @@
     }
     box.appendChild(el('b', { class: 'kvr-subh', text: 'Manuell kvittering og til gode-lapp' }));
     box.appendChild(hintEl(M.words.length ? M.manual + ' bonger med ordene «' + M.words.join('», «') + '» blant ' + M.scanned + ' skannede; ' + M.findings.length + ' har samme beløp som en annen bong innen ' + ctlCfg.manualDays + ' dager. Ordene er ikke bekreftet i ekte data; se Diagnostikk.' : 'Av: ordlisten er tom under Innstillinger.'));
-    var old = oldScans().length;
-    if (old) box.appendChild(el('div', { class: 'kvr-row' }, [btn('Skann på nytt (' + old + ' eldre)', rescanOld)]));
-    box.appendChild(el('div', { class: 'kvr-row' }, [btn('Diagnostikk: ukjente linjer…', openDiag)]));
+    box.appendChild(hintEl('Kortdata krever ny skanning: bruk «Skann på nytt» under Bongregnskap og referanser. Ukjente linjer og ord finner du i Diagnostikk under Pris, kjøpeutbytte og hendelser.'));
   }
 
   function renderAcctCard(R) {
@@ -2200,13 +2200,15 @@
     ].filter(Boolean));
     head.addEventListener('click', function () { expanded[id] = !open; renderCheck(); });
     var card = el('div', { class: 'kvr-ck' + (open ? ' kvr-open' : '') }, [head,
-      el('div', { class: 'kvr-reasons' }, rk.reasons.map(function (r) { return el('span', { class: 'kvr-reason', text: L.reasonBase(r) }); }))]);
+      el('div', { class: 'kvr-reasons' }, L.scoreBreakdown(rk.reasons, weights).map(function (x) {
+        return el('span', { class: 'kvr-reason' + (x.counts ? '' : ' kvr-cov'), text: L.reasonBase(x.reason), title: x.counts ? '' : 'Teller ikke: samme forhold er dekket av «' + L.reasonBase(x.by) + '»' });
+      }))]);
     if (!open) return card;
 
     var body = el('div', { class: 'kvr-ck-b' });
-    var why = el('ul', { class: 'kvr-why' }, rk.reasons.map(function (r) {
-      var gid = L.groupForReason(r);
-      return el('li', {}, [el('span', { text: L.explainReason(r, { id: id, cfg: anomCfg, ctl: ctlCfg, findings: ctlRes ? ctlRes.findings : [], rules: customRules }) }),
+    var why = el('ul', { class: 'kvr-why' }, L.scoreBreakdown(rk.reasons, weights).map(function (x) {
+      var r = x.reason, gid = L.groupForReason(r);
+      return el('li', { class: x.counts ? '' : 'kvr-cov' }, [el('span', { text: L.explainReason(r, { id: id, cfg: anomCfg, ctl: ctlCfg, findings: ctlRes ? ctlRes.findings : [], rules: customRules }) + (x.counts ? '' : ' (Teller ikke: dekket av «' + L.reasonBase(x.by) + '».)') }),
         gid ? el('button', { type: 'button', class: 'kvr-ent kvr-adj', text: 'Juster', title: 'Åpne terskler og poeng for denne testen', onclick: function () { openSettings(gid); } }) : null].filter(Boolean));
     }));
     body.appendChild(el('div', { class: 'kvr-hint', text: 'Hvorfor flagget?' }));

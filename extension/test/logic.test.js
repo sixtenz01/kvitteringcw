@@ -233,9 +233,7 @@ assert.strictEqual(L.patterns(mi, {}, Object.assign({}, C, { closeTime: '00:00',
 const pci = [mkI('p-1', '2026-10-02', '10:00', 1, 'A', -150, 1), mkI('p-2', '2026-10-02', '11:00', 1, 'A', -150, 1), mkI('p-3', '2026-10-02', '12:00', 1, 'A', 30, 1), mkI('p-4', '2026-10-02', '12:10', 2, 'A', -150, 1)];
 const pcs = { 'p-1': rcpt([['399 PANTELAPP', '', '-150.00']]), 'p-2': rcpt([['399 PANTELAPP', '', '-150.00']]), 'p-3': rcpt([['220 PANT', '', '2.00']]), 'p-4': rcpt([['399 PANTELAPP', '', '-150.00']]) };
 const pk = L.pantCheck(pci, pcs, C);
-assert.strictEqual(pk.findings.length, 1);
-assert.strictEqual(pk.findings[0].ids.length, 2);
-assert.match(pk.findings[0].detail, /Kasse 1 2026-10-02: 150 kr × 2/);
+assert.strictEqual(pk.findings.length, 0, 'gjentatte pantebeløp ligger nå i lappChecks (Pantelapp innløst flere ganger)');
 assert.deepStrictEqual(pk.balance.map(b => [b.sale, b.ret, b.diff, b.flag]), [[2, 450, -448, true]]);
 assert.strictEqual(L.pantCheck(pci, pcs, Object.assign({}, C, { pantRatio: '' })).balance[0].flag, false);
 
@@ -298,7 +296,22 @@ assert.strictEqual(L.focusStats([], {}).avg, 0);
 
 // ---- risikoscore, rangering og forklaring
 const W = L.sanitizeWeights(null);
-assert.strictEqual(L.riskScore(['Stor panteretur (256 kr)', 'Kontant tilbake uten salg', 'Rundt beløp'], W), 8);
+assert.strictEqual(L.riskScore(['Stor panteretur (256 kr)', 'Kontant tilbake uten salg', 'Rundt beløp'], W), 5, 'pant og kontant tilbake er samme familie: høyeste (4) + rundt beløp (1)');
+// tester som måler samme forhold teller bare det høyeste poenget per bong
+assert.strictEqual(L.riskScore(['Kontant tilbake uten salg', 'Kontant tilbake uten salg flere ganger', 'Varelinjer slettet, pant utbetalt kontant'], W), 5);
+assert.strictEqual(L.riskScore(['Høy rabattprosent', 'Rabatt uten årsak', 'Rabatt uten treff på andre salg'], W), 4);
+assert.strictEqual(L.riskScore(['Linjer stemmer ikke med totalen', 'Betaling stemmer ikke med totalen', 'MVA stemmer ikke'], W), 4);
+assert.strictEqual(L.riskScore(['Avvikende pris på vare', 'Spør pris avviker fra dagens salg'], W), 3);
+assert.strictEqual(L.riskScore(['Kassadifferanse', 'Gjentatte kassadifferanser'], W), 5);
+assert.strictEqual(L.riskScore(['Medlemsnr flere ganger samme dag', 'Medlemsnr brukt svært mye'], W), 4, 'ulike signaler summeres');
+assert.strictEqual(L.riskScore(['Retur uten salg', 'Kortkjøp refundert kontant'], W), 8, 'ulike familier summeres');
+assert.strictEqual(L.riskScore(['Kontant tilbake uten salg', 'Rabatt uten årsak', 'Linjer stemmer ikke med totalen'], W), 11, 'ulike familier summeres');
+const bd = L.scoreBreakdown(['Rabatt uten årsak', 'Høy rabattprosent', 'Rundt beløp (500 kr)'], W);
+assert.deepStrictEqual(bd.map((x) => [x.counts, x.by]), [[true, null], [false, 'Rabatt uten årsak'], [true, null]], 'lik vekt: den første teller');
+assert.strictEqual(L.reasonFamily('Stor panteretur (256 kr)'), 'kontant');
+assert.strictEqual(L.reasonFamily('Rundt beløp'), null);
+assert.strictEqual(L.scoreBreakdown(['Høy rabattprosent', 'Rabatt uten årsak'], Object.assign({}, W, { 'Rabatt uten årsak': 9 })).find((x) => x.counts).reason, 'Rabatt uten årsak', 'vektene avgjør hvilken som teller');
+Object.keys(L.FAMILIES).forEach((f) => L.FAMILIES[f].forEach((t) => assert.ok(t in L.RISK_WEIGHTS, 'ukjent test i familie: ' + t)));
 assert.strictEqual(L.riskScore(['Regel: Min regel'], W), 3);
 assert.strictEqual(L.riskScore(['Ukjent grunn'], W), 2);
 assert.strictEqual(L.riskScore(['Stor panteretur (1 kr)'], Object.assign({}, W, { 'Stor panteretur': '10' })), 10);
@@ -307,9 +320,9 @@ assert.deepStrictEqual([L.riskLevel(9), L.riskLevel(8), L.riskLevel(4), L.riskLe
 const rkItems = [mkI('k-1', '2026-10-02', '10:00', 1, 'A', 100), mkI('k-2', '2026-10-02', '11:00', 1, 'B', -300), mkI('k-3', '2026-10-02', '12:00', 2, 'B', 500), mkI('k-4', '2026-10-02', '13:00', 1, 'A', 50)];
 const rkAnom = { 'k-1': ['Rundt beløp'], 'k-2': ['Stor panteretur (300 kr)', 'Kontant tilbake uten salg'], 'k-3': ['Rundt beløp', 'Samme beløp gjentatt'] };
 const rkr = L.rankReceipts(rkItems, rkAnom, W);
-assert.deepStrictEqual(rkr.map(r => [r.id, r.score]), [['k-2', 7], ['k-3', 4], ['k-1', 1]]);
+assert.deepStrictEqual(rkr.map(r => [r.id, r.score]), [['k-3', 4], ['k-2', 4], ['k-1', 1]], 'k-2: pant og kontant tilbake er samme familie, høyeste (4) teller');
 const rkc = L.rankCashiers(rkItems, rkAnom, W, { rows: [{ id: 'A', flags: { retShare: true, avg: false } }, { id: 'C', flags: {} }] });
-assert.deepStrictEqual(rkc.map(c => [c.id, c.score, c.flagged]), [['B', 11, 2], ['A', 3, 1]]);
+assert.deepStrictEqual(rkc.map(c => [c.id, c.score, c.flagged]), [['B', 8, 2], ['A', 3, 1]]);
 assert.deepStrictEqual(rkc[1].profile, ['høy returandel']);
 const ex = r => L.explainReason(r, { id: 'k-2', cfg: L.defaultAnom(), ctl: L.defaultControl(), rules: [{ name: 'Min', conds: [{ f: 'sum', op: '<=', v: '-200' }, { f: 'tid', op: '>=', v: '20:00' }] }], findings: [{ title: 'Samme beløp gjentatt', ids: ['k-2'], detail: 'Kasserer B 2026-10-02: -300 kr × 3' }] });
 assert.match(ex('Stor panteretur (300 kr)'), /300 kr\. Grensen er 300 kr/);

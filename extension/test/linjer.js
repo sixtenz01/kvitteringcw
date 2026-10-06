@@ -89,7 +89,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   await analyse();
   const fnd = await txt('[data-sec=findings]');
   assert.match(fnd, /Pantelapp: Manuell pantelapp Kasse 1 10:\d\d kasserer A: 1 manuell pantelapp \(kode 99\), 60\.00 kr/);
-  assert.match(fnd, /Pantelapp: Pantelapp innløst flere ganger Pantelapp 45\.00 kr innløst på 2 bonger innen 60 min: kasse 1 12:00 \(kasserer B\), kasse 2 12:20 \(kasserer B\)/);
+  assert.match(fnd, /Pantelapp: Pantelapp innløst flere ganger Pantelapp 45\.00 kr innløst på 2 bonger \(innen 60 min, eller samme kasse samme dag\): 10-02 12:00 kasse 1 \(kasserer B\), 10-02 12:20 kasse 2 \(kasserer B\)/);
   assert.match(fnd, /Pantelapp: Pantelapp slettet .*kasserer C: 1 × pantelapp 25\.00 kr slettet \(linje og motlinje\)/);
   assert.match(fnd, /Slettede linjer: Varelinjer slettet, pant utbetalt kontant .*1 varelinje slettet \(150\.00 kr\)\. Igjen er bare pant, og 150\.00 kr betalt tilbake kontant/);
   assert.match(fnd, /Mønster: Kontant tilbake uten salg flere ganger|Slettede linjer: Varelinjer slettet/);
@@ -107,6 +107,14 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   assert.match(lines, /1 varelinje slettet på 1 bong, 1 av dem med pant og kontant tilbake/);
   assert.match(lines, /Eget forbruk 1 30,00/);
   assert.match(lines, /VISA …1234 3 3 300,00/);
+
+  // samme forhold teller bare én gang: den svakeste årsaken vises overstrøket med forklaring
+  await go('Analyse', 'Sjekk først');
+  const cov = await page.$$eval('.kvr-reason.kvr-cov', (n) => n.map((x) => x.title + '|' + x.textContent));
+  assert.ok(cov.length >= 2, 'overstrøkne årsaker: ' + cov.length);
+  assert.ok(cov.every((c) => /^Teller ikke: samme forhold er dekket av «[^»]+»\|/.test(c)), cov.join(' ; '));
+  assert.ok(cov.some((c) => /Kontant tilbake uten salg\b/.test(c.split('|')[1])), 'kontant tilbake uten salg er dekket av høyere poeng i samme familie');
+  assert.ok(await page.$('.kvr-reason:not(.kvr-cov)'));
 
   // søk: spesialbetaling og rabatt-prosent
   const viser = async () => (await txt('.kvr-tiles')).match(/^(\d+) \/ (\d+)/)[1];
