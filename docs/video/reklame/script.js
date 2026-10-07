@@ -447,9 +447,11 @@ function showReceipt(parent, lines) {
 const SCENES = [];
 // scener som tones ut siste overgang (resten har felles bakgrunn/panel og går direkte over i neste)
 const FADEOUT = new Set(['problem', 'produkt', 'tolv', 'sjekk', 'monstre', 'funn', 'kasserer', 'rapport', 'foreetter']);
-const PACE = { hook: 1.06, problem: 1.09, produkt: 1.1, hent: 1.12, skann: 1.08, analyse: 1.07, tolv: 1.12, sjekk: 1.09, monstre: 1.09, funn: 1.08, kasserer: 1.11, rapport: 1.1, foreetter: 1.11, cta: 1.14 };
+// tempofaktor per scene: under 1 = roligere (mer tid til å lese), over 1 = raskere. ?tempo=1.2 gjør alt 20 % raskere, ?tempo=0.8 roligere.
+const TEMPO = Number(new URLSearchParams(location.search).get('tempo')) || 1;
+const PACE = { hook: .95, problem: .9, produkt: .88, hent: .9, skann: .9, analyse: .9, tolv: .84, sjekk: .84, monstre: .82, funn: .78, kasserer: .84, rapport: .85, foreetter: .85, cta: 1 };
 // k = tempofaktor: scenens interne tidslinje spilles k ganger raskere (dur/k sekunder i virkeligheten)
-const scene = (id, dur, factory, cues) => { const k = PACE[id] || 1; SCENES.push({ id, dur: dur / k, k, factory, cues: cues || [] }); };
+const scene = (id, dur, factory, cues) => { const k = (PACE[id] || 1) * TEMPO; SCENES.push({ id, dur: dur / k, k, factory, cues: cues || [] }); };
 const add = (root, cls, html, css) => { const n = el('div', cls, html); if (css) Object.assign(n.style, css); root.appendChild(n); return n; };
 const LOGO_SVG = '<svg viewBox="0 0 150 150"><path fill="#fff" d="M44 30a5 5 0 0 1 5-5h52a5 5 0 0 1 5 5v94l-6-6-6 6-6-6-6 6-6-6-6 6-6-6-6 6-6-6-6 6z"/><rect x="58" y="48" width="34" height="6" rx="3" fill="#00693C" opacity=".5"/><rect x="58" y="63" width="34" height="6" rx="3" fill="#00693C" opacity=".5"/><rect x="58" y="78" width="34" height="6" rx="3" fill="#00693C" opacity=".5"/><rect x="58" y="97" width="20" height="8" rx="4" fill="#00693C"/></svg>';
 function stagePos(node, ax, ay) { const r = node.getBoundingClientRect(), s = $('#stage').getBoundingClientRect(), k = s.width / 1920; return [(r.left - s.left + r.width * (ax == null ? .5 : ax)) / k, (r.top - s.top + r.height * (ay == null ? .5 : ay)) / k]; }
@@ -982,11 +984,12 @@ const Demo = (() => {
 function boot() {
   Engine.layout(); Engine.fit(); addEventListener('resize', Engine.fit);
   const gate = $('#gate'), end = $('#end'), dev = $('#dev'), sound = $('#sound');
+  $('#gate-note').textContent = `Kvitteringshenter · reklame · ca. ${Math.round(Engine.total / 5) * 5} sekunder`;
   Engine.onEnd = () => { if (!RENDER) end.hidden = false; };
   const start = () => { gate.hidden = true; end.hidden = true; Sfx.emit('scene-transition'); Engine.restart(); };
 
   // offentlig API (brukes også til opptak): KH.seek(t), KH.onSound(fn) …
-  window.KH = { seek: t => Engine.seek(t), play: Engine.play, pause: Engine.pause, restart: Engine.restart, scene: Engine.scene, scenes: SCENES.map(s => ({ id: s.id, start: s.start, dur: s.dur })), total: Engine.total, onSound: Sfx.on, demo: Demo.open, cues: () => SCENES.flatMap(s => s.cues.map(c => ({ t: +(s.start + c[0] / s.k).toFixed(3), name: c[1], scene: s.id }))) };
+  window.KH = { seek: t => Engine.seek(t), play: Engine.play, pause: Engine.pause, restart: Engine.restart, scene: Engine.scene, scenes: SCENES.map(s => ({ id: s.id, start: s.start, dur: s.dur, k: s.k })), total: Engine.total, onSound: Sfx.on, demo: Demo.open, cues: () => SCENES.flatMap(s => s.cues.map(c => ({ t: +(s.start + c[0] / s.k).toFixed(3), name: c[1], scene: s.id }))) };
   window.__render = t => Engine.seek(t);
   window.__prep = () => { gate.hidden = true; end.hidden = true; sound.hidden = true; dev.hidden = true; $('#stage').style.transform = 'none'; };
 
@@ -1020,7 +1023,7 @@ function boot() {
 
   const hash = location.hash.match(/t=([\d.]+)/);
   if (hash) { gate.hidden = true; Engine.play(+hash[1]); }
-  else if (RM || Q.has('gate')) { Engine.seek(0); gate.hidden = false; $('#gate-note').textContent = 'Kvitteringshenter · reklame · redusert bevegelse er på'; }
+  else if (RM || Q.has('gate')) { Engine.seek(0); gate.hidden = false; $('#gate-note').textContent += ' · redusert bevegelse er på'; }
   else { gate.hidden = true; Sfx.emit('scene-transition'); Engine.restart(); }
 }
 boot();

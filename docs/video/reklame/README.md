@@ -1,6 +1,6 @@
 # Kvitteringshenter – reklame (HTML, CSS og JavaScript)
 
-Åpne `index.html` direkte i nettleseren. Ingen bygging, ingen eksterne biblioteker. Reklamen er ca. 40 sekunder, starter av seg selv og kan spilles, spoles og restartes.
+Åpne `index.html` direkte i nettleseren. Ingen bygging, ingen eksterne biblioteker. Reklamen er ca. 50 sekunder, starter av seg selv og kan spilles, spoles og restartes.
 
 | Fil | Innhold |
 |---|---|
@@ -28,6 +28,7 @@
 | `←` `→` | spol ±2 s |
 | `?dev` i adressen | spolebar og scenelinje |
 | `#t=12.5` i adressen | start på 12,5 s |
+| `?tempo=1.2` i adressen | tempo: 1.2 = 20 % raskere, 0.8 = roligere (standard 1) |
 | Etter reklamen | «Spill igjen» og «Utforsk demo» (Hent, Filtrer, Skann, Analyse, Rapport) |
 
 Stående mobil: flaten dreies 90° slik at 16:9-reklamen fyller skjermen. Med `prefers-reduced-motion` starter ikke reklamen av seg selv, datastrømmen står stille og uskarphet er slått av.

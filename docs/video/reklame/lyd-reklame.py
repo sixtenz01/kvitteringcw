@@ -5,6 +5,7 @@ import json, math, random, struct, sys, wave
 SR = 44100
 D = json.load(open(sys.argv[1])); DUR = D['total'] + .6; N = int(DUR * SR)
 START = {s['id']: s['start'] for s in D['scenes']}
+K = {s['id']: s.get('k', 1) for s in D['scenes']}
 random.seed(8)
 mix = [0.0] * N
 hz = lambda m: 440.0 * 2 ** ((m - 69) / 12)
@@ -77,7 +78,7 @@ t = START['hent']; step = .25; i = 0; end = START['cta'] + .3
 while t < end:
     bar = int((t - START['hent']) / 2.0); ch = PROG[bar % 4]; m = CH[ch][i % 8]
     inten = .6 + .5 * clamp((t - START['analyse']) / 8, 0, 1) + (.35 if START['analyse'] <= t < START['tolv'] else 0)
-    if START['tolv'] + 2.0 <= t < START['sjekk']: inten *= .55          # åndepause rundt «12»
+    if START['tolv'] + 1.9 / K['tolv'] <= t < START['sjekk']: inten *= .55          # åndepause rundt «12»
     vel = (.075 + (.03 if i % 8 == 0 else 0)) * inten
     put(t, pluck(m + (12 if (t > START['sjekk'] and i % 16 > 7) else 0), .8), vel)
     if i % 8 == 0: tone(t, hz(ROOT[ch]), 1.9, .13 * min(1, inten), env=lambda x: min(1, x * 25) * math.exp(-x * 1.6))
@@ -86,7 +87,7 @@ while t < end:
 t = START['sjekk']
 while t < START['rapport'] + 2.0: thump(t, .22); t += .5
 # 5 · stor løsning på «12» og i finalen
-t12 = START['tolv'] + 2.55 / 1.12
+t12 = START['tolv'] + 2.55 / K['tolv']
 noise_sweep(t12 - .9, .9, 300, 7000, .08, shape=lambda x: x ** 3)
 thump(t12, .85)
 for i, m in enumerate((57, 61, 64, 69, 73, 76, 81)): put(t12 + .03 + i * .04, bell(m, 3.2), .1)
