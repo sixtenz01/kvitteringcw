@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="nb"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Kvitteringshenter</title>
+<style>
+@font-face{font-family:'Inter';src:url(inter.woff2) format('woff2');font-weight:100 900;font-style:normal}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;background:#000;overflow:hidden}
+#stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;margin:-540px 0 0 -960px;background:#000;overflow:hidden;
+  font-family:Inter,-apple-system,'SF Pro Display','Helvetica Neue',Arial,sans-serif;color:#f5f5f7;-webkit-font-smoothing:antialiased;font-feature-settings:'tnum' 1,'cv05' 1}
+.line{position:absolute;left:0;width:1920px;text-align:center;white-space:nowrap;font-weight:700;letter-spacing:-.035em;line-height:1.05;will-change:transform,opacity,filter;visibility:hidden}
+.left{position:absolute;left:120px;text-align:left;white-space:nowrap;font-weight:700;letter-spacing:-.035em;line-height:1.04;will-change:transform,opacity,filter;visibility:hidden}
+.gray{color:#86868b;font-weight:600;letter-spacing:-.02em}
+.wd{display:inline-block;will-change:transform,opacity,filter}
+.g1,.g2,.g3,.g4,.gm{-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent;padding-bottom:.08em;margin-bottom:-.08em}
+.g1{background-image:linear-gradient(90deg,#30d158,#64d2ff)}
+.g2{background-image:linear-gradient(90deg,#ffd60a,#ff375f)}
+.g3{background-image:linear-gradient(90deg,#0a84ff,#bf5af2)}
+.g4{background-image:linear-gradient(90deg,#64d2ff,#5e5ce6)}
+.gm{background-image:linear-gradient(90deg,#7ef0c0,#2fbf8a)}
+.glow{position:absolute;border-radius:50%;pointer-events:none;opacity:0;will-change:opacity,transform}
+#persp,#dp{position:absolute;inset:0;perspective:2800px}
+#dev{position:absolute;left:-240px;top:-135px;width:2400px;height:1350px;border-radius:44px;overflow:hidden;transform-origin:50% 50%;
+  box-shadow:0 0 0 2px rgba(255,255,255,.10);background:#e9eeeb;opacity:0;will-change:transform,opacity,filter}
+#dev img{display:block;width:2400px;height:1350px}
+#veil{position:absolute;left:0;top:0;width:1100px;height:1080px;background:linear-gradient(90deg,#000 0,#000 1000px,rgba(0,0,0,0) 1075px);opacity:0}
+.col{position:absolute;width:640px;text-align:center;top:270px}
+.col .n{font-size:262px;font-weight:700;letter-spacing:-.05em;line-height:1;white-space:nowrap}
+.col .l{font-size:64px;margin-top:6px;white-space:nowrap}
+.sep{position:absolute;top:300px;width:1px;height:500px;background:linear-gradient(180deg,rgba(255,255,255,0),rgba(255,255,255,.22),rgba(255,255,255,0));opacity:0}
+.beat{position:absolute;inset:0;perspective:2400px;display:none}
+.bw{position:absolute;left:120px;top:96px;font-size:250px;font-weight:700;letter-spacing:-.05em;line-height:1;white-space:nowrap}
+.bs{position:absolute;left:128px;top:372px;font-size:58px;line-height:1.15;white-space:nowrap}
+.bc{position:absolute;border-radius:26px;overflow:hidden;background:#fff;box-shadow:0 0 0 1px rgba(255,255,255,.10),0 50px 110px rgba(0,0,0,.75);opacity:0;will-change:transform,opacity,filter}
+.bc img{display:block;width:100%}
+.doc{position:absolute;border-radius:22px;overflow:hidden;background:#fff;box-shadow:0 0 0 1px rgba(255,255,255,.10),0 50px 120px rgba(0,0,0,.8);opacity:0;will-change:transform,opacity,filter}
+.doc img{display:block;width:100%}
+#fnbg{position:absolute;left:0;bottom:0;width:1920px;height:130px;background:linear-gradient(180deg,rgba(0,0,0,0),#000 70%);opacity:0}
+#fn{position:absolute;left:0;width:1920px;text-align:center;bottom:34px;font-size:22px;color:#6e6e73;font-weight:500;opacity:0}
+#fade{position:absolute;inset:0;background:#000;opacity:0;pointer-events:none}
+#bar{position:absolute;left:0;bottom:0;height:3px;background:rgba(255,255,255,.55);width:0}
+#start{position:fixed;inset:0;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:26px;color:#f5f5f7;font-family:Inter,-apple-system,'Helvetica Neue',Arial,sans-serif;cursor:pointer;z-index:10;transition:opacity .6s}
+#start .b{display:flex;align-items:center;gap:14px;padding:18px 36px;border-radius:999px;background:#f5f5f7;color:#000;font-size:22px;font-weight:600;letter-spacing:-.01em}
+#start .c{font-size:15px;color:#86868b;font-weight:500}
+</style></head><body>
+<div id="stage">
+  <div class="glow" id="glow" style="left:160px;top:200px;width:1600px;height:900px;background:radial-gradient(closest-side,rgba(48,209,140,.40),rgba(48,209,140,0))"></div>
+  <div class="glow" id="glow2" style="left:260px;top:360px;width:1400px;height:900px;background:radial-gradient(closest-side,rgba(48,209,140,.34),rgba(48,209,140,0))"></div>
+  <div class="glow" id="glow3" style="left:560px;top:-60px;width:800px;height:800px;background:radial-gradient(closest-side,rgba(48,209,140,.34),rgba(48,209,140,0))"></div>
+
+  <!-- 1 -->
+  <div class="line gray" id="a1" style="top:440px;font-size:132px">Hver dag.</div>
+  <div class="line" id="n241" style="top:170px;font-size:460px;letter-spacing:-.06em">0</div>
+  <div class="line gray" id="n241l" style="top:690px;font-size:80px">kvitteringer.</div>
+  <div class="line" id="a2" style="top:410px;font-size:132px">Hvilke bør du <span class="g1">se på?</span></div>
+
+  <!-- 2 -->
+  <div class="line" id="h1" style="top:58px;font-size:150px">Kvitteringshenter.</div>
+  <div class="line gray" id="h2" style="top:236px;font-size:58px">Rangerer hver bong. Forklarer hvorfor.</div>
+  <div id="persp"><div id="dev"><img src="../ui-bilder/stor-dokket.jpg"></div></div>
+  <div id="veil"></div>
+  <div class="left gray" id="m0" style="top:222px;font-size:46px">Sjekk først.</div>
+  <div class="left" id="m1" style="top:292px;font-size:108px">Rangert etter<br>risiko.</div>
+  <div class="left" id="m2" style="top:556px;font-size:108px"><span class="g1">Forklart</span><br><span class="g1">bong for bong.</span></div>
+
+  <!-- 3 -->
+  <div class="col" id="c1" style="left:160px"><div class="n" id="n1" style="color:#86868b">0</div><div class="l gray">kvitteringer</div></div>
+  <div class="col" id="c2" style="left:640px"><div class="n" id="n2">0</div><div class="l gray">å sjekke</div></div>
+  <div class="col" id="c3" style="left:1120px"><div class="n g2" id="n3">0</div><div class="l gray">høy risiko</div></div>
+  <div class="sep" id="sp1" style="left:720px"></div><div class="sep" id="sp2" style="left:1200px"></div>
+  <div class="line gray" id="nc" style="top:880px;font-size:56px">Fra alle bongene til de som betyr noe.</div>
+
+  <!-- 4 -->
+  <div class="beat" id="b1"><div class="glow" style="left:700px;top:420px;width:1200px;height:760px;background:radial-gradient(closest-side,rgba(48,209,140,.42),rgba(48,209,140,0));opacity:1"></div>
+    <div class="bw"><span class="g1">Pant.</span></div><div class="bs gray">Manuell, maskin, slettet<br>og gjenbrukt.</div>
+    <div class="bc" style="left:640px;top:600px;width:1200px"><img src="../ui-bilder/d-lapp.jpg"></div></div>
+  <div class="beat" id="b2"><div class="glow" style="left:700px;top:380px;width:1200px;height:800px;background:radial-gradient(closest-side,rgba(255,159,10,.40),rgba(255,159,10,0));opacity:1"></div>
+    <div class="bw"><span class="g2">Rabatt.</span></div><div class="bs gray">Mulig sentral kampanje?<br>Du bestemmer.</div>
+    <div class="bc" style="left:1340px;top:330px;width:500px"><img src="../ui-bilder/sjekk-kampanje.jpg"></div>
+    <div class="bc" style="left:560px;top:640px;width:1170px"><img src="../ui-bilder/kampanje-dialog.jpg"></div></div>
+  <div class="beat" id="b3"><div class="glow" style="left:700px;top:420px;width:1200px;height:760px;background:radial-gradient(closest-side,rgba(10,132,255,.42),rgba(10,132,255,0));opacity:1"></div>
+    <div class="bw"><span class="g3">Kasserer.</span></div><div class="bs gray">Hver profil mot<br>butikkens snitt.</div>
+    <div class="bc" style="left:600px;top:590px;width:1254px"><img src="../ui-bilder/d-profile.jpg"></div></div>
+  <div class="beat" id="b4"><div class="glow" style="left:700px;top:380px;width:1200px;height:800px;background:radial-gradient(closest-side,rgba(100,210,255,.40),rgba(100,210,255,0));opacity:1"></div>
+    <div class="bw"><span class="g4">Mønstre.</span></div><div class="bs gray">Når og hvor<br>det skjer.</div>
+    <div class="bc" style="left:610px;top:640px;width:594px"><img src="../ui-bilder/ch-heat.jpg"></div>
+    <div class="bc" style="left:1060px;top:470px;width:700px"><img src="../ui-bilder/ch-cash.jpg"></div></div>
+
+  <!-- 5 -->
+  <div class="line" id="r1" style="top:56px;font-size:190px"><span class="g1">Etterprøvbart.</span></div>
+  <div class="line gray" id="r2" style="top:268px;font-size:54px">Revisjonsrapport i én ZIP. Kontrollsum på hver fil.</div>
+  <div id="dp"><div class="doc" id="rd2" style="left:980px;top:380px;width:760px"><img src="../ui-bilder/rapport-funn.jpg"></div>
+    <div class="doc" id="rd1" style="left:430px;top:420px;width:540px;z-index:2"><img src="../ui-bilder/rapport-forside.jpg"></div></div>
+
+  <!-- 6 -->
+  <svg class="line" id="lock" style="top:170px;left:900px;width:120px;height:140px" viewBox="0 0 120 140" fill="none" stroke="#f5f5f7" stroke-width="9" stroke-linecap="round"><rect x="14" y="58" width="92" height="72" rx="16"/><path d="M34 58V42a26 26 0 0 1 52 0v16"/></svg>
+  <div class="line" id="p1" style="top:360px;font-size:150px">Ingen kall mot<br>Lindbaks API.</div>
+  <div class="line gray" id="p2" style="top:710px;font-size:64px">Alt blir på maskinen din.</div>
+
+  <!-- slutt -->
+  <svg class="line" id="lg" style="top:170px;left:830px;width:260px;height:260px" viewBox="0 0 260 260"><defs><linearGradient id="lgg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3ddc97"/><stop offset="1" stop-color="#00704a"/></linearGradient></defs>
+    <rect width="260" height="260" rx="60" fill="url(#lgg)"/>
+    <path fill="#fff" d="M78 60a8 8 0 0 1 8-8H182a8 8 0 0 1 8 8V206l-8-10-8 10-8-10-8 10-8-10-8 10-8-10-8 10-8-10-8 10-8-10-8 10-8-10-8 10-8-10z"/>
+    <rect x="100" y="88" width="60" height="9" rx="4.5" fill="#00704a" opacity=".45"/><rect x="100" y="112" width="60" height="9" rx="4.5" fill="#00704a" opacity=".45"/><rect x="100" y="136" width="60" height="9" rx="4.5" fill="#00704a" opacity=".45"/><rect x="100" y="166" width="38" height="12" rx="6" fill="#00704a"/></svg>
+  <div class="line" id="e1" style="top:500px;font-size:128px">Kvitteringshenter</div>
+  <div class="line gray" id="e2" style="top:672px;font-size:58px">Ta kontroll på kvitteringsjournalen.</div>
+  <div class="line gray" id="e3" style="top:780px;font-size:34px;color:#6e6e73;font-weight:500">Tillegg for Chrome  ·  For Lindbak Chain Web</div>
+
+  <div id="fnbg"></div><div id="fn">Skjermbildene viser oppdiktede data.</div>
+  <div id="fade"></div><div id="bar"></div>
+</div>
+<div id="start"><div class="b"><svg width="20" height="22" viewBox="0 0 20 22"><path d="M2 2l16 9L2 20z" fill="#000"/></svg>Spill av</div><div class="c">Kvitteringshenter · 44 sek · med lyd</div></div>
+<audio id="aud" src="apple.mp3" preload="auto"></audio>
+<script>
+'use strict';
+const DUR=44;
+const $=id=>document.getElementById(id);
+const cl=(x,a=0,b=1)=>Math.min(b,Math.max(a,x));
+const lerp=(a,b,x)=>a+(b-a)*x;
+const seg=(t,a,b)=>cl((t-a)/(b-a));
+// cubic-bezier som i CSS
+function bez(x1,y1,x2,y2){return function(x){if(x<=0)return 0;if(x>=1)return 1;let t=x;for(let i=0;i<10;i++){const u=1-t,cx=3*x1*t*u*u+3*x2*t*t*u+t*t*t-x,dx=3*x1*u*u+6*(x2-x1)*t*u+3*(1-x2)*t*t;if(Math.abs(cx)<1e-6||Math.abs(dx)<1e-7)break;t-=cx/dx}t=cl(t);const u=1-t;return 3*y1*t*u*u+3*y2*t*t*u+t*t*t}}
+const E_OUT=bez(.16,1,.3,1), E_IO=bez(.65,0,.35,1), E_SOFT=bez(.25,.1,.25,1);
+// nøkkelbilder: kf(t,[[tid,verdi],[tid,verdi,easing],...]); easingen hører til segmentet som ender i nøkkelen
+function kf(t,k){if(t<=k[0][0])return k[0][1];for(let i=1;i<k.length;i++){if(t<=k[i][0]){const a=k[i-1],b=k[i];return lerp(a[1],b[1],(b[2]||E_IO)(seg(t,a[0],b[0])))}}return k[k.length-1][1]}
+let T=0;
+// tekst som toner inn fra uskarphet og glir opp, og ut igjen
+function tx(id,a,z,o,tt){o=o||{};const el=typeof id==='string'?$(id):id,t=tt==null?T:tt;
+  const p=E_OUT(seg(t,a,a+(o.d||1.3))),q=z==null?0:E_IO(seg(t,z,z+(o.od||.6))),op=p*(1-q);
+  if(op<.003){el.style.visibility='hidden';return}
+  el.style.visibility='visible';el.style.opacity=op;
+  const y=(1-p)*(o.dy==null?38:o.dy)-q*(o.dyo==null?14:o.dyo),s=lerp(o.s0==null?1:o.s0,1,p)*(1+q*(o.so==null?.015:o.so)),b=(1-p)*(o.b==null?18:o.b)+q*(o.bo==null?10:o.bo);
+  el.style.transform=`translate3d(${(o.dx||0)*(1-p)}px,${y}px,0) scale(${s})`;el.style.filter=b>.05?`blur(${b.toFixed(2)}px)`:'none'}
+const WORDS={};
+function splitWords(el){const nodes=[...el.childNodes];el.textContent='';const ws=[];
+  nodes.forEach(n=>{if(n.nodeType===3){n.textContent.split(/(\s+)/).forEach(part=>{if(!part)return;if(/^\s+$/.test(part))el.appendChild(document.createTextNode(' '));else{const s=document.createElement('span');s.className='wd';s.textContent=part;el.appendChild(s);ws.push(s)}})}
+    else if(n.nodeType===1){if(n.tagName==='BR')el.appendChild(n);else{n.classList.add('wd');el.appendChild(n);ws.push(n)}}});WORDS[el.id]=ws}
+function txw(id,a,z,o){o=o||{};const el=$(id),ws=WORDS[id],q=z==null?0:E_IO(seg(T,z,z+(o.od||.6)));let any=false;
+  ws.forEach((w,i)=>{const s0=a+i*(o.st||.09),p=E_OUT(seg(T,s0,s0+(o.d||1.2))),op=p*(1-q);w.style.opacity=op;w.style.transform=`translate3d(0,${(1-p)*(o.dy==null?44:o.dy)-q*10}px,0)`;const b=(1-p)*(o.b==null?16:o.b)+q*8;w.style.filter=b>.05?`blur(${b.toFixed(2)}px)`:'none';if(op>.003)any=true});
+  el.style.visibility=any?'visible':'hidden'}
+function glow(id,keys,sc){const el=$(id),o=kf(T,keys);el.style.opacity=o;el.style.transform=`scale(${sc?sc(T):1})`}
+['a2','m1','m2','p1'].forEach(id=>splitWords($(id)));
+const BS=[22.0,24.25,26.5,28.75];
+function render(t){T=t;
+  /* 1 · åpning */
+  tx('a1',.6,2.5,{d:1.5,dy:30});
+  $('n241').textContent=Math.round(241*E_OUT(seg(t,3.0,4.7)));
+  tx('n241',2.8,5.0,{d:1.1,dy:56,s0:.93,od:.8,so:-.07,bo:16});
+  tx('n241l',3.3,5.0,{d:1.1,od:.6});
+  txw('a2',5.7,7.6,{st:.11,d:1.25});
+  /* 2 · produktet */
+  tx('h1',8.5,11.7,{d:1.5,dy:44,od:.7,dyo:-18});tx('h2',9.5,11.7,{d:1.4,od:.7,dyo:-14});
+  const s=kf(t,[[8,.56],[11,.62,E_OUT],[12,.62],[13.7,1.074]]);
+  const ax=kf(t,[[12,1200],[13.7,2002]]),ay=kf(t,[[12,675],[13.7,805]]);
+  const dx=kf(t,[[12,0],[13.7,479]]);
+  const dy=kf(t,[[8,540],[11,196,E_OUT],[12,196],[13.7,20]]);
+  const rx=kf(t,[[8,24],[11,9,E_OUT],[12,9],[13.7,0]]),ry=kf(t,[[8,-16],[11,-6,E_OUT],[12,-6],[13.7,0]]);
+  const fl=Math.sin(t*.9)*(1-seg(t,12,12.9));
+  const dev=$('dev');
+  dev.style.opacity=E_OUT(seg(t,8,9.4))*(1-E_IO(seg(t,16,16.7)));
+  const db=(1-E_OUT(seg(t,8,9.8)))*18;dev.style.filter=db>.05?`blur(${db.toFixed(2)}px)`:'none';
+  dev.style.transform=`translate3d(${dx-s*(ax-1200)}px,${dy-s*(ay-675)+9*fl}px,0) rotateX(${rx+fl*.6}deg) rotateY(${ry+fl*.8}deg) scale(${s})`;
+  glow('glow',[[8.3,0],[10.8,.95],[13.7,.3],[16,.3],[16.8,0]],t=>lerp(.85,1.12,seg(t,8,16)));
+  $('veil').style.opacity=kf(t,[[12.8,0],[13.9,1],[15.9,1],[16.5,0]]);
+  tx('m0',13.4,15.7,{d:1.2,dy:24});txw('m1',13.7,15.7,{st:.1,d:1.2});txw('m2',14.7,15.7,{st:.1,d:1.2});
+  /* 3 · tallene */
+  const N=[['n1',241,16.7],['n2',59,17.7],['n3',12,18.7]];
+  N.forEach(([id,v,a],i)=>{const c=$('c'+(i+1));tx(c,a,21.4,{d:1.3,dy:60,s0:.94,od:.7,so:-.04,bo:12});$(id).textContent=Math.round(v*E_OUT(seg(t,a+.1,a+1.5)))});
+  $('sp1').style.opacity=kf(t,[[17.5,0],[18.2,1],[21.4,1],[21.9,0]]);$('sp2').style.opacity=kf(t,[[18.5,0],[19.2,1],[21.4,1],[21.9,0]]);
+  tx('nc',19.9,21.4,{d:1.3,dy:24,od:.6});
+  /* 4 · fire ord */
+  BS.forEach((b0,i)=>{const el=$('b'+(i+1)),u=t-b0;if(u<-.15||u>3){el.style.display='none';return}el.style.display='block';
+    const kids=el.children,q=E_IO(seg(u,1.95,2.45));
+    kids[0].style.opacity=E_OUT(seg(u,0,1.2))*(1-q);                                       // lys bak
+    tx(kids[1],0,1.95,{d:1.1,dy:60,b:22,od:.5,dyo:20},u);tx(kids[2],.25,1.95,{d:1.2,dy:34,od:.5,dyo:12},u);
+    for(let j=3;j<kids.length;j++){const c=kids[j],d0=.12+.2*(j-3),p=E_OUT(seg(u,d0,d0+1.6));
+      const op=p*(1-q);c.style.opacity=op;c.style.visibility=op<.003?'hidden':'visible';
+      const x=(1-p)*380-u*16+q*-60,y=Math.sin(u*1.7+j)*6+(1-p)*40,ry=lerp(-36,-13,p)+u*1.4,b=(1-p)*14+q*10;
+      c.style.transform=`translate3d(${x}px,${y}px,${(j-3)*-60}px) rotateY(${ry}deg) rotateX(${lerp(8,3,p)}deg)`;c.style.filter=b>.05?`blur(${b.toFixed(2)}px)`:'none'}});
+  /* 5 · rapport */
+  glow('glow2',[[31,0],[32.8,.9],[36,.6],[36.6,0]]);
+  tx('r1',30.9,36.0,{d:1.5,dy:50,od:.6,dyo:-16});tx('r2',31.7,36.0,{d:1.3,dy:26,od:.6,dyo:-10});
+  [['rd1',1,-1],['rd2',1.35,1]].forEach(([id,delay,sg],i)=>{const el=$(id),a=31.2+(i?.35:0),p=E_OUT(seg(t,a,a+1.8)),q=E_IO(seg(t,36,36.6)),op=p*(1-q);
+    el.style.opacity=op;const b=(1-p)*16+q*10;el.style.filter=b>.05?`blur(${b.toFixed(2)}px)`:'none';
+    const dr=seg(t,32,36.6);
+    el.style.transform=`translate3d(${(1-p)*(-sg)*220+sg*-dr*-26}px,${(1-p)*300-dr*34}px,${i?-80:0}px) rotateY(${sg*lerp(-38,-16,p)*-1+dr*sg*-5}deg) rotateZ(${sg*(i?2.2:-2.6)}deg)`});
+  /* 6 · personvern */
+  tx('lock',36.7,39.7,{d:1.4,dy:30,od:.6});txw('p1',37.0,39.7,{st:.12,d:1.3});tx('p2',38.2,39.7,{d:1.3,dy:26,od:.6});
+  /* slutt */
+  const lp=E_OUT(seg(t,40.4,42));$('lg').style.visibility=lp<.003?'hidden':'visible';$('lg').style.opacity=lp;
+  $('lg').style.transform=`scale(${lerp(.74,1,lp)})`;$('lg').style.filter=(1-lp)*18>.05?`blur(${((1-lp)*18).toFixed(2)}px)`:'none';
+  glow('glow3',[[40.4,0],[42,.95],[44,.8]],t=>lerp(.8,1.1,seg(t,40.4,44)));
+  tx('e1',41.1,null,{d:1.4,dy:40});tx('e2',41.8,null,{d:1.4,dy:28});tx('e3',42.5,null,{d:1.3,dy:20});
+  const fo=kf(t,[[8.6,0],[9.6,1],[39.7,1],[40.3,0]]);$('fn').style.opacity=.9*fo;$('fnbg').style.opacity=fo;
+  $('fade').style.opacity=kf(t,[[43.45,0],[44,1]]);
+  const bar=$('bar');if(bar)bar.style.width=(t/DUR*100)+'%';
+}
+/* avspilling i nettleseren */
+let playing=false,t0=0,base=0;const aud=$('aud');
+function tick(now){if(!playing)return;let t=(now-t0)/1000+base;if(t>=DUR){t=DUR-.001;playing=false;$('start').querySelector('.b').lastChild.textContent='Spill av igjen';$('start').style.display='flex';$('start').style.opacity=1}render(t);if(playing)requestAnimationFrame(tick)}
+function play(from){base=from||0;t0=performance.now();playing=true;try{aud.currentTime=base;aud.play().catch(()=>{})}catch(e){}requestAnimationFrame(tick)}
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('stage').style.transform=`scale(${s})`}
+addEventListener('resize',fit);fit();
+$('start').addEventListener('click',()=>{$('start').style.opacity=0;setTimeout(()=>{if(playing)$('start').style.display='none'},650);play(0)});
+addEventListener('keydown',e=>{if(e.code==='Space'){e.preventDefault();if(playing){playing=false;aud.pause()}else play(T>=DUR-.01?0:T)}else if(e.key==='r'||e.key==='R'){$('start').style.display='none';play(0)}else if(e.key==='f'){document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen()}});
+window.prepRender=function(){const s=$('start');if(s)s.remove();$('bar').remove();$('stage').style.transform='none'};
+window.render=render;render(0);
+</script></body></html>
