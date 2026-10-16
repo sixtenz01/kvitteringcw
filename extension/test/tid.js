@@ -16,10 +16,10 @@ const hm = (t, plus) => { const [h, m] = t.split(':').map(Number); const x = h *
 function pageFor(mode) {
   const rows = LOCAL.map((r, i) => {
     const utc = hm(r.t, -120);
-    const raw = mode === 'shift' ? `2026-10-02 ${utc}` : `2026-10-02T${utc}:00Z`;
+    const raw = mode === 'shift' ? `2026-10-02 ${utc}` : mode === 'mincell' ? `2026-10-02 ${r.t}` : mode === 'minsec' ? `2026-10-02 ${r.t}:${String(11 + i * 7)}` : `2026-10-02T${utc}:00Z`;
     return { transactionId: r.id, endDateTime: raw, storeNumber: r.store, workstationNumber: r.ws, cashierNumber: r.cashier, totalAmount: 100 + i, receiptType: 1, memberNumber: r.member, journalSourceName: 'main' };
   });
-  const cellText = (r, i) => mode === 'cell' ? `02.10.2026 ${LOCAL[i].t}:00` : mode === 'shift' ? `02.10.2026 ${hm(LOCAL[i].t, -120)}:00` : '';
+  const cellText = (r, i) => mode === 'cell' ? `02.10.2026 ${LOCAL[i].t}:00` : mode === 'shift' ? `02.10.2026 ${hm(LOCAL[i].t, -120)}:00` : mode === 'mincell' || mode === 'minsec' ? `02.10.2026 ${LOCAL[i].t}` : '';
   const receipts = {};
   LOCAL.forEach((r) => { receipts[r.id] = `<div>Kvittering: 7 02.10.2026 ${r.t}:10</div><table><tr><td>7000000000001 VARE</td><td></td><td>10.00</td></tr><tr><td>Bank:</td><td></td><td>10.00</td></tr></table>`; });
   return `<!doctype html><html><head><meta charset="utf-8"></head><body>
@@ -96,6 +96,17 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
     assert.strictEqual(await page.inputValue('input[aria-label="Tidsforskyvning for listen (min)"]'), '120');
     await page.click('#kvr-panel button:text-is("Diagnostikk…")');
     assert.match((await page.innerText('.kvr-dlg')).replace(/\s+/g, ' '), /6 bonger sammenlignet: 6 har samme klokkeslett/);
+  });
+
+  // 4. S1: listen viser bare minutter og rådata har ikke sekunder. Pluginen skal ikke finne på sekunder.
+  await run('mincell', async ({ page, go, analyse }) => {
+    await analyse();
+    assert.match((await page.innerText('[data-sec=lines]')).replace(/\s+/g, ' '), /Listen viser bare hele minutter \(0 % har sekunder\)/);
+  });
+  // 5. S1: listen viser bare minutter, men rådata har sekunder for samme minutt: sekundene brukes
+  await run('minsec', async ({ page, go, analyse }) => {
+    await analyse();
+    assert.match((await page.innerText('[data-sec=lines]')).replace(/\s+/g, ' '), /Listen viser sekunder \(100 % av bongene\)/);
   });
 
   assert.deepStrictEqual(errors, []);

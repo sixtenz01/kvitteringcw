@@ -117,6 +117,11 @@ Versjon 3.21.0 legger til: **Tempo** (serier av bonger med høyst N sekunder mel
 - **Manuell kvittering / til gode-lapp:** ordliste; flagges når en annen bong i butikken har samme beløp innen 3 dager.
 - Ikke bekreftet i ekte data: hvordan slettede linjer, spør pris, kortlinje, manuell kvittering og spesialbetaling står på bongen. Testene bruker motlinjer, ord og maskerte kortnumre; Diagnostikk samler det som ikke kjennes igjen.
 
+## Versjon 3.21.1: tempo og flere butikker
+
+- **Tempo (S1):** listen viser ikke lenger «:00» som ikke finnes. `parseCellDT` tar bare med sekunder når CW viser dem, og `mergeDT` bruker sekundene fra rådata når de er samme minutt som listen. Ligger nesten alle bonger på «:00» (minst 20 bonger, over halvparten), regnes listen som hele minutter. Da brukes «bonger i samme minutt» i stedet for sekundgrensen.
+- **Flere butikker (S17):** kasserer-ID og kassenummer er lokale per butikk. Med mer enn én butikk i listen får de sammensatt id (`12@1005`, vist som «12 (1005)»). Profil, rabatt, medlem, tempo, kassadifferanse, avstemming, diagrammer, filtre, omfang og Fokus regner da per person og per kasse. Butikksnittet er snittet i samme butikk (egen rad per butikk i profilen). Med én butikk er alt som før. Ansattliste: `12=1234567` gjelder kasserer 12 i alle butikker, `12@1005=1234567` bare i butikk 1005. Vanlig nummer i et filter treffer fortsatt alle butikker.
+
 ## Kontroll-fanen
 
 - **Arbeidsoppgaver:** lagre filter + datovalg (i går, i dag, siste 7 dager, forrige uke) + skanning + kontroller + sammendrag som én knapp. «Morgenkontroll (i går)» er innebygd: henter gårsdagen fra CW, skanner, kjører alle kontroller og viser et sammendrag som kan kopieres som tekst. Lagrede filtre (Filter-fanen) setter bare filter.
@@ -224,6 +229,7 @@ NODE_PATH=<global node_modules> node test/avdeling.js  # butikknummer = nivå + 
 NODE_PATH=<global node_modules> node test/butikk.js    # butikknavn fra BUTIKK-kolonnen, redigering, filter samlet under Filtrer
 NODE_PATH=<global node_modules> node test/linjer.js    # samme funn i panelet: kort, søk på spesialbetaling og rabatt-%
 node test/innhold.test.js                              # tempo, overvåkede varer, retur uten kjøp, topptekst/bunn (v7), betalingsmåter, fulltekstsøk
+node test/kasserer.test.js                             # kasserer-ID og kassenummer er lokale per butikk (flere butikker i datagrunnlaget)
 NODE_PATH=<global node_modules> node test/innhold.js    # samme i panelet: skanning av topptekst/bunn, funn, kort, Diagnostikk, søk og betalingsfilter
 NODE_PATH=<global node_modules> node test/stor.js  # panelstørrelse: Vanlig/Stor/Full, dokking, kolonner, husking
 TOUR=<mappe> NODE_PATH=<global node_modules> node test/tour.js  # skjermbilder av alle faner (valgfritt)

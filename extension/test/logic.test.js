@@ -758,8 +758,16 @@ assert.strictEqual(L.groupForReason('Mange avvikende priser'), 'price');
   assert.deepStrictEqual(L.parseDT(L.localDT('2026-10-02T21:59:00Z')), { date: '2026-10-02', time: '23:59' });
   assert.deepStrictEqual(L.parseDT(L.localDT('2026-10-02T22:30:00Z')), { date: '2026-10-03', time: '00:30' }, 'over midnatt');
   assert.strictEqual(L.parseCellDT('02.10.2026 22:04:15'), '2026-10-02 22:04:15');
-  assert.strictEqual(L.parseCellDT(' 2.10.2026, 9:05 '), '2026-10-02 09:05:00');
-  assert.strictEqual(L.parseCellDT('2026-10-02 22:04'), '2026-10-02 22:04:00');
+  // sekunder tas bare med når listen viser dem (S1: tidligere ble :00 fylt inn)
+  assert.strictEqual(L.parseCellDT(' 2.10.2026, 9:05 '), '2026-10-02 09:05');
+  assert.strictEqual(L.parseCellDT('2026-10-02 22:04'), '2026-10-02 22:04');
+  assert.strictEqual(L.parseCellDT('02.10.2026 22:04:00'), '2026-10-02 22:04:00');
+  // rådata med sekunder brukes når de er samme minutt som listen viser
+  assert.strictEqual(L.mergeDT('2026-10-02 22:04', '2026-10-02 22:04:37'), '2026-10-02 22:04:37');
+  assert.strictEqual(L.mergeDT('2026-10-02 22:04', '2026-10-02 22:05:37'), '2026-10-02 22:04', 'annet minutt: listen vinner');
+  assert.strictEqual(L.mergeDT('2026-10-02 22:04:15', '2026-10-02 22:04:37'), '2026-10-02 22:04:15', 'listen med sekunder vinner');
+  assert.strictEqual(L.mergeDT('', '2026-10-02 22:04:37'), '2026-10-02 22:04:37');
+  assert.strictEqual(L.mergeDT('', ''), '');
   assert.strictEqual(L.parseCellDT('02.10.2026'), '', 'uten klokkeslett brukes ikke');
   assert.strictEqual(L.headerDT('Butikk: 1001, Kassenr: 2 Kvittering: 2371 02.10.2026 22:03:10 Medlemsnr.: 5'), '2026-10-02 22:03:10');
   assert.strictEqual(L.headerDT('ingen topptekst'), '');

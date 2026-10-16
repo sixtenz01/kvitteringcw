@@ -203,7 +203,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   await go('Analyse', 'Fokus');
   const picks = '.kvr-card:has(h4:text-is("Kasserere i listen"))';
   assert.match(await page.innerText(picks), /Kasserer A/);
-  await page.click(picks + ' .kvr-ent:text-is("Kasserer A")');
+  await page.click(picks + ' .kvr-ent:text-is("Kasserer A (1005)")');
   assert.match(await page.innerText('.kvr-ftiles'), /Kvitteringer/);
 
   assert.deepStrictEqual(errors, []);

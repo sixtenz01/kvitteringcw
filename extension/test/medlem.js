@@ -84,14 +84,14 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   assert.match(fnd, /Medlem: Medlemsnr flere ganger samme dag Medlemsnr M2: 4 bonger 2026-10-07/);
   assert.ok(!/Medlemsnr brukt svært mye/.test(fnd), 'totalgrensen på 15 nås ikke');
   const mem = await txt('[data-sec=member]');
-  assert.match(mem, /Medlemsnr Bonger Kasserer Funn M2 4 \(1 d, 1 b\) B \(50 %\) dag M1 2 \(1 d, 2 b\) A \(50 %\) butikker K0 1 \(1 d, 1 b\)/);
+  assert.match(mem, /Medlemsnr Bonger Kasserer Funn M2 4 \(1 d, 1 b\) B \(1005\) \(50 %\) dag M1 2 \(1 d, 2 b\) A \(1005\) \(50 %\) butikker K0 1 \(1 d, 1 b\)/);
   // pris per vare
-  assert.match(fnd, /Pris: Avvikende pris på vare Kasse 2 15:00 kasserer C: MELK 1L kr 8\.00 mot vanlig 12\.90 \(−38 %\)/);
-  assert.match(fnd, /Pris: Mange avvikende priser Kasserer C: 3 varelinjer/);
+  assert.match(fnd, /Pris: Avvikende pris på vare Kasse 2 \(1005\) 15:00 kasserer C: MELK 1L kr 8\.00 mot vanlig 12\.90 \(−38 %\)/);
+  assert.match(fnd, /Pris: Mange avvikende priser Kasserer C \(1005\): 3 varelinjer/);
   // kjøpeutbytte
-  assert.match(fnd, /Kjøpeutbytte: Medlem uten kjøpeutbytte Kasse 1 00:45 kasserer B: medlemsnr K0 men ingen Kjøpeutbytte-tabell \(16 av 17 medlemsbonger har den\)/);
+  assert.match(fnd, /Kjøpeutbytte: Medlem uten kjøpeutbytte Kasse 1 \(1005\) 00:45 kasserer B: medlemsnr K0 men ingen Kjøpeutbytte-tabell \(16 av 17 medlemsbonger har den\)/);
   // hendelsesord
-  assert.match(fnd, /Hendelse: Hendelsesord på bong Kasse 1 09:00 kasserer A: «Linje annullert av kasserer»/);
+  assert.match(fnd, /Hendelse: Hendelsesord på bong Kasse 1 \(1005\) 09:00 kasserer A: «Linje annullert av kasserer»/);
   const misc = await txt('[data-sec=misc]');
   assert.match(misc, /Pris per vare 29 av 29 salg har enhetspris/);
   assert.match(misc, /Kjøpeutbytte 17 medlemssalg, 17 skannet med ny skanning, 16 med Kjøpeutbytte-tabell\. Tabellen finnes på de fleste medlemsbonger/);
@@ -123,8 +123,8 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   await runAnalysis();
   await go('Analyse', 'Detaljer');
   const fnd2 = await txt('[data-sec=findings]');
-  assert.match(fnd2, /Medlem: Kasserer bruker eget medlemsnr Kasserer A har tastet sitt eget medlemsnr M1 på 1 bonger/);
-  assert.match(fnd2, /Medlem: Ansatt-medlemsnr brukt Ansattnummer M1 brukt på 1 bonger \(kasserere D\)/);
+  assert.match(fnd2, /Medlem: Kasserer bruker eget medlemsnr Kasserer A \(1005\) har tastet sitt eget medlemsnr M1 på 1 bonger/);
+  assert.match(fnd2, /Medlem: Ansatt-medlemsnr brukt Ansattnummer M1 brukt på 1 bonger \(kasserere D \(1010\)\)/);
   // klikk på medlemsnr filtrerer listen
   await page.click('[data-sec=member] button:text-is("M2")');
   assert.strictEqual(await page.$$eval('tbody tr', trs => trs.filter(t => t.style.display !== 'none').length), 4);

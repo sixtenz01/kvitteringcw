@@ -13,12 +13,14 @@ const add = (o) => {
   n++;
   const r = Object.assign({ id: `1001-${o.ws || 1}-${n}`, cashier: 'B', ws: 1, tot: 10, date: '2026-10-02', time: '10:00:00', lines: [], pay: 'Bank', auth: 'AU' + n, term: 'T555111', hdrCash: null, card: null }, o);
   r.hdrCash = r.hdrCash || r.cashier;
+  // ekte sekunder på alle bonger unntatt serien: :00 på nesten alle bonger regnes som polstring (hele minutter), ikke sekunder
+  if (!o.keepSec && /:00$/.test(r.time)) r.time = r.time.slice(0, -2) + String((n * 7) % 53 + 3).padStart(2, '0');
   ROWS.push(r);
 };
 // bakgrunn: 11 vanlige salg på kasse 3, fem minutter mellom hver, unike autorisasjonskoder
 for (let i = 0; i < 11; i++) add({ cashier: 'B', ws: 3, time: `10:${String(10 + i * 5).padStart(2, '0')}:00`, tot: 40 + i, lines: [[`70000000000${i}`, 'VARE', 40 + i]] });
 // serie: seks bonger på kasse 1 med 10 sekunder mellom hver, to av dem med samme autorisasjonskode
-for (let i = 0; i < 6; i++) add({ cashier: 'A', ws: 1, time: `09:00:${String(i * 10).padStart(2, '0')}`, tot: 20 + i, lines: [[`70000000010${i}`, 'SMÅVARE', 20 + i]], auth: i < 2 ? 'ZZ99' : 'AU' + (100 + i), term: i < 2 ? 'T111222' : 'T555111' });
+for (let i = 0; i < 6; i++) add({ keepSec: true, cashier: 'A', ws: 1, time: `09:00:${String(i * 10).padStart(2, '0')}`, tot: 20 + i, lines: [[`70000000010${i}`, 'SMÅVARE', 20 + i]], auth: i < 2 ? 'ZZ99' : 'AU' + (100 + i), term: i < 2 ? 'T111222' : 'T555111' });
 // topptekst som ikke stemmer med listen
 add({ cashier: 'D', ws: 4, time: '12:00:00', tot: 33, lines: [['7000000000333', 'RAR VARE', 33]], hdrCash: 'Z' });
 // overvåket vare: salg og retur

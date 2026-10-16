@@ -157,10 +157,10 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   assert.match(await page.innerText(sbox), /0 av 2 valgt/);
 
   // piller i stedet for Ctrl-lister
-  await page.click('[data-sec=who] .kvr-pill:text-is("6")');
+  await page.click('[data-sec=who] .kvr-pill:text-is("6 (1005)")');
   assert.deepStrictEqual(await vis(), ['t-1']);
   assert.match(await page.innerText('.kvr-chipsrow'), /Kasse: 6/);
-  await page.click('[data-sec=who] .kvr-pill:text-is("6")');
+  await page.click('[data-sec=who] .kvr-pill:text-is("6 (1005)")');
   assert.strictEqual((await vis()).length, 5);
 
   // panelstørrelse: Vanlig -> Stor -> Full -> Vanlig
@@ -433,7 +433,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   assert.ok((await page.$$eval('[data-sec=ch-cash] .kvr-hb', n => n.length)) >= 2);
   assert.match(await page.innerText('[data-sec=ch-cash]'), /Kasserer 10 \(/);
   assert.strictEqual(await page.$$eval('[data-sec=ch-heat] .kvr-hc', n => n.length), 3 * 24);
-  await page.click('[data-sec=ch-heat] .kvr-ent:text-is("Kasse 6") ~ .kvr-hc >> nth=0');
+  await page.click('[data-sec=ch-heat] .kvr-ent:text-is("Kasse 6 (1005)") ~ .kvr-hc >> nth=0');
   assert.deepStrictEqual(await vis(), ['t-1']);
   assert.match(await page.innerText('.kvr-chipsrow'), /Kasse: 6/);
   await wipe();
@@ -445,10 +445,10 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
 
   // fokus: alt om én kasserer eller kasse
   await tab('Filter');
-  await page.click('[data-sec=who] .kvr-pill:text-is("12")');
+  await page.click('[data-sec=who] .kvr-pill:text-is("12 (1005)")');
   await tab('Fokus');
   const fk = await page.innerText('.kvr-pane:has([data-sec=f-top])');
-  assert.match(fk, /kasserer 12/i); assert.match(fk, /593,60/); assert.match(fk, /Kasse 4 \(2\)/);
+  assert.match(fk, /kasserer 12/i); assert.match(fk, /593,60/); assert.match(fk, /Kasse 4 \(1005\) \(2\)/);
   assert.match(fk, /mot butikksnitt/i); assert.match(fk, /aktivitet per time/i);
   assert.strictEqual(await page.$$eval('.kvr-hcol', n => n.length), 24);
   assert.deepStrictEqual(await vis(), ['t-3', 't-4']);
@@ -456,18 +456,19 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   assert.match(await page.innerText('[data-sec=f-top] h4'), /kasse 4/i);
   assert.match(await page.innerText('.kvr-chipsrow'), /Kasse: 4/);
   assert.doesNotMatch(await page.innerText('.kvr-chipsrow'), /Kasserer:/);
-  assert.match(await page.innerText('[data-sec=f-with]'), /Kasserer 12 \(2\)/);
+  assert.match(await page.innerText('[data-sec=f-with]'), /Kasserer 12 \(1005\) \(2\)/);
   await wipe();
   await tab('Rapport');
   await page.selectOption('[data-sec=report] select', 'kasse');
-  await page.click('[data-sec=report] .kvr-ent:text-is("Kasse 6")');
+  await page.click('[data-sec=report] .kvr-ent:text-is("Kasse 6 (1005)")');
   assert.match(await page.innerText('[data-sec=f-top] h4'), /kasse 6/i);
   assert.deepStrictEqual(await vis(), ['t-1']);
   await wipe();
   assert.match(await page.getAttribute('tr[data-id="t-5"] td[data-field="cashierNumber"]', 'title'), /Alt\+klikk: se alt om kasserer 10/);
   await page.click('tr[data-id="t-5"] td[data-field="cashierNumber"]', { modifiers: ['Alt'] });
-  assert.match(await page.innerText('[data-sec=f-top] h4'), /kasserer 10/i);
-  assert.deepStrictEqual(await vis(), ['t-1', 't-5']);
+  assert.match(await page.innerText('[data-sec=f-top] h4'), /kasserer 10 \(1010\)/i);
+  // kasserer-ID er lokal per butikk: kasserer 10 i butikk 1010 er ikke kasserer 10 i butikk 1005
+  assert.deepStrictEqual(await vis(), ['t-5']);
   assert.strictEqual(await sel() === null || (await sel()) !== 't-5', true, 'Alt+klikk velger ikke raden');
   await page.click('button:text-is("Fjern fokus")');
   assert.strictEqual(await page.$$eval('.kvr-fchip', n => n.length), 0);

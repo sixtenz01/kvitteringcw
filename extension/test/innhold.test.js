@@ -38,6 +38,22 @@ const E1 = '7038010000010', E2 = '7038010000027', E3 = '7038010000034', E4 = '70
   assert.deepStrictEqual([r.series, r.findings[0].title, r.findings[0].detail.includes('i samme minutt (grense 6)')], [1, 'Bonger i rask rekkefølge', true]);
   assert.strictEqual(L.tempoChecks(min(5), CT()).series, 0);
   assert.strictEqual(L.tempoChecks(min(6), Object.assign(CT(), { paceMinuteN: '' })).series, 0);
+  // S1: celler med bare minutter (parseCellDT) skal ikke se ut som sekunder
+  const cell = (n) => Array.from({ length: n }, (_, i) => bong({ endDateTime: L.parseCellDT('05.10.2026 12:30'), cashierNumber: 'C', totalAmount: 5 + i }));
+  r = L.tempoChecks(cell(6), CT());
+  assert.deepStrictEqual([r.secOK, r.secShare, r.series], [false, 0, 1]);
+  assert.ok(r.findings[0].detail.includes('i samme minutt (grense 6)'));
+  // fire bonger i hver sin minutt (20 s ekte avstand) er ikke en serie når bare minutter vises
+  r = L.tempoChecks(['12:00', '12:01', '12:02', '12:03'].map((t) => bong({ endDateTime: L.parseCellDT('05.10.2026 ' + t), totalAmount: 7 })), CT());
+  assert.deepStrictEqual([r.secOK, r.series], [false, 0]);
+  // :00 på nesten alle bonger er polstring, ikke sekunder
+  const pad = Array.from({ length: 24 }, (_, i) => bong({ endDateTime: '2026-10-05 13:' + String(10 + i).padStart(2, '0') + ':00', cashierNumber: 'P', totalAmount: 3 + i }));
+  r = L.tempoChecks(pad, CT());
+  assert.deepStrictEqual([r.secPadded, r.secOK, r.secShare], [true, false, 1]);
+  // ekte sekunder (jevnt fordelt) regnes som sekunder
+  const real = Array.from({ length: 24 }, (_, i) => bong({ endDateTime: '2026-10-05 14:00:' + String((i * 7) % 60).padStart(2, '0'), cashierNumber: 'R', totalAmount: 3 + i, workstationNumber: 9 }));
+  r = L.tempoChecks(real, CT());
+  assert.deepStrictEqual([r.secPadded, r.secOK], [false, true]);
   // 0-kr-bonger: kassererfunn
   const zeros = Array.from({ length: 5 }, () => bong({ cashierNumber: 'Z', totalAmount: 0, endDateTime: '2026-10-05 09:' + String(seq % 50 + 10) + ':00' }));
   r = L.tempoChecks(zeros.concat(bong({ cashierNumber: 'Z' })), CT());

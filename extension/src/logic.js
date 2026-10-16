@@ -64,11 +64,20 @@
   }
 
   // Dato og klokkeslett slik de vises i CW-listen, for eksempel «02.10.2026 22:04:15» eller «2026-10-02 22:04».
+  // Sekunder tas bare med når listen viser dem (ellers ser tempotestene minutter som sekundnøyaktige tider).
   function parseCellDT(text) {
     var t = String(text || '').replace(/\s+/g, ' ').trim(), m;
-    if ((m = /(\d{1,2})[.\/](\d{1,2})[.\/](\d{4}),? (\d{1,2}):(\d{2})(?::(\d{2}))?/.exec(t))) return validDT(+m[3], +m[2], +m[1], +m[4], +m[5]) ? m[3] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2) + ' ' + ('0' + m[4]).slice(-2) + ':' + m[5] + ':' + (m[6] || '00') : '';
-    if ((m = /(\d{4})-(\d{2})-(\d{2})[ T](\d{1,2}):(\d{2})(?::(\d{2}))?/.exec(t))) return validDT(+m[1], +m[2], +m[3], +m[4], +m[5]) ? m[1] + '-' + m[2] + '-' + m[3] + ' ' + ('0' + m[4]).slice(-2) + ':' + m[5] + ':' + (m[6] || '00') : '';
+    if ((m = /(\d{1,2})[.\/](\d{1,2})[.\/](\d{4}),? (\d{1,2}):(\d{2})(?::(\d{2}))?/.exec(t))) return validDT(+m[3], +m[2], +m[1], +m[4], +m[5]) ? m[3] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2) + ' ' + ('0' + m[4]).slice(-2) + ':' + m[5] + (m[6] !== undefined ? ':' + m[6] : '') : '';
+    if ((m = /(\d{4})-(\d{2})-(\d{2})[ T](\d{1,2}):(\d{2})(?::(\d{2}))?/.exec(t))) return validDT(+m[1], +m[2], +m[3], +m[4], +m[5]) ? m[1] + '-' + m[2] + '-' + m[3] + ' ' + ('0' + m[4]).slice(-2) + ':' + m[5] + (m[6] !== undefined ? ':' + m[6] : '') : '';
     return '';
+  }
+
+  // Listen kan vise bare minutter mens rådata (lokal tid) har sekunder. Sekundene brukes når rådata er samme minutt som listen viser.
+  function mergeDT(shown, raw) {
+    var s = String(shown || ''), r = String(raw === undefined || raw === null ? '' : raw);
+    if (!s) return r;
+    if (s.length === 16 && r.length === 19 && r.slice(0, 16) === s) return r;
+    return s;
   }
 
   // Løpenummer i bongens topptekst: «Kvittering: 2371 …».
@@ -155,8 +164,8 @@
     var dt = parseDT(item.endDateTime);
     var sum = item.totalAmount;
     if (!inList(f.stores, item.storeNumber)) return false;
-    if (!inList(f.workstations, item.workstationNumber)) return false;
-    if (!inList(f.cashiers, item.cashierNumber)) return false;
+    if (!inWs(f.workstations, item)) return false;
+    if (!inCashiers(f.cashiers, item)) return false;
     if (!inList(f.types, item.receiptType)) return false;
     if (f.dateFrom && dt.date < f.dateFrom) return false;
     if (f.dateTo && dt.date > f.dateTo) return false;
@@ -558,9 +567,9 @@
     var acc = {};
     items.forEach(function (it) {
       var day = opts.byDay ? parseDT(it.endDateTime).date : '';
-      var id = by === 'kasse' ? it.workstationNumber : it.cashierNumber;
+      var id = by === 'kasse' ? wsId(it) : cashierId(it);
       var key = day + '|' + id;
-      var e = acc[key] || (acc[key] = { day: day, id: id, label: (by === 'kasse' ? 'Kasse ' : 'Kasserer ') + id, count: 0, sum: 0, retCount: 0, retSum: 0, pantSale: 0, pantRet: 0, scanned: 0, anom: 0, settleCount: 0, settleDiff: 0 });
+      var e = acc[key] || (acc[key] = { day: day, id: id, label: (by === 'kasse' ? 'Kasse ' : 'Kasserer ') + idLabel(id), count: 0, sum: 0, retCount: 0, retSum: 0, pantSale: 0, pantRet: 0, scanned: 0, anom: 0, settleCount: 0, settleDiff: 0 });
       var sc = scanMap && scanMap[it.transactionId];
       if (anomMap && anomMap[it.transactionId] && anomMap[it.transactionId].length) e.anom++;
       if (it.receiptType === 2) {
@@ -920,6 +929,24 @@
   }
   function numCmp(a, b) { return String(a).localeCompare(String(b), 'nb', { numeric: true }); }
 
+  // Kasserer-ID og kassenummer er lokale per butikk. Med flere butikker i datagrunnlaget får de sammensatt id «12@1005», slik at to
+  // personer med samme nummer ikke slås sammen. Med én butikk er id det vanlige nummeret, som før.
+  var MULTI = false;
+  function setMultiStore(on) { MULTI = !!on; }
+  function multiStore() { return MULTI; }
+  function cashierId(it) { return MULTI ? String(it.cashierNumber) + '@' + String(it.storeNumber) : it.cashierNumber; }
+  function wsId(it) { return MULTI ? String(it.workstationNumber) + '@' + String(it.storeNumber) : it.workstationNumber; }
+  function idPart(id, i) { var t = String(id), k = t.lastIndexOf('@'); return k === -1 ? (i === 1 ? '' : t) : (i === 1 ? t.slice(k + 1) : t.slice(0, k)); }
+  function idLabel(id) { var t = String(id); return t.lastIndexOf('@') === -1 ? t : idPart(t, 0) + ' (' + idPart(t, 1) + ')'; }
+  function wsOf(it) { return MULTI ? it.workstationNumber + ' (' + it.storeNumber + ')' : it.workstationNumber; }
+  function wsText(k) { var q = String(k).split('|'); return MULTI ? q[1] + ' (' + q[0] + ')' : q[1]; }
+  function cashierLabel(it) { return idLabel(cashierId(it)); }
+  // Treff i en liste over kasserere/kasser (filter, omfang, fokus): vanlig nummer treffer alle butikker, «12@1005» bare én.
+  function isCashier(it, id) { id = String(id); return id.indexOf('@') === -1 ? String(it.cashierNumber) === id : String(it.cashierNumber) + '@' + String(it.storeNumber) === id; }
+  function isWs(it, id) { id = String(id); return id.indexOf('@') === -1 ? String(it.workstationNumber) === id : String(it.workstationNumber) + '@' + String(it.storeNumber) === id; }
+  function inCashiers(list, it) { return !list || !list.length || list.some(function (v) { return isCashier(it, v); }); }
+  function inWs(list, it) { return !list || !list.length || list.some(function (v) { return isWs(it, v); }); }
+
   var CONTROL_FIELDS = [
     ['closeTime', 'Stengetid (HH:MM)', '22:00'], ['closeWindow', 'Minutter før stenging', '60'],
     ['smallReturn', 'Liten retur ≤ kr', '100'], ['smallReturnN', 'Små returer ≥ antall', '3'],
@@ -1039,7 +1066,7 @@
       sf('memberN', 'ctl', 'num', 'Samme medlemsnr totalt: flagg ved', 'bonger', 'Avhenger av hvor lang periode du har lastet. Sett høyt for en måned.', true),
       sf('memberCashN', 'ctl', 'num', 'Medlemsnr nesten bare hos én kasserer: flagg ved', 'bonger', 'Minst så mange bonger med nummeret.', true),
       sf('memberCashShare', 'ctl', 'num', 'Andel hos samme kasserer over', '%', 'Må også være minst «Avviker fra snittet» ganger kassererens vanlige andel av bongene.'),
-      sf('empMembers', 'ctl', 'text', 'Ansattes medlemsnr', '', 'Komma-separert. «1234567» flagger alle bonger med nummeret; «12=1234567» (kasserer=medlemsnr) flagger når kasserer 12 bruker nummeret.', true)
+      sf('empMembers', 'ctl', 'text', 'Ansattes medlemsnr', '', 'Komma-separert. «1234567» flagger alle bonger med nummeret; «12=1234567» (kasserer=medlemsnr) flagger når kasserer 12 bruker nummeret, i alle butikker. «12@1005=1234567» gjelder bare butikk 1005 (kasserer-ID er lokal per butikk).', true)
     ], weights: ['Medlem i flere butikker samtidig', 'Medlemsnr flere ganger samme dag', 'Medlemsnr brukt svært mye', 'Medlemsnr nesten bare hos én kasserer', 'Ansatt-medlemsnr brukt', 'Kasserer bruker eget medlemsnr'] },
     { id: 'price', title: 'Pris per vare', text: 'Samme vare solgt til ulik enhetspris samme dag i samme butikk. Kan tyde på manuell pris, spør pris eller feil pris. Krever skanning.', fields: [
       sf('priceDevPct', 'ctl', 'num', 'Pris avviker fra vanlig pris med minst', '%', 'Vanlig pris = den prisen flest bonger har samme dag (minst 60 %). Kampanjer og flerkjøp kan gi falske treff.', true),
@@ -1165,14 +1192,18 @@
   function profiles(items, scanMap, cfg) {
     var f = cnum(cfg.profFactor, 1.5), minN = cnum(cfg.profMin, 5), shr = cnum(cfg.profShrink, null);
     var sh = function (x, n, mu) { return shr === null || !(n >= 0) ? x : (n * x + shr * mu) / (n + shr); };
-    var acc = {}, tot = null;
+    var acc = {}, tot = null, tots = {};
     var fresh = function () { return { count: 0, ret: 0, pos: 0, posSum: 0, scanned: 0, lapper: 0, neg: 0 }; };
     tot = fresh();
     items.forEach(function (it) {
       if (!isSale(it)) return;
-      var a = acc[it.cashierNumber] || (acc[it.cashierNumber] = fresh());
+      var cid = cashierId(it);
+      var a = acc[cid] || (acc[cid] = fresh());
+      a.store = it.storeNumber;
+      // butikksnittet regnes per butikk: kasserer-ID er lokal per butikk
+      var ts = tots[it.storeNumber] || (tots[it.storeNumber] = fresh());
       var sc = scanMap && scanMap[it.transactionId];
-      [a, tot].forEach(function (x) {
+      [a, ts, tot].forEach(function (x) {
         x.count++;
         if (it.totalAmount < 0) x.ret++;
         if (it.totalAmount > 0) { x.pos++; x.posSum += it.totalAmount; }
@@ -1186,24 +1217,26 @@
         neg: x.neg, negPer: x.scanned ? x.neg / x.scanned : 0
       };
     };
-    var store = met(tot);
+    var store = met(tot), byStore = {};
+    Object.keys(tots).forEach(function (k) { byStore[k] = met(tots[k]); });
     var rows = Object.keys(acc).sort(numCmp).map(function (id) {
-      var m = met(acc[id]);
+      var m = met(acc[id]), base = byStore[acc[id].store] || store;
       m.id = id;
+      m.store = acc[id].store;
       m.flags = {};
       if (m.count >= minN) {
-        var sr = sh(m.retShare, m.count, store.retShare), sa = sh(m.avg, m.pos, store.avg);
-        m.flags.retShare = store.retShare > 0 && sr >= store.retShare * f;
-        m.flags.avg = store.avg > 0 && (sa >= store.avg * f || (m.avg > 0 && sa <= store.avg / f));
+        var sr = sh(m.retShare, m.count, base.retShare), sa = sh(m.avg, m.pos, base.avg);
+        m.flags.retShare = base.retShare > 0 && sr >= base.retShare * f;
+        m.flags.avg = base.avg > 0 && (sa >= base.avg * f || (m.avg > 0 && sa <= base.avg / f));
       }
       if (m.scanned >= minN) {
-        m.flags.lapperPer = store.lapperPer > 0 && sh(m.lapperPer, m.scanned, store.lapperPer) >= store.lapperPer * f;
-        m.flags.negPer = store.negPer > 0 && sh(m.negPer, m.scanned, store.negPer) >= store.negPer * f;
+        m.flags.lapperPer = base.lapperPer > 0 && sh(m.lapperPer, m.scanned, base.lapperPer) >= base.lapperPer * f;
+        m.flags.negPer = base.negPer > 0 && sh(m.negPer, m.scanned, base.negPer) >= base.negPer * f;
       }
       m.flagged = Object.keys(m.flags).some(function (k) { return m.flags[k]; });
       return m;
     });
-    return { rows: rows, store: store };
+    return { rows: rows, store: store, byStore: byStore };
   }
 
   function groupInto(map, key, it) { (map[key] = map[key] || []).push(it); }
@@ -1223,13 +1256,13 @@
         if (Math.abs(it.totalAmount) > small) return;
         var m = timeOf(it);
         if (m === null || m < close - win || m > close) return;
-        groupInto(g, dayOf(it) + '|' + it.workstationNumber, it);
+        groupInto(g, dayOf(it) + '|' + wsId(it), it);
       });
       Object.keys(g).forEach(function (k) {
         if (g[k].length < Number(cfg.smallReturnN)) return;
         var p = k.split('|');
         out.push({ kind: 'Mønster', code: 'smallReturns', title: 'Små returer før stenging', flag: true,
-          detail: 'Kasse ' + p[1] + ' ' + p[0] + ': ' + g[k].length + ' returer ≤ ' + small + ' kr de siste ' + win + ' min før ' + cfg.closeTime,
+          detail: 'Kasse ' + idLabel(p[1]) + ' ' + p[0] + ': ' + g[k].length + ' returer ≤ ' + small + ' kr de siste ' + win + ' min før ' + cfg.closeTime,
           ids: g[k].map(function (x) { return x.transactionId; }) });
       });
     }
@@ -1238,13 +1271,13 @@
       items.forEach(function (it) {
         var sc = scanOf(it);
         if (!sc || netNp(sc) > 0 || !(sc.retLines > 0) || !((sc.pay['Kontant tilbake'] || 0) > 0)) return;
-        groupInto(g2, String(it.workstationNumber), it);
+        groupInto(g2, String(wsId(it)), it);
       });
       Object.keys(g2).forEach(function (k) {
         if (g2[k].length < Number(cfg.cashNoSaleN)) return;
         var sum = round2(g2[k].reduce(function (a, it) { return a + (scanOf(it).pay['Kontant tilbake'] || 0); }, 0));
         out.push({ kind: 'Mønster', code: 'cashNoSale', title: 'Kontant tilbake uten salg flere ganger', flag: true,
-          detail: 'Kasse ' + k + ': ' + g2[k].length + ' ganger, totalt ' + sum + ' kr',
+          detail: 'Kasse ' + idLabel(k) + ': ' + g2[k].length + ' ganger, totalt ' + sum + ' kr',
           ids: g2[k].map(function (x) { return x.transactionId; }) });
       });
     }
@@ -1252,13 +1285,13 @@
       var g3 = {}, min = cnum(cfg.repeatMin, 50);
       items.forEach(function (it) {
         if (!isSale(it) || Math.abs(it.totalAmount) < min) return;
-        groupInto(g3, dayOf(it) + '|' + it.cashierNumber + '|' + it.totalAmount, it);
+        groupInto(g3, dayOf(it) + '|' + cashierId(it) + '|' + it.totalAmount, it);
       });
       Object.keys(g3).forEach(function (k) {
         if (g3[k].length < Number(cfg.repeatN)) return;
         var p = k.split('|');
         out.push({ kind: 'Mønster', code: 'repeatAmount', title: 'Samme beløp gjentatt', flag: true,
-          detail: 'Kasserer ' + p[1] + ' ' + p[0] + ': ' + p[2] + ' kr × ' + g3[k].length,
+          detail: 'Kasserer ' + idLabel(p[1]) + ' ' + p[0] + ': ' + p[2] + ' kr × ' + g3[k].length,
           ids: g3[k].map(function (x) { return x.transactionId; }) });
       });
     }
@@ -1304,7 +1337,7 @@
         if (gap > maxGap) { skipped++; continue; }
         if (gap > 0) {
           findings.push({ kind: 'Sekvens', code: 'gap', title: 'Hull i bongnummer', flag: false,
-            detail: 'Kasse ' + k.split('|')[1] + ': mangler ' + (uniq[i - 1].n + 1) + (gap > 1 ? '–' + (uniq[i].n - 1) : '') + ' (' + gap + ')',
+            detail: 'Kasse ' + wsText(k) + ': mangler ' + (uniq[i - 1].n + 1) + (gap > 1 ? '–' + (uniq[i].n - 1) : '') + ' (' + gap + ')',
             ids: [uniq[i - 1].it.transactionId, uniq[i].it.transactionId] });
         }
       }
@@ -1315,13 +1348,13 @@
       items.forEach(function (it) {
         if (!isSale(it)) return;
         var m = timeOf(it);
-        if (m !== null && (m < from || m > to)) groupInto(g, dayOf(it) + '|' + it.workstationNumber, it);
+        if (m !== null && (m < from || m > to)) groupInto(g, dayOf(it) + '|' + wsId(it), it);
       });
       Object.keys(g).forEach(function (k) {
         var p = k.split('|');
         var times = g[k].map(function (x) { return parseDT(x.endDateTime).time; }).sort();
         findings.push({ kind: 'Sekvens', code: 'hours', title: 'Bonger utenfor åpningstid', flag: true,
-          detail: 'Kasse ' + p[1] + ' ' + p[0] + ': ' + g[k].length + ' bonger (' + times[0] + (times.length > 1 ? '–' + times[times.length - 1] : '') + ', åpent ' + cfg.openFrom + '–' + cfg.openTo + ')',
+          detail: 'Kasse ' + idLabel(p[1]) + ' ' + p[0] + ': ' + g[k].length + ' bonger (' + times[0] + (times.length > 1 ? '–' + times[times.length - 1] : '') + ', åpent ' + cfg.openFrom + '–' + cfg.openTo + ')',
           ids: g[k].map(function (x) { return x.transactionId; }) });
       });
     }
@@ -1333,8 +1366,8 @@
     var rows = {}, tol = cnum(cfg.reconTol, 1);
     items.forEach(function (it) {
       var sc = scanMap && scanMap[it.transactionId];
-      var k = dayOf(it) + '|' + it.workstationNumber;
-      var r = rows[k] || (rows[k] = { day: dayOf(it), kasse: it.workstationNumber, pay: {}, salgTotal: 0, salgScanned: 0, settleCount: 0, telt: 0, bank: 0 });
+      var k = dayOf(it) + '|' + wsId(it);
+      var r = rows[k] || (rows[k] = { day: dayOf(it), kasse: wsOf(it), ws: wsId(it), pay: {}, salgTotal: 0, salgScanned: 0, settleCount: 0, telt: 0, bank: 0 });
       if (isSale(it)) {
         r.salgTotal++;
         if (sc) {
@@ -1375,8 +1408,8 @@
         if (!st.last || it.endDateTime > st.last) st.last = it.endDateTime;
         st.hours[Math.floor(mins(dt.time) / 60)]++;
       }
-      st.kasse[it.workstationNumber] = (st.kasse[it.workstationNumber] || 0) + 1;
-      st.kasserer[it.cashierNumber] = (st.kasserer[it.cashierNumber] || 0) + 1;
+      st.kasse[wsId(it)] = (st.kasse[wsId(it)] || 0) + 1;
+      st.kasserer[cashierId(it)] = (st.kasserer[cashierId(it)] || 0) + 1;
       var sc = scanMap && scanMap[it.transactionId];
       if (it.receiptType === 1 || it.receiptType === 2) st.scannable++;
       if (sc) st.scanned++;
@@ -1489,7 +1522,7 @@
     items.forEach(function (it) {
       var r = anomMap && anomMap[it.transactionId];
       if (!r || !r.length) return;
-      var a = acc[it.cashierNumber] || (acc[it.cashierNumber] = { id: String(it.cashierNumber), score: 0, flagged: 0, profile: [] });
+      var a = acc[cashierId(it)] || (acc[cashierId(it)] = { id: String(cashierId(it)), score: 0, flagged: 0, profile: [] });
       a.score += riskScore(r, weights); a.flagged++;
     });
     var names = { retShare: 'høy returandel', avg: 'avvikende snittbeløp', lapperPer: 'mange pantelapper', negPer: 'mange korrigeringer' };
@@ -1538,7 +1571,7 @@
 
   // ---- diagramdata --------------------------------------------------------------------
   function chartData(items, scanMap) {
-    var hours = { count: [], sum: [] }, days = {}, cash = {}, heat = {}, pant = {}, tot = { n: 0, ret: 0 };
+    var hours = { count: [], sum: [] }, days = {}, cash = {}, heat = {}, pant = {}, tot = { n: 0, ret: 0 }, tots = {};
     for (var h = 0; h < 24; h++) { hours.count.push(0); hours.sum.push(0); }
     items.forEach(function (it) {
       if (!isSale(it)) return;
@@ -1546,10 +1579,12 @@
       hours.count[hr]++; hours.sum[hr] = round2(hours.sum[hr] + it.totalAmount);
       var d = days[day] || (days[day] = { day: day, count: 0, sum: 0 });
       d.count++; d.sum = round2(d.sum + it.totalAmount);
-      var c = cash[it.cashierNumber] || (cash[it.cashierNumber] = { id: String(it.cashierNumber), count: 0, ret: 0 });
+      var c = cash[cashierId(it)] || (cash[cashierId(it)] = { id: String(cashierId(it)), store: it.storeNumber, count: 0, ret: 0 });
       c.count++; if (it.totalAmount < 0) c.ret++;
       tot.n++; if (it.totalAmount < 0) tot.ret++;
-      var hm = heat[it.workstationNumber] || (heat[it.workstationNumber] = { id: String(it.workstationNumber), counts: hours.count.map(function () { return 0; }) });
+      var tsr = tots[it.storeNumber] || (tots[it.storeNumber] = { n: 0, ret: 0 });
+      tsr.n++; if (it.totalAmount < 0) tsr.ret++;
+      var hm = heat[wsId(it)] || (heat[wsId(it)] = { id: String(wsId(it)), counts: hours.count.map(function () { return 0; }) });
       hm.counts[hr]++;
       var sc = scanMap && scanMap[it.transactionId];
       if (sc) { var p = pant[day] || (pant[day] = { day: day, sale: 0, ret: 0 }); p.sale = round2(p.sale + sc.sale); p.ret = round2(p.ret + Math.abs(sc.ret)); }
@@ -1560,7 +1595,7 @@
     return {
       hours: hours,
       days: Object.keys(days).sort().map(function (k) { return days[k]; }),
-      cashiers: Object.keys(cash).map(function (k) { var c = cash[k]; c.share = c.count ? c.ret / c.count : 0; return c; })
+      cashiers: Object.keys(cash).map(function (k) { var c = cash[k], t = tots[c.store]; c.share = c.count ? c.ret / c.count : 0; c.storeShare = t && t.n ? t.ret / t.n : 0; return c; })
         .sort(function (a, b) { return b.share - a.share || b.count - a.count || numCmp(a.id, b.id); }),
       storeShare: tot.n ? tot.ret / tot.n : 0,
       heat: { rows: heatRows, max: max },
@@ -1618,7 +1653,7 @@
       })[0];
       if (twin) {
         findings.push({ kind: 'Falsk retur', code: 'saleThenReturn', title: 'Salg og retur av samme beløp', flag: true,
-          detail: 'Kasse ' + r.workstationNumber + ': salg ' + parseDT(twin.endDateTime).time + ' og retur ' + parseDT(r.endDateTime).time + ', begge ' + amt + ' kr (kasserer ' + twin.cashierNumber + (twin.cashierNumber !== r.cashierNumber ? ' og ' + r.cashierNumber : '') + ')',
+          detail: 'Kasse ' + wsOf(r) + ': salg ' + parseDT(twin.endDateTime).time + ' og retur ' + parseDT(r.endDateTime).time + ', begge ' + amt + ' kr (kasserer ' + twin.cashierNumber + (twin.cashierNumber !== r.cashierNumber ? ' og ' + r.cashierNumber : '') + ')',
           ids: [r.transactionId, twin.transactionId] });
       }
       if (!sc) return;
@@ -1632,14 +1667,14 @@
       });
       if (unmatched.length && lineCheck) {
         findings.push({ kind: 'Falsk retur', code: 'returnNoSale', title: 'Retur uten salg', flag: true,
-          detail: 'Kasse ' + r.workstationNumber + ' ' + parseDT(r.endDateTime).time + ': retur av ' + unmatched.map(function (l) { return l.n + ' (' + (-l.a) + ' kr)'; }).join(', ') + ' uten tilsvarende salg i datagrunnlaget',
+          detail: 'Kasse ' + wsOf(r) + ' ' + parseDT(r.endDateTime).time + ': retur av ' + unmatched.map(function (l) { return l.n + ' (' + (-l.a) + ' kr)'; }).join(', ') + ' uten tilsvarende salg i datagrunnlaget',
           ids: [r.transactionId] });
       }
       if (matched) {
         var ssc = scanMap[matched.transactionId];
         if (ssc && (ssc.pay['Bank'] || 0) > 0 && (sc.pay['Kontant tilbake'] || 0) > 0) {
           findings.push({ kind: 'Falsk retur', code: 'cardRefundCash', title: 'Kortkjøp refundert kontant', flag: true,
-            detail: 'Kasse ' + r.workstationNumber + ' ' + parseDT(r.endDateTime).time + ': ' + sc.pay['Kontant tilbake'] + ' kr utbetalt kontant for vare betalt med kort (salg ' + parseDT(matched.endDateTime).time + ')',
+            detail: 'Kasse ' + wsOf(r) + ' ' + parseDT(r.endDateTime).time + ': ' + sc.pay['Kontant tilbake'] + ' kr utbetalt kontant for vare betalt med kort (salg ' + parseDT(matched.endDateTime).time + ')',
             ids: [r.transactionId, matched.transactionId] });
         }
       }
@@ -1676,7 +1711,7 @@
       var who = {};
       arr.forEach(function (x) { who[x.it.cashierNumber] = true; });
       return { kind: 'Kassaoppgjør', code: 'afterSettle', title: 'Salg etter kassaoppgjør', flag: true,
-        detail: 'Kasse ' + p[1] + ' ' + p[2] + ': ' + arr.length + ' salg (' + sum + ' kr) etter kassaoppgjør kl ' + parseDT(prev.endDateTime).time + ' (oppgjør av kasserer ' + prev.cashierNumber + '; salg av ' + Object.keys(who).join(', ') + ')',
+        detail: 'Kasse ' + wsText(k) + ' ' + p[2] + ': ' + arr.length + ' salg (' + sum + ' kr) etter kassaoppgjør kl ' + parseDT(prev.endDateTime).time + ' (oppgjør av kasserer ' + prev.cashierNumber + '; salg av ' + Object.keys(who).join(', ') + ')',
         ids: arr.map(function (x) { return x.it.transactionId; }) };
     });
   }
@@ -1690,7 +1725,7 @@
       if (n !== null) groupInto(byK, it.storeNumber + '|' + it.workstationNumber, { n: n, it: it });
     });
     Object.keys(byK).forEach(function (k) {
-      var kasse = k.split('|')[1];
+      var kasse = wsText(k);
       var arr = byK[k].sort(function (a, b) { return a.n - b.n || (a.it.endDateTime < b.it.endDateTime ? -1 : 1); });
       var seen = {}, uniq = [];
       arr.forEach(function (x) {
@@ -1722,7 +1757,7 @@
     var regMin = cnum(cfg.seqRegMin, null);
     if (regMin !== null) {
       Object.keys(byK).forEach(function (k) {
-        var kasse = k.split('|')[1], seenN = {}, u = [];
+        var kasse = wsText(k), seenN = {}, u = [];
         byK[k].slice().sort(function (a, b) { return a.n - b.n; }).forEach(function (x) { if (!seenN[x.n]) { seenN[x.n] = true; u.push(x); } });
         for (var i = 0; i < u.length; i++) {
           var win = [];
@@ -1750,7 +1785,7 @@
       var sc = scanMap && scanMap[it.transactionId];
       if (it.receiptType !== 2 || !sc || !sc.settle) return;
       var d = sc.settle.diff.sum || 0;
-      [['kasserer', it.cashierNumber], ['kasse', it.workstationNumber]].forEach(function (g) {
+      [['kasserer', cashierId(it)], ['kasse', wsId(it)]].forEach(function (g) {
         var key = g[0] + '|' + g[1];
         var e = acc[key] || (acc[key] = { kind: g[0], id: String(g[1]), n: 0, minus: 0, plus: 0, sumMinus: 0, sumPlus: 0, net: 0, days: {}, list: [], ids: [] });
         e.n++; e.net += d;
@@ -1765,7 +1800,7 @@
       e.flag = (repN !== null && e.minus >= repN && Object.keys(e.days).length >= 2) || (total !== null && e.sumMinus <= -total);
       if (e.flag) {
         findings.push({ kind: 'Kassadifferanse', code: 'diffRepeat', title: 'Gjentatte kassadifferanser', flag: true,
-          detail: (e.kind === 'kasserer' ? 'Kasserer ' : 'Kasse ') + e.id + ': ' + e.minus + ' av ' + e.n + ' oppgjør med minus, totalt ' + e.sumMinus + ' kr',
+          detail: (e.kind === 'kasserer' ? 'Kasserer ' : 'Kasse ') + idLabel(e.id) + ': ' + e.minus + ' av ' + e.n + ' oppgjør med minus, totalt ' + e.sumMinus + ' kr',
           ids: e.ids.slice(), cashier: e.kind === 'kasserer' ? e.id : null });
       }
       return e;
@@ -1776,19 +1811,21 @@
   // Retur og kassadifferanse: henger kassererens returandel per dag sammen med differansen i kassaoppgjøret?
   function retDiffCorr(items, scanMap, cfg) {
     var rho = cnum(cfg.corrRho, null), minDays = cnum(cfg.corrDays, 8), days = {}, sales = 0, rets = 0;
-    var res = { findings: [], rows: [] };
+    var res = { findings: [], rows: [] }, cst = {}, sst = {};
     items.forEach(function (it) {
       var d = dayOf(it);
       if (!d) return;
-      var c = String(it.cashierNumber), e = (days[c] = days[c] || {})[d] = days[c][d] || { n: 0, ret: 0, diff: null };
-      if (isSale(it)) { e.n++; sales++; if (it.totalAmount < 0) { e.ret++; rets++; } }
+      var c = String(cashierId(it)), e = (days[c] = days[c] || {})[d] = days[c][d] || { n: 0, ret: 0, diff: null };
+      cst[c] = it.storeNumber;
+      var ss = sst[it.storeNumber] || (sst[it.storeNumber] = { s: 0, r: 0 });
+      if (isSale(it)) { e.n++; sales++; ss.s++; if (it.totalAmount < 0) { e.ret++; rets++; ss.r++; } }
       else if (it.receiptType === 2) {
         var sc = scanMap && scanMap[it.transactionId];
         if (sc && sc.settle) e.diff = (e.diff || 0) + (sc.settle.diff.sum || 0);
       }
     });
-    var storeShare = sales ? rets / sales : 0;
     Object.keys(days).sort(numCmp).forEach(function (c) {
+      var sq = sst[cst[c]], storeShare = sq && sq.s ? sq.r / sq.s : 0;
       var pts = Object.keys(days[c]).map(function (d) { return days[c][d]; }).filter(function (e) { return e.n >= 5 && e.diff !== null; });
       var n = pts.reduce(function (a, e) { return a + e.n; }, 0), r = pts.reduce(function (a, e) { return a + e.ret; }, 0), diff = round2(pts.reduce(function (a, e) { return a + e.diff; }, 0));
       var row = { id: c, days: pts.length, rho: null, diff: diff, retShare: n ? r / n : 0, flag: false };
@@ -1796,7 +1833,7 @@
       if (rho !== null && row.rho !== null && row.rho <= -rho && diff < 0 && row.retShare >= storeShare) {
         row.flag = true;
         res.findings.push({ kind: 'Kassadifferanse', code: 'retDiff', title: 'Retur og kassadifferanse henger sammen', flag: false, cashier: c, ids: [],
-          detail: 'Kasserer ' + c + ': dager med mange returer har mer minus i kassen (ρ ' + row.rho.toFixed(2).replace('.', ',') + ' over ' + pts.length + ' dager), differanse totalt ' + diff + ' kr, returandel ' + Math.round(row.retShare * 100) + ' % mot butikkens ' + Math.round(storeShare * 100) + ' %' });
+          detail: 'Kasserer ' + idLabel(c) + ': dager med mange returer har mer minus i kassen (ρ ' + row.rho.toFixed(2).replace('.', ',') + ' over ' + pts.length + ' dager), differanse totalt ' + diff + ' kr, returandel ' + Math.round(row.retShare * 100) + ' % mot butikkens ' + Math.round(storeShare * 100) + ' %' });
       }
       if (pts.length) res.rows.push(row);
     });
@@ -1891,15 +1928,16 @@
     var sales = items.filter(function (it) { return isSale(it) && it.totalAmount > 0; });
     var overall = benfordStats(sales.map(function (it) { return it.totalAmount; }));
     overall.enough = overall.n >= minAll;
-    var by = {};
-    sales.forEach(function (it) { groupInto(by, String(it.cashierNumber), it); });
+    var by = {}, salesBy = {};
+    sales.forEach(function (it) { groupInto(by, String(cashierId(it)), it); groupInto(salesBy, it.storeNumber, it); });
     var round = function (arr) { return arr.length ? arr.filter(function (it) { return Math.round(it.totalAmount * 100) % 100 === 0; }).length / arr.length : 0; };
     var storeRound = round(sales), findings = [];
+    var storeRoundOf = function (st) { return round(salesBy[st] || []); };
     var digitMin = cnum(cfg.digitMin, 50), digitP = cnum(cfg.digitP, null), pooled = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], dig = {};
     sales.forEach(function (it) {
       var d = Math.round(it.totalAmount * 100) % 10;
       pooled[d]++;
-      (dig[it.cashierNumber] = dig[it.cashierNumber] || [0, 0, 0, 0, 0, 0, 0, 0, 0, 0])[d]++;
+      (dig[cashierId(it)] = dig[cashierId(it)] || [0, 0, 0, 0, 0, 0, 0, 0, 0, 0])[d]++;
     });
     // Normalfordeling = median over kassererne av hvert siffers andel (robust mot at én kasserer avviker). Krever minst tre kasserere.
     var elig = Object.keys(dig).filter(function (c) { return dig[c].reduce(function (a, b) { return a + b; }, 0) >= digitMin; }), digitBase = null;
@@ -1920,19 +1958,19 @@
             row.flagDigit = true;
             var top = dc.indexOf(Math.max.apply(null, dc));
             findings.push({ kind: 'Tallanalyse', code: 'digit', title: 'Avvikende siste siffer', flag: false, cashier: id, ids: [],
-              detail: 'Kasserer ' + id + ': siste siffer i totalbeløpet avviker fra de andre kassererne (χ² ' + dt.chi.toFixed(1) + ', p ' + (dt.p < 0.0001 ? '< 0,0001' : dt.p.toFixed(4).replace('.', ',')) + ', ' + arr.length + ' bonger; vanligste siffer ' + top + ' hos ' + Math.round(dc[top] / arr.length * 100) + ' %)' });
+              detail: 'Kasserer ' + idLabel(id) + ': siste siffer i totalbeløpet avviker fra de andre kassererne (χ² ' + dt.chi.toFixed(1) + ', p ' + (dt.p < 0.0001 ? '< 0,0001' : dt.p.toFixed(4).replace('.', ',')) + ', ' + arr.length + ' bonger; vanligste siffer ' + top + ' hos ' + Math.round(dc[top] / arr.length * 100) + ' %)' });
           }
         }
       }
       if (b.n >= minCash && b.mad > madLimit) {
         row.flagBenford = true;
         findings.push({ kind: 'Tallanalyse', code: 'benford', title: 'Avvikende sifferfordeling', flag: false, cashier: id, ids: [],
-          detail: 'Kasserer ' + id + ': første siffer i totalbeløp avviker fra Benford (MAD ' + b.mad.toFixed(3) + ', ' + b.n + ' bonger)' });
+          detail: 'Kasserer ' + idLabel(id) + ': første siffer i totalbeløp avviker fra Benford (MAD ' + b.mad.toFixed(3) + ', ' + b.n + ' bonger)' });
       }
-      if (rShare !== null && arr.length >= rMin && row.roundShare * 100 >= rShare && row.roundShare >= 2 * storeRound) {
+      if (rShare !== null && arr.length >= rMin && row.roundShare * 100 >= rShare && row.roundShare >= 2 * storeRoundOf(arr[0].storeNumber)) {
         row.flagRound = true;
         findings.push({ kind: 'Tallanalyse', code: 'round', title: 'Mange runde beløp', flag: false, cashier: id, ids: [],
-          detail: 'Kasserer ' + id + ': ' + Math.round(row.roundShare * 100) + ' % av totalene er hele kroner (butikk ' + Math.round(storeRound * 100) + ' %, ' + arr.length + ' bonger)' });
+          detail: 'Kasserer ' + idLabel(id) + ': ' + Math.round(row.roundShare * 100) + ' % av totalene er hele kroner (butikk ' + Math.round(storeRoundOf(arr[0].storeNumber) * 100) + ' %, ' + arr.length + ' bonger)' });
       }
       return row;
     });
@@ -1987,7 +2025,7 @@
         var k = campKey(l.c), e = item[k] || (item[k] = { key: k, c: l.c, name: l.n, rateBongs: {}, bongs: {}, cashiers: {}, stores: {}, days: {} });
         var rr = Math.round(r);
         (e.rateBongs[rr] = e.rateBongs[rr] || {})[it.transactionId] = 1;
-        e.bongs[it.transactionId] = 1; e.cashiers[it.cashierNumber] = 1; e.stores[it.storeNumber] = 1; e.days[dayOf(it)] = 1;
+        e.bongs[it.transactionId] = 1; e.cashiers[cashierId(it)] = 1; e.stores[it.storeNumber] = 1; e.days[dayOf(it)] = 1;
       });
     });
     var rows = Object.keys(item).map(function (k) {
@@ -2030,7 +2068,7 @@
     var pctMin = cnum(cfg.discPct, null), cashCmp = hasNum(cfg.discCash), f = cnum(cfg.profFactor, 1.5), minN = cnum(cfg.profMin, 5);
     var watch = watchReasons(cfg), wPct = cnum(cfg.discWatchPct, 0), wKr = cnum(cfg.discWatchKr, 0), wN = cnum(cfg.discWatchN, null);
     var fresh = function () { return { n: 0, withDisc: 0, disc: 0, withNR: 0, nr: 0, withCpn: 0, cpn: 0, cpnSum: 0, withW: 0 }; };
-    var acc = {}, tot = fresh(), camps = {}, findings = [], scannedSales = 0, sales = 0, reasons = {}, matrix = {};
+    var acc = {}, tots = {}, tot = fresh(), camps = {}, findings = [], scannedSales = 0, sales = 0, reasons = {}, matrix = {};
     var pop = popArg || items, camp = campaigns(pop, scanMap, cfg, decisions);
     var hiFrom = cnum(cfg.discHiFrom, null), hiTo = cnum(cfg.discHiTo, 100), matchPct = cnum(cfg.discMatchPct, null), matchNR = hasNum(cfg.discMatchNR);
     var rateIdx = {};
@@ -2052,11 +2090,14 @@
       var sc = scanMap && scanMap[it.transactionId];
       if (!hasDisc(sc)) return;
       scannedSales++;
-      var a = acc[it.cashierNumber] || (acc[it.cashierNumber] = fresh());
+      var cid = cashierId(it);
+      var a = acc[cid] || (acc[cid] = fresh());
+      a.store = it.storeNumber;
+      var ts = tots[it.storeNumber] || (tots[it.storeNumber] = fresh());
       // rabatt uten årsak som brukeren har bekreftet som kampanje, teller ikke mot kassereren
       var nrL = sc.items.filter(function (l) { return l.d && !l.dr && camp.line(it, l) !== 'kampanje'; });
       var nrSum = round2(nrL.reduce(function (x, l) { return x + l.d; }, 0));
-      [a, tot].forEach(function (x) {
+      [a, ts, tot].forEach(function (x) {
         x.n++;
         if (sc.discN) { x.withDisc++; x.disc += sc.disc; }
         if (nrL.length) { x.withNR++; x.nr += nrSum; }
@@ -2068,7 +2109,7 @@
         var e = reasons[rn] || (reasons[rn] = { name: rn, lines: 0, bongs: {}, sum: 0, pctSum: 0, pctN: 0 });
         e.lines++; e.bongs[it.transactionId] = true; e.sum = round2(e.sum + l.d);
         if (l.dp) { e.pctSum += l.dp; e.pctN++; }
-        var m = matrix[it.cashierNumber] || (matrix[it.cashierNumber] = {});
+        var m = matrix[cashierId(it)] || (matrix[cashierId(it)] = {});
         m[rn] = (m[rn] || 0) + 1;
       });
       sc.coupons.forEach(function (c) {
@@ -2080,7 +2121,7 @@
         if (wl.length) {
           a.withW++; tot.withW++;
           findings.push({ kind: 'Rabatt', code: 'discWatch', title: 'Rabatt med overvåket årsak', flag: true,
-            detail: 'Kasse ' + it.workstationNumber + ' ' + parseDT(it.endDateTime).time + ' kasserer ' + it.cashierNumber + ': ' +
+            detail: 'Kasse ' + wsOf(it) + ' ' + parseDT(it.endDateTime).time + ' kasserer ' + it.cashierNumber + ': ' +
               wl.map(function (l) { return l.n + ' −' + l.d + ' kr (' + (l.dp || '?') + ' %) – årsak ' + reasonName(l.dr); }).join(', '),
             ids: [it.transactionId] });
         }
@@ -2129,7 +2170,7 @@
         var hits = sc.items.filter(function (l) { return l.d && !l.dr && (l.dp || 0) >= pctMin && !sure(l); });
         skipped += sc.items.filter(function (l) { return l.d && !l.dr && (l.dp || 0) >= pctMin && sure(l); }).length;
         if (hits.length) withCamp({ kind: 'Rabatt', code: 'discNoReason', title: 'Rabatt uten årsak', flag: true,
-          detail: 'Kasse ' + it.workstationNumber + ' ' + parseDT(it.endDateTime).time + ' kasserer ' + it.cashierNumber + ': ' +
+          detail: 'Kasse ' + wsOf(it) + ' ' + parseDT(it.endDateTime).time + ' kasserer ' + it.cashierNumber + ': ' +
             hits.map(function (l) { return l.n + ' −' + l.d + ' kr (' + (l.dp || '?') + ' %)'; }).join(', ') + ' uten rabattårsak.',
           ids: [it.transactionId] }, hits);
       }
@@ -2137,19 +2178,19 @@
     var shareOf = function (x) { return x.n ? x.withNR / x.n : 0; };
     var storeShare = shareOf(tot);
     var rows = Object.keys(acc).sort(numCmp).map(function (id) {
-      var x = acc[id];
+      var x = acc[id], sShare = shareOf(tots[x.store] || tot);
       var row = { id: id, n: x.n, withW: x.withW, flagW: false, withDisc: x.withDisc, disc: round2(x.disc), withNR: x.withNR, nr: round2(x.nr), withCpn: x.withCpn, cpn: x.cpn, cpnSum: round2(x.cpnSum),
         share: shareOf(x), flag: false };
       if (watch.length && wN !== null && x.withW >= wN) {
         row.flagW = true;
         var per = watch.map(function (n) { return n + ' ' + ((matrix[id] && matrix[id][n]) || 0); }).join(', ');
         findings.push({ kind: 'Rabatt', code: 'discWatchCash', title: 'Mange rabatter med overvåket årsak', flag: false, cashier: id, ids: [],
-          detail: 'Kasserer ' + id + ': ' + x.withW + ' av ' + x.n + ' bonger med overvåket rabattårsak (' + per + '; grense ' + wN + ')' });
+          detail: 'Kasserer ' + idLabel(id) + ': ' + x.withW + ' av ' + x.n + ' bonger med overvåket rabattårsak (' + per + '; grense ' + wN + ')' });
       }
-      if (cashCmp && x.n >= minN && x.withNR >= 2 && storeShare > 0 && row.share >= storeShare * f) {
+      if (cashCmp && x.n >= minN && x.withNR >= 2 && sShare > 0 && row.share >= sShare * f) {
         row.flag = true;
         findings.push({ kind: 'Rabatt', code: 'discCash', title: 'Mange rabatter uten årsak', flag: false, cashier: id, ids: [],
-          detail: 'Kasserer ' + id + ': ' + Math.round(row.share * 100) + ' % av bongene har rabatt uten årsak (butikk ' + Math.round(storeShare * 100) + ' %, ' + x.n + ' bonger)' });
+          detail: 'Kasserer ' + idLabel(id) + ': ' + Math.round(row.share * 100) + ' % av bongene har rabatt uten årsak (butikk ' + Math.round(sShare * 100) + ' %, ' + x.n + ' bonger)' });
       }
       return row;
     });
@@ -2186,15 +2227,20 @@
     return { members: members, pairs: pairs, any: any };
   }
 
-  function whereText(it) { return 'Kasse ' + it.workstationNumber + ' ' + parseDT(it.endDateTime).time + ' kasserer ' + it.cashierNumber; }
+  // «12=1234567» gjelder kasserer 12 i alle butikker, «12@1005=1234567» bare i butikk 1005 (kasserer-ID er lokal per butikk).
+  function empHas(emp, it, mk) { return !!(emp.pairs[String(it.cashierNumber) + '|' + mk] || emp.pairs[String(it.cashierNumber) + '@' + String(it.storeNumber) + '|' + mk]); }
+
+  function whereText(it) { return 'Kasse ' + wsOf(it) + ' ' + parseDT(it.endDateTime).time + ' kasserer ' + it.cashierNumber; }
 
   // Misbruk av medlemsnummer, kun fra listen (gridet). pop = alle innlastede bonger i valgte butikker.
   function memberChecks(items, pop, cfg) {
-    var findings = [], byM = {}, salesAll = 0, byCashAll = {};
+    var findings = [], byM = {}, salesAll = 0, byCashAll = {}, salesBy = {}, cashSt = {};
     pop.forEach(function (it) {
       if (it.receiptType !== 1 || typeof it.totalAmount !== 'number') return;
       salesAll++;
-      byCashAll[it.cashierNumber] = (byCashAll[it.cashierNumber] || 0) + 1;
+      salesBy[it.storeNumber] = (salesBy[it.storeNumber] || 0) + 1;
+      byCashAll[cashierId(it)] = (byCashAll[cashierId(it)] || 0) + 1;
+      cashSt[cashierId(it)] = it.storeNumber;
       var k = memberKey(it);
       if (k) (byM[k] = byM[k] || []).push(it);
     });
@@ -2208,10 +2254,10 @@
       arr.forEach(function (it) {
         (days[dayOf(it)] = days[dayOf(it)] || []).push(it);
         stores[it.storeNumber] = true;
-        (cash[it.cashierNumber] = cash[it.cashierNumber] || []).push(it);
+        (cash[cashierId(it)] = cash[cashierId(it)] || []).push(it);
       });
       var top = Object.keys(cash).sort(function (a, b) { return cash[b].length - cash[a].length; })[0];
-      var topShare = cash[top].length / arr.length;
+      var topShare = cash[top].length / arr.length, topBase = salesBy[cashSt[top]] ? byCashAll[top] / salesBy[cashSt[top]] : 0;
       rows.push({ id: mk, n: arr.length, days: Object.keys(days).length, stores: Object.keys(stores).length, cashier: top, share: topShare, flags: [] });
       var row = rows[rows.length - 1];
       if (stMin !== null) {
@@ -2233,7 +2279,7 @@
           if (days[d].length < dayN) return;
           row.flags.push('samme dag');
           findings.push({ kind: 'Medlem', code: 'memberDay', title: 'Medlemsnr flere ganger samme dag', flag: true,
-            detail: 'Medlemsnr ' + mk + ': ' + days[d].length + ' bonger ' + d + ' (kasserere ' + Object.keys(days[d].reduce(function (o, x) { o[x.cashierNumber] = 1; return o; }, {})).join(', ') + ')', ids: ids(days[d]) });
+            detail: 'Medlemsnr ' + mk + ': ' + days[d].length + ' bonger ' + d + ' (kasserere ' + Object.keys(days[d].reduce(function (o, x) { o[cashierLabel(x)] = 1; return o; }, {})).join(', ') + ')', ids: ids(days[d]) });
         });
       }
       if (totN !== null && arr.length >= totN) {
@@ -2241,23 +2287,23 @@
         findings.push({ kind: 'Medlem', code: 'memberMany', title: 'Medlemsnr brukt svært mye', flag: true,
           detail: 'Medlemsnr ' + mk + ': ' + arr.length + ' bonger på ' + row.days + ' dager i ' + row.stores + ' butikk' + (row.stores === 1 ? '' : 'er') + ' (grense ' + totN + ')', ids: ids(arr) });
       }
-      if (cN !== null && cash[top].length >= cN && topShare >= cShare && salesAll && topShare >= fac * (byCashAll[top] / salesAll)) {
+      if (cN !== null && cash[top].length >= cN && topShare >= cShare && topBase && topShare >= fac * topBase) {
         row.flags.push('én kasserer');
         findings.push({ kind: 'Medlem', code: 'memberCash', title: 'Medlemsnr nesten bare hos én kasserer', flag: true,
-          detail: 'Medlemsnr ' + mk + ': ' + cash[top].length + ' av ' + arr.length + ' bonger (' + Math.round(topShare * 100) + ' %) hos kasserer ' + top + ', som ellers har ' + Math.round(byCashAll[top] / salesAll * 100) + ' % av bongene', ids: ids(cash[top]) });
+          detail: 'Medlemsnr ' + mk + ': ' + cash[top].length + ' av ' + arr.length + ' bonger (' + Math.round(topShare * 100) + ' %) hos kasserer ' + idLabel(top) + ', som ellers har ' + Math.round(topBase * 100) + ' % av bongene', ids: ids(cash[top]) });
       }
       if (emp.any && emp.members[mk]) {
-        var mine = arr.filter(function (it) { return emp.pairs[String(it.cashierNumber) + '|' + mk]; });
-        var other = arr.filter(function (it) { return !emp.pairs[String(it.cashierNumber) + '|' + mk]; });
+        var mine = arr.filter(function (it) { return empHas(emp, it, mk); });
+        var other = arr.filter(function (it) { return !empHas(emp, it, mk); });
         if (mine.length) {
           row.flags.push('eget nummer');
           findings.push({ kind: 'Medlem', code: 'empOwn', title: 'Kasserer bruker eget medlemsnr', flag: true,
-            detail: 'Kasserer ' + mine[0].cashierNumber + ' har tastet sitt eget medlemsnr ' + mk + ' på ' + mine.length + ' bonger', ids: ids(mine) });
+            detail: 'Kasserer ' + cashierLabel(mine[0]) + ' har tastet sitt eget medlemsnr ' + mk + ' på ' + mine.length + ' bonger', ids: ids(mine) });
         }
         if (other.length) {
           row.flags.push('ansatt');
           findings.push({ kind: 'Medlem', code: 'empUse', title: 'Ansatt-medlemsnr brukt', flag: true,
-            detail: 'Ansattnummer ' + mk + ' brukt på ' + other.length + ' bonger (kasserere ' + Object.keys(other.reduce(function (o, x) { o[x.cashierNumber] = 1; return o; }, {})).join(', ') + ')', ids: ids(other) });
+            detail: 'Ansattnummer ' + mk + ' brukt på ' + other.length + ' bonger (kasserere ' + Object.keys(other.reduce(function (o, x) { o[cashierLabel(x)] = 1; return o; }, {})).join(', ') + ')', ids: ids(other) });
         }
       }
     });
@@ -2306,7 +2352,7 @@
         res.deviating++;
         var id = x.it.transactionId;
         (perBong[id] = perBong[id] || { it: x.it, lines: [] }).lines.push(x.l.n + ' kr ' + x.price.toFixed(2) + ' mot vanlig ' + mode.toFixed(2) + ' (' + (dev > 0 ? '+' : '−') + Math.round(Math.abs(dev)) + ' %)');
-        perCash[x.it.cashierNumber] = (perCash[x.it.cashierNumber] || 0) + 1;
+        perCash[cashierId(x.it)] = (perCash[cashierId(x.it)] || 0) + 1;
       });
     });
     Object.keys(perBong).forEach(function (id) {
@@ -2317,7 +2363,7 @@
       res.rows.push({ id: c, n: perCash[c] });
       if (cashN !== null && perCash[c] >= cashN) {
         res.findings.push({ kind: 'Pris', code: 'priceCash', title: 'Mange avvikende priser', flag: false, cashier: c, ids: [],
-          detail: 'Kasserer ' + c + ': ' + perCash[c] + ' varelinjer med pris som avviker minst ' + pct + ' % fra vanlig pris samme dag (grense ' + cashN + ')' });
+          detail: 'Kasserer ' + idLabel(c) + ': ' + perCash[c] + ' varelinjer med pris som avviker minst ' + pct + ' % fra vanlig pris samme dag (grense ' + cashN + ')' });
       }
     });
     return res;
@@ -2423,7 +2469,7 @@
     var res = { findings: [], rows: [], mach: { n: 0, sum: 0 }, man: { n: 0, sum: 0 }, del: 0, reuse: 0, scanned: 0, sales: 0, coverage: 1 };
     var manMin = cnum(cfg.lappManualMin, null), manN = cnum(cfg.lappManualN, null), delOn = hasNum(cfg.lappDel), reuseMin = cnum(cfg.lappReuseMin, null);
     var pmin = cnum(cfg.pantMin, 20), f = cnum(cfg.profFactor, 1.5);
-    var scope = {}, per = {}, store = { n: 0, man: 0 }, lines = [];
+    var scope = {}, per = {}, stores = {}, lines = [];
     items.forEach(function (it) { scope[it.transactionId] = true; });
     pop.forEach(function (it) {
       if (it.receiptType !== 1) return;
@@ -2441,12 +2487,13 @@
       // flere pantelinjer på bongen: summen er også en lapp-sum (samme bongsum igjen og igjen)
       if (reuseMin !== null && sc.retLines >= 2 && -sc.ret >= pmin) lines.push({ it: it, kind: 'b', amt: -sc.ret, id: '' });
       if (!scope[it.transactionId]) return;
-      var c = per[it.cashierNumber] || (per[it.cashierNumber] = { id: String(it.cashierNumber), bongs: 0, mach: { n: 0, sum: 0 }, man: { n: 0, sum: 0 }, manBongs: 0, del: 0, reuse: 0, flag: false });
+      var c = per[cashierId(it)] || (per[cashierId(it)] = { id: String(cashierId(it)), store: it.storeNumber, bongs: 0, mach: { n: 0, sum: 0 }, man: { n: 0, sum: 0 }, manBongs: 0, del: 0, reuse: 0, flag: false });
       var sum = function (a) { return round2(a.reduce(function (x, l) { return x - l.a; }, 0)); };
-      if (man.length || mach.length || oth.length) { c.bongs++; store.n++; }
+      var sb = stores[it.storeNumber] || (stores[it.storeNumber] = { n: 0, man: 0 });
+      if (man.length || mach.length || oth.length) { c.bongs++; sb.n++; }
       c.mach.n += mach.length; c.mach.sum = round2(c.mach.sum + sum(mach)); res.mach.n += mach.length; res.mach.sum = round2(res.mach.sum + sum(mach));
       c.man.n += man.length; c.man.sum = round2(c.man.sum + sum(man)); res.man.n += man.length; res.man.sum = round2(res.man.sum + sum(man));
-      if (man.length) { c.manBongs++; store.man++; }
+      if (man.length) { c.manBongs++; sb.man++; }
       if (manMin !== null && man.length && sum(man) >= manMin) {
         res.findings.push({ kind: 'Pantelapp', code: 'lappManual', title: 'Manuell pantelapp', flag: true,
           detail: whereText(it) + ': ' + man.length + ' manuell pantelapp (kode 99), ' + money(sum(man)) + ' kr' + (mach.length ? ' (og ' + mach.length + ' fra pantemaskin, kode 399)' : ''),
@@ -2482,22 +2529,24 @@
           if (seen.some(function (sIds) { return ids.every(function (id) { return sIds.indexOf(id) !== -1; }); })) return;
           seen.push(ids);
           res.reuse++;
-          cl.forEach(function (x) { if (scope[x.it.transactionId] && per[x.it.cashierNumber]) per[x.it.cashierNumber].reuse++; });
+          cl.forEach(function (x) { if (scope[x.it.transactionId] && per[cashierId(x.it)]) per[cashierId(x.it)].reuse++; });
           var byId = k.indexOf('id|') === 0;
           res.findings.push({ kind: 'Pantelapp', code: 'lappReuse', title: 'Pantelapp innløst flere ganger', flag: true,
             detail: (byId ? 'Pantelapp nr ' + cl[0].id : (cl[0].kind === 'b' ? 'Pantelapper på til sammen ' : 'Pantelapp ') + money(cl[0].amt) + ' kr') + ' innløst på ' + cl.length + ' bonger' + (byId ? '' : ' (innen ' + reuseMin + ' min, eller samme kasse samme dag)') + ': ' +
-              cl.map(function (x) { return dayOf(x.it).slice(5) + ' ' + parseDT(x.it.endDateTime).time + ' kasse ' + x.it.workstationNumber + ' (kasserer ' + x.it.cashierNumber + ')'; }).join(', '),
+              cl.map(function (x) { return dayOf(x.it).slice(5) + ' ' + parseDT(x.it.endDateTime).time + ' kasse ' + wsOf(x.it) + ' (kasserer ' + x.it.cashierNumber + ')'; }).join(', '),
             ids: ids });
         });
       });
     }
-    var storeShare = store.n ? store.man / store.n : 0;
+    var allN = 0, allMan = 0;
+    Object.keys(stores).forEach(function (k) { allN += stores[k].n; allMan += stores[k].man; });
+    var storeShare = allN ? allMan / allN : 0;
     res.rows = Object.keys(per).sort(numCmp).map(function (id) {
-      var c = per[id];
+      var c = per[id], sbc = stores[c.store] || { n: 0, man: 0 }, sShare = sbc.n ? sbc.man / sbc.n : 0;
       c.share = c.bongs ? c.manBongs / c.bongs : 0;
-      c.flag = manN !== null && c.manBongs >= manN && (storeShare === 0 || c.share >= storeShare * f);
+      c.flag = manN !== null && c.manBongs >= manN && (sShare === 0 || c.share >= sShare * f);
       if (c.flag) res.findings.push({ kind: 'Pantelapp', code: 'lappManualCash', title: 'Mange manuelle pantelapper', flag: false, cashier: id, ids: [],
-        detail: 'Kasserer ' + id + ': ' + c.manBongs + ' av ' + c.bongs + ' pantebonger har manuell pantelapp (' + Math.round(c.share * 100) + ' %, butikk ' + Math.round(storeShare * 100) + ' %; grense ' + manN + ' bonger)' });
+        detail: 'Kasserer ' + idLabel(id) + ': ' + c.manBongs + ' av ' + c.bongs + ' pantebonger har manuell pantelapp (' + Math.round(c.share * 100) + ' %, butikk ' + Math.round(sShare * 100) + ' %; grense ' + manN + ' bonger)' });
       return c;
     });
     res.storeShare = storeShare;
@@ -2528,7 +2577,7 @@
       var sc = scans[it.transactionId];
       if (!sc || it.receiptType !== 1) return;
       var cx = cancelled(sc);
-      var c = per[it.cashierNumber] || (per[it.cashierNumber] = { id: String(it.cashierNumber), bongs: 0, lines: 0, unresolved: 0, combos: 0, sales: 0, flag: false });
+      var c = per[cashierId(it)] || (per[cashierId(it)] = { id: String(cashierId(it)), bongs: 0, lines: 0, unresolved: 0, combos: 0, sales: 0, flag: false });
       c.sales++;
       if (!cx.itemLines) return;
       c.bongs++; c.lines += cx.itemLines; res.voided += cx.itemLines; res.bongs++;
@@ -2553,7 +2602,7 @@
       var c = per[id];
       c.flag = cashN !== null && c.lines >= cashN;
       if (c.flag) res.findings.push({ kind: 'Slettede linjer', code: 'voidCash2', title: 'Mange makulerte varelinjer', flag: false, cashier: id, ids: [],
-        detail: 'Kasserer ' + id + ': ' + c.lines + ' makulerte varelinjer på ' + c.bongs + ' av ' + c.sales + ' salg (grense ' + cashN + ')' });
+        detail: 'Kasserer ' + idLabel(id) + ': ' + c.lines + ' makulerte varelinjer på ' + c.bongs + ' av ' + c.sales + ' salg (grense ' + cashN + ')' });
       return c;
     });
     return res;
@@ -2589,7 +2638,7 @@
       var h = specialHits(sc, res.words);
       if (!h.length) return;
       res.hits++;
-      var c = per[it.cashierNumber] || (per[it.cashierNumber] = { id: String(it.cashierNumber), n: 0, words: {} });
+      var c = per[cashierId(it)] || (per[cashierId(it)] = { id: String(cashierId(it)), n: 0, words: {} });
       c.n++;
       h.forEach(function (x) {
         var b = res.byWord[x.w] || (res.byWord[x.w] = { w: x.w, bongs: 0, sum: 0 });
@@ -2603,7 +2652,7 @@
       var c = per[id];
       c.flag = cashN !== null && c.n >= cashN;
       if (c.flag) res.findings.push({ kind: 'Spesialbetaling', code: 'specialCash', title: 'Mange spesialbetalinger', flag: false, cashier: id, ids: [],
-        detail: 'Kasserer ' + id + ': ' + c.n + ' bonger med ' + Object.keys(c.words).map(function (w) { return w + ' ' + c.words[w]; }).join(', ') + ' (grense ' + cashN + ')' });
+        detail: 'Kasserer ' + idLabel(id) + ': ' + c.n + ' bonger med ' + Object.keys(c.words).map(function (w) { return w + ' ' + c.words[w]; }).join(', ') + ' (grense ' + cashN + ')' });
       return c;
     });
     return res;
@@ -2649,7 +2698,7 @@
       var ask = askLines(sc);
       var hasEv = (sc.ev || []).some(function (e) { return ASK_RE.test(e.k) || ASK_RE.test(e.t); });
       if (!ask.length && !hasEv) return;
-      var c = per[it.cashierNumber] || (per[it.cashierNumber] = { id: String(it.cashierNumber), n: 0, dev: 0, flag: false });
+      var c = per[cashierId(it)] || (per[cashierId(it)] = { id: String(cashierId(it)), n: 0, dev: 0, flag: false });
       if (!ask.length) { res.evOnly++; c.n++; return; }
       var bad = [];
       ask.forEach(function (l) {
@@ -2667,7 +2716,7 @@
       var c = per[id];
       c.flag = cashN !== null && c.n >= cashN;
       if (c.flag) res.findings.push({ kind: 'Spør pris', code: 'askCash', title: 'Mange spør pris', flag: false, cashier: id, ids: [],
-        detail: 'Kasserer ' + id + ': ' + c.n + ' bonger med spør pris, ' + c.dev + ' med pris som avviker (grense ' + cashN + ')' });
+        detail: 'Kasserer ' + idLabel(id) + ': ' + c.n + ' bonger med spør pris, ' + c.dev + ' med pris som avviker (grense ' + cashN + ')' });
       return c;
     });
     return res;
@@ -2701,7 +2750,7 @@
       }
       var c = arr[0].c, label = (c.s ? c.s.toUpperCase() + ' ' : '') + (c.f ? c.f + '…' : '…') + c.n;
       var cash = {};
-      arr.forEach(function (x) { cash[x.it.cashierNumber] = (cash[x.it.cashierNumber] || 0) + 1; });
+      arr.forEach(function (x) { cash[cashierId(x.it)] = (cash[cashierId(x.it)] || 0) + 1; });
       res.rows.push({ key: k, label: label, n: arr.length, best: best.length, sum: round2(arr.reduce(function (a, x) { return a + Math.abs(x.it.totalAmount); }, 0)), cashiers: cash, flag: nMin !== null && best.length >= nMin });
       if (nMin !== null && best.length >= nMin) {
         res.findings.push({ kind: 'Kort', code: 'cardRet', title: 'Gjentatte returer på samme kort', flag: true,
@@ -2854,7 +2903,7 @@
         if (l.length < 2) return;
         res.refs.dup++;
         res.findings.push({ kind: 'Regnskap', code: 'refDup', title: 'Samme betalingsreferanse på flere bonger', flag: true,
-          detail: 'Referanse ' + g.ref.slice(2) + ' (' + (g.ref.charAt(0) === 'T' ? 'TransId' : 'Referanse') + ') på ' + l.length + ' bonger: ' + l.map(function (it) { return 'kasse ' + it.workstationNumber + ' ' + parseDT(it.endDateTime).time; }).join(', '),
+          detail: 'Referanse ' + g.ref.slice(2) + ' (' + (g.ref.charAt(0) === 'T' ? 'TransId' : 'Referanse') + ') på ' + l.length + ' bonger: ' + l.map(function (it) { return 'kasse ' + wsOf(it) + ' ' + parseDT(it.endDateTime).time; }).join(', '),
           ids: l.map(function (it) { return it.transactionId; }) });
       });
     }
@@ -2891,7 +2940,7 @@
   }
 
   function tempoChecks(items, cfg) {
-    var res = { findings: [], rows: [], sales: 0, secShare: 0, secOK: false, series: 0, inSeries: 0, zero: 0, minGap: null, gapOn: false };
+    var res = { findings: [], rows: [], sales: 0, secShare: 0, secOK: false, secPadded: false, series: 0, inSeries: 0, zero: 0, minGap: null, gapOn: false };
     var gap = cnum(cfg.paceSec, null), nMin = Math.max(2, cnum(cfg.paceN, 4)), minN = cnum(cfg.paceMinuteN, null), zeroN = cnum(cfg.zeroN, null);
     var sales = [], per = {};
     var row = function (id) { return per[id] || (per[id] = { id: String(id), n: 0, series: 0, inSeries: 0, zero: 0 }); };
@@ -2900,23 +2949,26 @@
       var t = tsSec(it);
       if (!t) return;
       sales.push({ it: it, t: t.t, sec: t.sec });
-      row(it.cashierNumber).n++;
-      if (it.totalAmount === 0) { row(it.cashierNumber).zero++; res.zero++; }
+      row(cashierId(it)).n++;
+      if (it.totalAmount === 0) { row(cashierId(it)).zero++; res.zero++; }
     });
     res.sales = sales.length;
-    res.secShare = sales.length ? sales.filter(function (x) { return x.sec; }).length / sales.length : 0;
-    res.secOK = res.secShare >= 0.8;
+    var withSec = sales.filter(function (x) { return x.sec; });
+    res.secShare = sales.length ? withSec.length / sales.length : 0;
+    // Viser listen :00 på nesten alle bonger, er det hele minutter med polstring, ikke sekunder (tilfeldige sekunder gir ca. 1/60 nuller).
+    res.secPadded = withSec.length >= 20 && withSec.filter(function (x) { return x.t % 60 === 0; }).length / withSec.length > 0.5;
+    res.secOK = res.secShare >= 0.8 && !res.secPadded;
     res.gapOn = res.secOK ? gap !== null : minN !== null;
     var lanes = {};
     sales.forEach(function (x) { groupInto(lanes, [x.it.storeNumber, x.it.workstationNumber, dayOf(x.it)].join('|'), x); });
     var mark = function (list, why) {
-      var cash = {};
-      list.forEach(function (x) { cash[x.it.cashierNumber] = true; var r = row(x.it.cashierNumber); r.inSeries++; });
-      Object.keys(cash).forEach(function (c) { row(c).series++; });
+      var cash = {}, cids = {};
+      list.forEach(function (x) { cash[x.it.cashierNumber] = true; cids[cashierId(x.it)] = true; row(cashierId(x.it)).inSeries++; });
+      Object.keys(cids).forEach(function (c) { row(c).series++; });
       res.series++; res.inSeries += list.length;
       var a = list[0].it, last = list[list.length - 1].it;
       res.findings.push({ kind: 'Tempo', code: 'pace', title: 'Bonger i rask rekkefølge', flag: true,
-        detail: 'Kasse ' + a.workstationNumber + ' ' + dayOf(a) + ' ' + parseDT(a.endDateTime).time + '–' + parseDT(last.endDateTime).time + ': ' + list.length + ' bonger ' + why + ' (kasserer ' + Object.keys(cash).sort(numCmp).join(', ') + ')',
+        detail: 'Kasse ' + wsOf(a) + ' ' + dayOf(a) + ' ' + parseDT(a.endDateTime).time + '–' + parseDT(last.endDateTime).time + ': ' + list.length + ' bonger ' + why + ' (kasserer ' + Object.keys(cash).sort(numCmp).join(', ') + ')',
         ids: list.map(function (x) { return x.it.transactionId; }) });
     };
     Object.keys(lanes).forEach(function (k) {
@@ -2940,7 +2992,7 @@
       var r = per[id];
       r.zeroFlag = zeroN !== null && r.zero >= zeroN;
       if (r.zeroFlag) res.findings.push({ kind: 'Tempo', code: 'zeroBon', title: 'Mange 0-kr-bonger', flag: false, cashier: id, ids: [],
-        detail: 'Kasserer ' + id + ': ' + r.zero + ' bonger på 0,00 kr av ' + r.n + ' (grense ' + zeroN + ')' });
+        detail: 'Kasserer ' + idLabel(id) + ': ' + r.zero + ' bonger på 0,00 kr av ' + r.n + ' (grense ' + zeroN + ')' });
       return r;
     }).filter(function (r) { return r.series || r.zero; });
     return res;
@@ -2989,7 +3041,7 @@
       res.sales++;
       if (!sc || !sc.items) return;
       res.scanned++;
-      var c = per[it.cashierNumber] || (per[it.cashierNumber] = { id: String(it.cashierNumber), sales: 0, n: 0, ret: 0, del: 0 });
+      var c = per[cashierId(it)] || (per[cashierId(it)] = { id: String(cashierId(it)), sales: 0, n: 0, ret: 0, del: 0 });
       c.sales++;
       var h = hits(sc);
       if (!h.length) return;
@@ -3011,13 +3063,13 @@
       if (delOn) one('slettet', 'Overvåket vare slettet', 'watchDel');
     });
     res.rows = Object.keys(per).sort(numCmp).map(function (id) {
-      var c = per[id], it0 = items.filter(function (i) { return String(i.cashierNumber) === id; })[0];
+      var c = per[id], it0 = items.filter(function (i) { return String(cashierId(i)) === id; })[0];
       c.share = c.sales ? c.n / c.sales : 0;
       var st = it0 ? it0.storeNumber : null, sShare = st !== null && storeTot[st] ? (storeHit[st] || 0) / storeTot[st] : 0;
       c.storeShare = sShare;
       c.flag = cashN !== null && c.n >= cashN && c.sales >= minN && c.share > sShare && c.share >= factor * sShare;
       if (c.flag) res.findings.push({ kind: 'Overvåket vare', code: 'watchCash', title: 'Mange overvåkede varer hos kasserer', flag: false, cashier: id, ids: [],
-        detail: 'Kasserer ' + id + ': ' + c.n + ' av ' + c.sales + ' salg (' + Math.round(c.share * 100) + ' %) har overvåket vare, butikken ' + Math.round(sShare * 100) + ' %' });
+        detail: 'Kasserer ' + idLabel(id) + ': ' + c.n + ' av ' + c.sales + ' salg (' + Math.round(c.share * 100) + ' %) har overvåket vare, butikken ' + Math.round(sShare * 100) + ' %' });
       return c;
     }).filter(function (c) { return c.n; });
     return res;
@@ -3089,7 +3141,7 @@
       var d = whereText(it) + ': ' + lines.slice(0, 3).map(function (l) { return '«' + l.n + '» (' + l.c + ', ' + money(Math.abs(l.a)) + ' kr)'; }).join(', ') + (lines.length > 3 ? ' og ' + (lines.length - 3) + ' til' : '') +
         (why.basis === 'dag' ? ' er solgt ingen steder i butikken samme dag før returen' : ' er ikke kjøpt ' + (why.basis === 'kort' ? 'med samme kort' : 'av samme medlem') + ' siste ' + days + ' dager, selv om ' + (why.basis === 'kort' ? 'kortet' : 'medlemmet') + ' har ' + why.sales.length + ' andre kjøp i perioden');
       res.findings.push({ kind: 'Retur av vare', code: 'retEan', title: why.t, flag: true, detail: d, ids: [it.transactionId].concat(other) });
-      res.rows.push({ id: it.transactionId, cashier: String(it.cashierNumber), when: dayOf(it) + ' ' + parseDT(it.endDateTime).time, basis: why.basis, n: lines.length, amt: round2(lines.reduce(function (a, l) { return a + Math.abs(l.a); }, 0)) });
+      res.rows.push({ id: it.transactionId, cashier: String(cashierId(it)), when: dayOf(it) + ' ' + parseDT(it.endDateTime).time, basis: why.basis, n: lines.length, amt: round2(lines.reduce(function (a, l) { return a + Math.abs(l.a); }, 0)) });
     });
     return res;
   }
@@ -3189,7 +3241,7 @@
         if (!arr.some(function (it) { return scope[it.transactionId]; })) return;
         var ft0 = scanMap[arr[0].transactionId].ft;
         res.findings.push({ kind: 'Topptekst', code: 'authDup', title: 'Samme autorisasjonskode på flere bonger', flag: true,
-          detail: 'Autorisasjon ' + ft0.a + (ft0.t ? ' (terminal ' + ft0.t + ')' : '') + ' står på ' + arr.length + ' bonger: ' + arr.slice(0, 4).map(function (it) { return dayOf(it) + ' ' + parseDT(it.endDateTime).time + ' kasse ' + it.workstationNumber + ' ' + money(it.totalAmount) + ' kr'; }).join('; '),
+          detail: 'Autorisasjon ' + ft0.a + (ft0.t ? ' (terminal ' + ft0.t + ')' : '') + ' står på ' + arr.length + ' bonger: ' + arr.slice(0, 4).map(function (it) { return dayOf(it) + ' ' + parseDT(it.endDateTime).time + ' kasse ' + wsOf(it) + ' ' + money(it.totalAmount) + ' kr'; }).join('; '),
           ids: arr.map(function (it) { return it.transactionId; }) });
       });
     }
@@ -3206,7 +3258,7 @@
       scanned++;
       Object.keys(sc.pay).forEach(function (k) {
         var e = by[k] || (by[k] = { label: k, bongs: 0, sum: 0, cashiers: {} });
-        e.bongs++; e.sum = round2(e.sum + sc.pay[k]); e.cashiers[it.cashierNumber] = 1;
+        e.bongs++; e.sum = round2(e.sum + sc.pay[k]); e.cashiers[cashierId(it)] = 1;
       });
     });
     var rows = Object.keys(by).map(function (k) {
@@ -3262,7 +3314,7 @@
     (items || []).forEach(function (it) {
       var k = it.saleChannel === undefined || it.saleChannel === null ? '?' : String(it.saleChannel);
       var c = ch[k] || (ch[k] = { k: k, n: 0, cashiers: {}, stores: {}, ws: {}, types: {}, sum: 0, cnt: 0, mem: 0, ret: 0 });
-      c.n++; c.cashiers[it.cashierNumber] = 1; c.stores[it.storeNumber] = 1; c.ws[it.workstationNumber] = 1; c.types[it.receiptType] = 1;
+      c.n++; c.cashiers[cashierId(it)] = 1; c.stores[it.storeNumber] = 1; c.ws[it.workstationNumber] = 1; c.types[it.receiptType] = 1;
       if (it.receiptType === 1 && typeof it.totalAmount === 'number') { c.sum += it.totalAmount; c.cnt++; if (it.totalAmount < 0) c.ret++; }
       if (it.memberNumber !== undefined && it.memberNumber !== null && it.memberNumber !== '') c.mem++;
       if (it.rawDT !== undefined && it.rawDT !== null) {
@@ -3299,10 +3351,10 @@
   function comparePeriods(itemsA, itemsB, scanMap, anomMap, weights, cfg) {
     var factor = cnum(cfg.profFactor, 1.5), minN = cnum(cfg.profMin, 5);
     var ids = {};
-    itemsA.concat(itemsB).forEach(function (it) { ids[it.cashierNumber] = true; });
+    itemsA.concat(itemsB).forEach(function (it) { ids[cashierId(it)] = true; });
     var rows = Object.keys(ids).sort(numCmp).map(function (id) {
-      var a = periodStats(itemsA.filter(function (it) { return String(it.cashierNumber) === id; }), scanMap, anomMap, weights);
-      var b = periodStats(itemsB.filter(function (it) { return String(it.cashierNumber) === id; }), scanMap, anomMap, weights);
+      var a = periodStats(itemsA.filter(function (it) { return String(cashierId(it)) === id; }), scanMap, anomMap, weights);
+      var b = periodStats(itemsB.filter(function (it) { return String(cashierId(it)) === id; }), scanMap, anomMap, weights);
       var dRet = b.retShare - a.retShare, dScore = b.score - a.score;
       var enough = a.count >= minN && b.count >= minN;
       var flags = [];
@@ -3373,7 +3425,17 @@
     localDT: localDT,
     cleanText: cleanText,
     normMember: normMember,
+    setMultiStore: setMultiStore,
+    multiStore: multiStore,
+    cashierId: cashierId,
+    wsId: wsId,
+    idLabel: idLabel,
+    idPart: idPart,
+    cashierLabel: cashierLabel,
+    isCashier: isCashier,
+    isWs: isWs,
     parseCellDT: parseCellDT,
+    mergeDT: mergeDT,
     headerDT: headerDT,
     headerSeq: headerSeq,
     defaultFilters: defaultFilters,

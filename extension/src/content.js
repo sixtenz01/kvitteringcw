@@ -174,7 +174,7 @@
       var dcell = tr.querySelector('td[data-field="endDateTime"]');
       var shown = dcell ? L.parseCellDT(dcell.textContent) : '';
       item.rawDT = item.endDateTime;
-      item.endDateTime = L.shiftDT(shown || L.localDT(item.endDateTime), timeShift);
+      item.endDateTime = L.shiftDT(L.mergeDT(shown, L.localDT(item.endDateTime)), timeShift);
       var cell = tr.querySelector('td[data-field="receiptIdentifier"]');
       item.bongnr = cell && cell.textContent.trim() ? cell.textContent.trim() : [item.storeNumber, item.workstationNumber, seqOf(item.transactionId)].join('-');
       var orig = pos.has(di) ? pos.get(di) : (di.uid && byUid[di.uid] !== undefined ? byUid[di.uid] : 0);
@@ -475,8 +475,8 @@
 
   function scopeMatches(it) {
     return storeOK(it) && periodOK(it) &&
-      (!scope.cashiers.length || scope.cashiers.indexOf(String(it.cashierNumber)) !== -1) &&
-      (!scope.workstations.length || scope.workstations.indexOf(String(it.workstationNumber)) !== -1);
+      (!scope.cashiers.length || scope.cashiers.some(function (v) { return L.isCashier(it, v); })) &&
+      (!scope.workstations.length || scope.workstations.some(function (v) { return L.isWs(it, v); }));
   }
 
   function analysisRecs(mode) {
@@ -645,6 +645,19 @@
     return Object.keys(seen).sort(function (a, b) { return a - b || (a < b ? -1 : 1); });
   }
 
+  // Kasserer-ID og kassenummer er lokale per butikk: med flere butikker i listen får de sammensatt id «12@1005» (se logic.js, cashierId).
+  function syncMulti() {
+    var seen = {}, n = 0;
+    recs.forEach(function (r) { var k = String(r.item.storeNumber); if (!seen[k]) { seen[k] = 1; n++; } });
+    L.setMultiStore(n > 1);
+  }
+
+  function distinctIds(kind) {
+    var seen = {};
+    recs.forEach(function (r) { seen[String(kind === 'kasserer' ? L.cashierId(r.item) : L.wsId(r.item))] = true; });
+    return Object.keys(seen).sort(function (a, b) { return a.localeCompare(b, 'nb', { numeric: true }); });
+  }
+
   function pills(cb) {
     var b = el('div', { class: 'kvr-pills', role: 'group' });
     b.cb = cb;
@@ -776,7 +789,7 @@
   }
 
   function refreshOptions() {
-    var key = [distinct('storeNumber'), distinct('workstationNumber'), distinct('cashierNumber'), distinct('receiptType'), JSON.stringify(storeMap), groupNames(), recs.length, cwStoreList.length].join('|');
+    var key = [distinct('storeNumber'), distinctIds('kasse'), distinctIds('kasserer'), L.multiStore(), distinct('receiptType'), JSON.stringify(storeMap), groupNames(), recs.length, cwStoreList.length].join('|');
     if (key === optsKey) return;
     optsKey = key;
     var storeVals = distinct('storeNumber'), sc = {};
@@ -787,11 +800,11 @@
       storeVals.forEach(function (v) { union[String(v)] = true; });
       cwStoreList.forEach(function (st) { union[String(st.number)] = true; });
       setStoreBox(ui.scStores, Object.keys(union).sort(function (a, b) { return a - b; }), sc, scope.stores);
-      fillSelect(ui.scCashiers, distinct('cashierNumber'), null, scope.cashiers);
-      fillSelect(ui.scKasser, distinct('workstationNumber'), null, scope.workstations);
+      fillSelect(ui.scCashiers, distinctIds('kasserer'), L.idLabel, scope.cashiers);
+      fillSelect(ui.scKasser, distinctIds('kasse'), L.idLabel, scope.workstations);
     }
-    fillSelect(ui.workstations, distinct('workstationNumber'), null, filters.workstations);
-    fillSelect(ui.cashiers, distinct('cashierNumber'), null, filters.cashiers);
+    fillSelect(ui.workstations, distinctIds('kasse'), L.idLabel, filters.workstations);
+    fillSelect(ui.cashiers, distinctIds('kasserer'), L.idLabel, filters.cashiers);
     fillSelect(ui.types, distinct('receiptType'), function (v) { return v + ' – ' + L.typeLabel(v); }, filters.types);
     fillSelect(ui.groups, groupNames(), null, filters.groups);
   }
@@ -800,6 +813,7 @@
     if (!grid) return;
     refreshStoreMap();
     recs = collect();
+    syncMulti();
     if (harvestGridStores()) refreshStoreMap();
     var items = recs.map(function (r) { return r.item; });
     var dup = L.findDuplicates(items);
@@ -829,7 +843,7 @@
       ensureCell(r);
       [['kasserer', 'cashierNumber', 'kasserer '], ['kasse', 'workstationNumber', 'kasse ']].forEach(function (c) {
         var td = r.tr.querySelector('td[data-field="' + c[1] + '"]') || (cdx[c[0]] !== undefined ? r.tr.children[cdx[c[0]]] : null);
-        if (td) td.title = 'Alt+klikk: se alt om ' + c[2] + r.item[c[1]];
+        if (td) td.title = 'Alt+klikk: se alt om ' + c[2] + (c[0] === 'kasserer' ? L.cashierLabel(r.item) : L.idLabel(L.wsId(r.item)));
       });
       if (show) visible++;
     });
@@ -907,8 +921,8 @@
     var add = function (label, clear, state) { out.push({ label: label, clear: clear, state: !!state }); };
     var rng = function (a, b) { return (a || '…') + ' → ' + (b || '…'); };
     if (f.stores.length) add('Butikk: ' + f.stores.map(sLabel).join(', '), function () { f.stores = []; });
-    if (f.workstations.length) add('Kasse: ' + f.workstations.join(', '), function () { f.workstations = []; });
-    if (f.cashiers.length) add('Kasserer: ' + f.cashiers.join(', '), function () { f.cashiers = []; });
+    if (f.workstations.length) add('Kasse: ' + f.workstations.map(L.idLabel).join(', '), function () { f.workstations = []; });
+    if (f.cashiers.length) add('Kasserer: ' + f.cashiers.map(L.idLabel).join(', '), function () { f.cashiers = []; });
     if (f.types.length) add('Type: ' + f.types.map(L.typeLabel).join(', '), function () { f.types = []; });
     if (f.dateFrom || f.dateTo) add('Dato ' + rng(f.dateFrom, f.dateTo), function () { f.dateFrom = ''; f.dateTo = ''; });
     if (f.timeFrom || f.timeTo) add('Tid ' + rng(f.timeFrom, f.timeTo), function () { f.timeFrom = ''; f.timeTo = ''; });
@@ -1386,10 +1400,11 @@
     mode = mode === 'visible' ? 'visible' : 'scope';
     if (scanning || !grid) return;
     lastMode = mode;
+    syncMulti();
     await runAnom(mode);
     var items = analysisItems(mode);
     var scopeIds = {}, scopeCash = {};
-    items.forEach(function (i) { scopeIds[i.transactionId] = true; scopeCash[String(i.cashierNumber)] = true; });
+    items.forEach(function (i) { scopeIds[i.transactionId] = true; scopeCash[String(L.cashierId(i))] = true; });
     // grunnlag for tester som trenger hele bildet: alle innlastede bonger i valgte butikker
     var pop = mode === 'visible' ? items : recs.filter(function (r) { return storeOK(r.item); }).map(function (r) { return r.item; });
     var keep = function (f) { return f.ids.length ? f.ids.some(function (id) { return scopeIds[id]; }) : (f.cashier ? !!scopeCash[f.cashier] : true); };
@@ -1538,7 +1553,7 @@
     box.appendChild(tbl(['Medlemsnr', 'Bonger', 'Kasserer', 'Funn'], M.rows.slice(0, 15).map(function (r) {
       var bad = r.flags.length > 0;
       return [{ node: btn(r.id, function () { filters.member = r.id; writeForm(); apply(); say('Viser kvitteringer med medlemsnr ' + r.id + '.'); }, 'kvr-ent') }, { t: r.n + ' (' + r.days + ' d, ' + r.stores + ' b)', bad: bad },
-        { node: el('span', {}, [entLink('kasserer', r.cashier, r.cashier), document.createTextNode(' (' + pct(r.share) + ')')]), bad: r.flags.indexOf('én kasserer') !== -1 }, { t: r.flags.map(function (f) { return short[f] || f; }).join(', ') || '–', bad: bad }];
+        { node: el('span', {}, [entLink('kasserer', r.cashier, L.idLabel(r.cashier)), document.createTextNode(' (' + pct(r.share) + ')')]), bad: r.flags.indexOf('én kasserer') !== -1 }, { t: r.flags.map(function (f) { return short[f] || f; }).join(', ') || '–', bad: bad }];
     })));
     box.appendChild(hintEl('Funn: to butikker innen ' + (ctlCfg.memberStoreMin || '–') + ' min, minst ' + (ctlCfg.memberDayN || '–') + ' bonger samme dag, totalt ' + (ctlCfg.memberN || '–') + ', og nesten bare hos én kasserer (minst ' + (ctlCfg.memberCashN || '–') + ' bonger, over ' + ctlCfg.memberCashShare + ' % og minst ' + ctlCfg.profFactor + '× kassererens vanlige andel). ' +
       (ctlCfg.empMembers ? 'Ansattliste er på.' : 'Legg inn ansattes medlemsnr under Innstillinger for å fange eget nummer direkte.') + ' Mange bruk av ett nummer kan være en trofast kunde: vurder sammen med hvem som taster det.'));
@@ -1621,7 +1636,7 @@
     if (!C.scanned) box.appendChild(hintEl('Ingen salg med kortdata. Kortnummer leses først i skanning versjon 6: bruk «Skann på nytt» under Bongregnskap.'));
     else {
       box.appendChild(hintEl(C.returns + ' returer blant ' + C.scanned + ' skannede salg, ' + C.withCard + ' med kort på bongen. Samme kort = samme leverandør og samme kortnummer slik det er trykt (siste fire siffer, eventuelt utsteder). Formatet er ikke bekreftet i ekte data.'));
-      var cr = C.rows.filter(function (r) { return r.n > 1; }).slice(0, 10).map(function (r) { return [r.label, { t: r.n, bad: r.flag }, r.best, fmt(r.sum), Object.keys(r.cashiers).map(function (k) { return k + ' ×' + r.cashiers[k]; }).join(', ')]; });
+      var cr = C.rows.filter(function (r) { return r.n > 1; }).slice(0, 10).map(function (r) { return [r.label, { t: r.n, bad: r.flag }, r.best, fmt(r.sum), Object.keys(r.cashiers).map(function (k) { return L.idLabel(k) + ' ×' + r.cashiers[k]; }).join(', ')]; });
       if (cr.length) box.appendChild(tbl(['Kort', 'Returer', 'Innen ' + ctlCfg.cardRetDays + ' d', 'Sum kr', 'Kasserer'], cr));
     }
     box.appendChild(el('b', { class: 'kvr-subh', text: 'Manuell kvittering og til gode-lapp' }));
@@ -1637,7 +1652,7 @@
     if (!T.sales) { box.appendChild(hintEl('Ingen salg med klokkeslett i omfanget.')); return; }
     var how = T.secOK
       ? 'Listen viser sekunder (' + pct(T.secShare) + ' av bongene). ' + (T.gapOn ? T.series + ' serier på ' + T.inSeries + ' bonger: minst ' + ctlCfg.paceN + ' bonger på samme kasse med høyst ' + ctlCfg.paceSec + ' s mellom.' : 'Serietesten er av.') + (T.minGap !== null ? ' Kortest tid mellom to bonger: ' + T.minGap + ' s.' : '')
-      : 'Listen viser bare hele minutter (' + pct(T.secShare) + ' har sekunder). ' + (T.gapOn ? T.series + ' minutter med minst ' + ctlCfg.paceMinuteN + ' bonger på samme kasse.' : 'Testen er av.');
+      : (T.secPadded ? 'Listen viser :00 på nesten alle bonger, så den regnes som hele minutter. ' : 'Listen viser bare hele minutter (' + pct(T.secShare) + ' har sekunder). ') + (T.gapOn ? T.series + ' minutter med minst ' + ctlCfg.paceMinuteN + ' bonger på samme kasse.' : 'Testen er av.');
     box.appendChild(hintEl(T.sales + ' salg. ' + how + ' ' + T.zero + ' bonger har sum 0,00 kr.'));
     if (T.rows.length) box.appendChild(tbl(['Kasserer', 'Serier', 'Bonger i serie', '0-kr-bonger'], T.rows.map(function (r) { return [{ node: entLink('kasserer', r.id) }, r.series, r.inSeries, { t: r.zero, bad: r.zeroFlag }]; })));
     box.appendChild(hintEl('Raske serier kan være kø med få varer, selvbetjening eller opprydding etter en feil. Se bongene før du konkluderer. Rødt = minst ' + (ctlCfg.zeroN || '–') + ' bonger på 0,00 kr.'));
@@ -1742,9 +1757,12 @@
         return [{ node: entLink('kasserer', r.id) }, r.count, { t: pct(r.retShare), bad: r.flags.retShare }, { t: fmt(r.avg), bad: r.flags.avg },
           r.scanned ? { t: r.lapperPer.toFixed(2), bad: r.flags.lapperPer } : '–', r.scanned ? { t: r.negPer.toFixed(2), bad: r.flags.negPer } : '–'];
       });
-      rows.push(['Butikksnitt', st.count, pct(st.retShare), fmt(st.avg), st.scanned ? st.lapperPer.toFixed(2) : '–', st.scanned ? st.negPer.toFixed(2) : '–']);
+      var snitt = function (label, m) { return [label, m.count, pct(m.retShare), fmt(m.avg), m.scanned ? m.lapperPer.toFixed(2) : '–', m.scanned ? m.negPer.toFixed(2) : '–']; };
+      var bsKeys = Object.keys(R.profile.byStore || {});
+      if (L.multiStore() && bsKeys.length > 1) bsKeys.sort(function (a, b) { return a.localeCompare(b, 'nb', { numeric: true }); }).forEach(function (k) { rows.push(snitt('Butikksnitt ' + k, R.profile.byStore[k])); });
+      else rows.push(snitt('Butikksnitt', st));
       ui.ctlProfile.appendChild(tbl(['Kasserer', 'Salg', 'Returandel', 'Snitt kr', 'Pantelapp/salg', 'Korr./salg'], rows));
-      ui.ctlProfile.appendChild(hintEl('Rødt = minst ' + ctlCfg.profFactor + '× butikksnittet (snitt også under 1/' + ctlCfg.profFactor + '). Returandel = salg med negativ sum. Pantelapper og korrigeringer (negative varelinjer utenom pant) krever skanning. Kasserere med færre enn ' + ctlCfg.profMin + ' bonger vurderes ikke.' + (ctlCfg.profShrink ? ' Tallene krympes mot butikksnittet (som ' + ctlCfg.profShrink + ' bonger), så få bonger gir små utslag.' : '')));
+      ui.ctlProfile.appendChild(hintEl('Rødt = minst ' + ctlCfg.profFactor + '× snittet i samme butikk (snitt også under 1/' + ctlCfg.profFactor + '). Returandel = salg med negativ sum. Pantelapper og korrigeringer (negative varelinjer utenom pant) krever skanning. Kasserere med færre enn ' + ctlCfg.profMin + ' bonger vurderes ikke.' + (ctlCfg.profShrink ? ' Tallene krympes mot butikksnittet (som ' + ctlCfg.profShrink + ' bonger), så få bonger gir små utslag.' : '')));
     }
     // funn
     if (!R.findings.length) ui.ctlFindings.appendChild(hintEl('Ingen funn med gjeldende terskler.'));
@@ -1752,7 +1770,7 @@
       var row = el('div', { class: 'kvr-li kvr-fl' + (f.flag ? '' : ' kvr-na') }, [el('div', { class: 'kvr-fl-t' }, [el('b', { text: f.kind + ': ' + f.title }), el('span', { text: f.detail })])]);
       var people = {}, desks = {};
       if (f.cashier) people[f.cashier] = true;
-      f.ids.forEach(function (id) { var rr = recById(id); if (rr) { people[rr.item.cashierNumber] = true; desks[rr.item.workstationNumber] = true; } });
+      f.ids.forEach(function (id) { var rr = recById(id); if (rr) { people[L.cashierId(rr.item)] = true; desks[L.wsId(rr.item)] = true; } });
       var ents = el('div', { class: 'kvr-ents' });
       Object.keys(people).slice(0, 3).forEach(function (k) { ents.appendChild(entLink('kasserer', k)); });
       Object.keys(desks).slice(0, 3).forEach(function (k) { ents.appendChild(entLink('kasse', k)); });
@@ -1779,7 +1797,7 @@
     if (!R.recon.length) ui.ctlRecon.appendChild(hintEl('Ingen skannede salg eller kassaoppgjør.'));
     else {
       ui.ctlRecon.appendChild(tbl(['Dag', 'Kasse', 'Kontant', 'Tilbake', 'Bank/kort', 'Forventet', 'Telt', 'Diff'], R.recon.map(function (r) {
-        return [r.day, { node: entLink('kasse', r.kasse, String(r.kasse)) }, fmt(r.pay['Kontant'] || 0), fmt(r.pay['Kontant tilbake'] || 0), fmt(r.pay['Bank'] || 0), fmt(r.expected),
+        return [r.day, { node: entLink('kasse', r.ws, String(r.kasse)) }, fmt(r.pay['Kontant'] || 0), fmt(r.pay['Kontant tilbake'] || 0), fmt(r.pay['Bank'] || 0), fmt(r.expected),
           r.settleCount ? fmt(r.telt) : '–', r.diff === null ? 'ingen oppgjør' : { t: fmt(r.diff) + (r.complete ? '' : ' *'), bad: r.flag }];
       })));
       ui.ctlRecon.appendChild(hintEl('Forventet = kontant − kontant tilbake fra skannede salg. Telt = telt kontant i kassaoppgjør samme dag og kasse. Diff = telt − forventet. * = ikke alle salg er skannet. Oppgjør etter midnatt eller samlet over flere dager gir falske avvik. Rapport-fanens «Diff» er oppgjørets egen differanse.'));
@@ -2213,13 +2231,13 @@
   }
 
   function entLink(kind, id, text) {
-    var b = el('button', { type: 'button', class: 'kvr-ent', title: 'Se alt om ' + (kind === 'kasserer' ? 'kasserer ' : 'kasse ') + id, text: text || ((kind === 'kasserer' ? 'Kasserer ' : 'Kasse ') + id) });
+    var b = el('button', { type: 'button', class: 'kvr-ent', title: 'Se alt om ' + (kind === 'kasserer' ? 'kasserer ' : 'kasse ') + L.idLabel(id), text: text || ((kind === 'kasserer' ? 'Kasserer ' : 'Kasse ') + L.idLabel(id)) });
     b.addEventListener('click', function (e) { e.stopPropagation(); setFocus(kind, String(id)); });
     return b;
   }
 
   function entsFor(item) {
-    return el('div', { class: 'kvr-ents' }, [entLink('kasserer', item.cashierNumber), entLink('kasse', item.workstationNumber)]);
+    return el('div', { class: 'kvr-ents' }, [entLink('kasserer', L.cashierId(item)), entLink('kasse', L.wsId(item))]);
   }
 
   function colIndexes() {
@@ -2249,7 +2267,7 @@
       if (!kind) return;
       e.preventDefault();
       e.stopPropagation();
-      setFocus(kind, String(kind === 'kasserer' ? rec.item.cashierNumber : rec.item.workstationNumber));
+      setFocus(kind, String(kind === 'kasserer' ? L.cashierId(rec.item) : L.wsId(rec.item)));
     }, true);
   }
 
@@ -2285,12 +2303,12 @@
         var box = el('div', { class: 'kvr-ents' }, list.slice(0, 40).map(function (id) { return entLink(kind, id); }));
         return el('div', { class: 'kvr-card' }, [el('h4', { text: label }), box]);
       };
-      [picks('kasserer', 'Kasserere i listen', uniq(function (i) { return i.cashierNumber; })), picks('kasse', 'Kasser i listen', uniq(function (i) { return i.workstationNumber; }))].forEach(function (c) { if (c) ui.focusBody.appendChild(c); });
+      [picks('kasserer', 'Kasserere i listen', uniq(function (i) { return L.cashierId(i); })), picks('kasse', 'Kasser i listen', uniq(function (i) { return L.wsId(i); }))].forEach(function (c) { if (c) ui.focusBody.appendChild(c); });
       return;
     }
     var isK = F.kind === 'kasserer';
-    var title = (isK ? 'Kasserer ' : 'Kasse ') + F.id;
-    var mine = recs.filter(function (r) { return String(isK ? r.item.cashierNumber : r.item.workstationNumber) === F.id; });
+    var title = (isK ? 'Kasserer ' : 'Kasse ') + L.idLabel(F.id);
+    var mine = recs.filter(function (r) { return isK ? L.isCashier(r.item, F.id) : L.isWs(r.item, F.id); });
     var ids = {};
     mine.forEach(function (r) { ids[r.item.transactionId] = true; });
     var items = mine.map(function (r) { return r.item; });
@@ -2316,19 +2334,19 @@
     var links = el('div', { class: 'kvr-ents' });
     var other = isK ? st.kasse : st.kasserer;
     Object.keys(other).sort(function (a, b) { return other[b] - other[a]; }).forEach(function (k) {
-      links.appendChild(entLink(isK ? 'kasse' : 'kasserer', k, (isK ? 'Kasse ' : 'Kasserer ') + k + ' (' + other[k] + ')'));
+      links.appendChild(entLink(isK ? 'kasse' : 'kasserer', k, (isK ? 'Kasse ' : 'Kasserer ') + L.idLabel(k) + ' (' + other[k] + ')'));
     });
     add(section('f-with', isK ? 'Brukte kasser' : 'Kasserere på kassen', [links]));
 
     // mot butikksnitt (kasserer)
     if (isK) {
       var prof = L.profiles(recs.map(function (r) { return r.item; }), scanMap, ctlCfg);
-      var mineP = prof.rows.filter(function (r) { return r.id === F.id; })[0];
+      var mineP = prof.rows.filter(function (r) { return String(r.id) === String(F.id) || (String(F.id).indexOf('@') === -1 && L.idPart(r.id, 0) === String(F.id)); })[0];
       if (mineP) {
-        var sa = prof.store;
+        var sa = (prof.byStore && prof.byStore[mineP.store]) || prof.store;
         add(section('f-prof', 'Mot butikksnitt', [tbl(['', 'Salg', 'Returandel', 'Snitt kr', 'Pantelapp/salg', 'Korr./salg'], [
           ['Denne kassereren', mineP.count, { t: pct(mineP.retShare), bad: mineP.flags.retShare }, { t: fmt(mineP.avg), bad: mineP.flags.avg }, mineP.scanned ? { t: mineP.lapperPer.toFixed(2), bad: mineP.flags.lapperPer } : '–', mineP.scanned ? { t: mineP.negPer.toFixed(2), bad: mineP.flags.negPer } : '–'],
-          ['Butikksnitt', sa.count, pct(sa.retShare), fmt(sa.avg), sa.scanned ? sa.lapperPer.toFixed(2) : '–', sa.scanned ? sa.negPer.toFixed(2) : '–']
+          [L.multiStore() ? 'Butikksnitt (' + mineP.store + ')' : 'Butikksnitt', sa.count, pct(sa.retShare), fmt(sa.avg), sa.scanned ? sa.lapperPer.toFixed(2) : '–', sa.scanned ? sa.negPer.toFixed(2) : '–']
         ])]));
       }
     }
@@ -2507,8 +2525,8 @@
     if (scope.compare.on) p.push('A ' + per(scope.dateFrom, scope.dateTo) + ' mot B ' + per(scope.compare.from, scope.compare.to));
     else if (scope.dateFrom || scope.dateTo) p.push(per(scope.dateFrom, scope.dateTo));
     if (scope.stores.length) p.push(scope.stores.length === 1 ? sLabel(scope.stores[0]) : scope.stores.length + ' butikker');
-    if (scope.cashiers.length) p.push('kasserer ' + scope.cashiers.join(', '));
-    if (scope.workstations.length) p.push('kasse ' + scope.workstations.join(', '));
+    if (scope.cashiers.length) p.push('kasserer ' + scope.cashiers.map(L.idLabel).join(', '));
+    if (scope.workstations.length) p.push('kasse ' + scope.workstations.map(L.idLabel).join(', '));
     if (scope.useFilters) p.push('+ filtrene i listen');
     return p.length ? p.join(' · ') : 'hele listen';
   }
@@ -2567,7 +2585,7 @@
     if (cash.length) {
       body.appendChild(section('chk-cash', 'Kasserere å se nærmere på', [el('div', { class: 'kvr-list' }, cash.map(function (c) {
         var row = el('div', { class: 'kvr-li kvr-fl' }, [el('div', { class: 'kvr-fl-t' }, [
-          el('b', { text: 'Kasserer ' + c.id }),
+          el('b', { text: 'Kasserer ' + L.idLabel(c.id) }),
           el('span', { text: c.flagged + ' flaggede bonger' + (c.profile.length ? ' · ' + c.profile.join(', ') : '') })]),
           riskBadge(c.score)]);
         row.addEventListener('click', function () { setFocus('kasserer', c.id); });
@@ -2750,18 +2768,19 @@
     if (cd.cashiers.length) {
       var factor = Number(ctlCfg.profFactor) || 1.5, minN = Number(ctlCfg.profMin) || 5;
       var axisMax = L.niceMax(Math.max(cd.cashiers[0].share, cd.storeShare, 0.1));
+      var shareOfStore = function (c) { return c.storeShare !== undefined ? c.storeShare : cd.storeShare; };
       var list = el('div', { class: 'kvr-hbars' });
       var rowsT = [];
       cd.cashiers.slice(0, 12).forEach(function (c) {
-        var flag = c.count >= minN && cd.storeShare > 0 && c.share >= cd.storeShare * factor;
-        var tip = 'Kasserer ' + c.id + ' · ' + c.ret + ' av ' + c.count + ' salg er returer (' + pct(c.share) + ')' + (flag ? ' · minst ' + factor + '× snittet' : '');
-        var link = entLink('kasserer', c.id, 'Kasserer ' + c.id + ' (' + c.count + ')');
+        var flag = c.count >= minN && shareOfStore(c) > 0 && c.share >= shareOfStore(c) * factor;
+        var tip = 'Kasserer ' + L.idLabel(c.id) + ' · ' + c.ret + ' av ' + c.count + ' salg er returer (' + pct(c.share) + ')' + (flag ? ' · minst ' + factor + '× snittet' : '');
+        var link = entLink('kasserer', c.id, 'Kasserer ' + L.idLabel(c.id) + ' (' + c.count + ')');
         var bar = el('div', { class: 'kvr-hb-bar' + (flag ? ' kvr-flag' : ''), style: 'width:' + Math.max(c.share > 0 ? 1 : 0, c.share / axisMax * 100) + '%' });
-        var track = el('div', { class: 'kvr-hb-track' }, [bar, el('div', { class: 'kvr-hb-ref', style: 'left:' + (cd.storeShare / axisMax * 100) + '%' })]);
+        var track = el('div', { class: 'kvr-hb-track' }, [bar, el('div', { class: 'kvr-hb-ref', style: 'left:' + (shareOfStore(c) / axisMax * 100) + '%' })]);
         var val = el('span', { class: 'kvr-hb-v', text: pct(c.share) + (flag ? ' ▲' : '') });
         var row = el('div', { class: 'kvr-hb', title: tip }, [link, track, val]);
         list.appendChild(row);
-        rowsT.push(['Kasserer ' + c.id, c.count, c.ret, pct(c.share) + (flag ? ' (høy)' : '')]);
+        rowsT.push(['Kasserer ' + L.idLabel(c.id), c.count, c.ret, pct(c.share) + (flag ? ' (høy)' : '')]);
       });
       body.appendChild(chartCard('ch-cash', 'Returandel per kasserer', 'Andel salg med negativ sum. Den tynne streken er butikksnittet (' + pct(cd.storeShare) + '). Oransje ▲ = minst ' + factor + '× snittet. Klikk et navn for å se alt om kassereren.',
         el('div', {}, [list, legend([[CH.bar, 'Returandel'], [CH.orange, 'Høy mot snitt']])]),
@@ -2771,19 +2790,19 @@
     // kasse x time
     var hm = L.chartData(scopedItems({ workstations: [], timeFrom: '', timeTo: '' }), scanMap).heat;
     if (hm.rows.length) {
-      var grid2 = el('div', { class: 'kvr-heat', style: 'grid-template-columns:62px repeat(24,1fr)' });
+      var grid2 = el('div', { class: 'kvr-heat', style: 'grid-template-columns:' + (L.multiStore() ? '104px' : '62px') + ' repeat(24,1fr)' });
       grid2.appendChild(el('span'));
       for (var h = 0; h < 24; h++) grid2.appendChild(el('span', { class: 'kvr-hh', text: h % 3 === 0 ? String(h) : '' }));
       var heatT = [];
       hm.rows.forEach(function (r) {
-        grid2.appendChild(entLink('kasse', r.id, 'Kasse ' + r.id));
+        grid2.appendChild(entLink('kasse', r.id, 'Kasse ' + L.idLabel(r.id)));
         r.counts.forEach(function (n, hr) {
           var idx = n === 0 ? -1 : Math.min(4, Math.ceil(n / hm.max * 5) - 1);
-          var cellEl = el('button', { type: 'button', class: 'kvr-hc', style: 'background:' + (idx < 0 ? CH.empty : RAMP[idx]), 'aria-label': 'Kasse ' + r.id + ' kl. ' + two(hr) + ': ' + n + ' salg' });
-          attachTip(cellEl, 'Kasse ' + r.id + ' · ' + two(hr) + ':00–' + two(hr) + ':59 · ' + n + ' salg', function () { filters.workstations = [r.id]; setTime(hr); });
+          var cellEl = el('button', { type: 'button', class: 'kvr-hc', style: 'background:' + (idx < 0 ? CH.empty : RAMP[idx]), 'aria-label': 'Kasse ' + L.idLabel(r.id) + ' kl. ' + two(hr) + ': ' + n + ' salg' });
+          attachTip(cellEl, 'Kasse ' + L.idLabel(r.id) + ' · ' + two(hr) + ':00–' + two(hr) + ':59 · ' + n + ' salg', function () { filters.workstations = [r.id]; setTime(hr); });
           grid2.appendChild(cellEl);
         });
-        heatT.push(['Kasse ' + r.id].concat([r.counts.reduce(function (a, b) { return a + b; }, 0)]));
+        heatT.push(['Kasse ' + L.idLabel(r.id)].concat([r.counts.reduce(function (a, b) { return a + b; }, 0)]));
       });
       body.appendChild(chartCard('ch-heat', 'Når skjer det? Kasse × time', 'Antall salg per kasse og klokketime. Mørkere = flere. Klikk en rute for å filtrere på kassen og timen.',
         el('div', {}, [grid2, el('div', { class: 'kvr-legend' }, [document.createTextNode('Færre '), el('span', { class: 'kvr-ramp' }, RAMP.map(function (c) { return el('i', { style: 'background:' + c }); })), document.createTextNode(' flere')])]),

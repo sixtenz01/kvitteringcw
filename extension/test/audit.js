@@ -90,8 +90,8 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   await page.click('[data-sec=scope] .kvr-chk:has-text("1010") input');
   await page.click('[data-sec=scope] .kvr-chk:has-text("1005") input');
   assert.match(await scopeTxt(), /1005 – Coop Mega Kolbotn → 4 av 11/);
-  await page.click('[data-sec=scope] .kvr-pills .kvr-pill:text-is("A")');
-  assert.match(await scopeTxt(), /kasserer A → 2 av 11/);
+  await page.click('[data-sec=scope] .kvr-pills .kvr-pill:text-is("A (1005)")');
+  assert.match(await scopeTxt(), /kasserer A \(1005\) → 2 av 11/);
   await page.click('[data-sec=scope] button:text-is("Nullstill omfang")');
   assert.match(await scopeTxt(), /Omfang: hele listen → 11 av 11/);
 
@@ -108,33 +108,33 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   await go('Analyse', 'Detaljer');
   await page.click('button:text-is("Åpne alle")');
   const fnd = (await page.innerText('[data-sec=findings]')).replace(/\s+/g, ' ');
-  assert.match(fnd, /Kasse 1: salg 10:00 og retur 10:20, begge 100 kr \(kasserer A\)/);
+  assert.match(fnd, /Kasse 1 \(1005\): salg 10:00 og retur 10:20, begge 100 kr \(kasserer A\)/);
   assert.match(fnd, /UKJENT VARE \(50 kr\) uten tilsvarende salg/);
-  assert.match(fnd, /Kasse 1 2026-09-28: 2 salg \(150 kr\) etter kassaoppgjør kl 22:00 \(oppgjør av kasserer A; salg av C\)/);
-  assert.match(fnd, /Kasse 1: mangler 105–108 \(4\)/);
-  assert.match(fnd, /Kasserer A: 2 av 2 oppgjør med minus, totalt -70 kr/);
+  assert.match(fnd, /Kasse 1 \(1005\) 2026-09-28: 2 salg \(150 kr\) etter kassaoppgjør kl 22:00 \(oppgjør av kasserer A; salg av C\)/);
+  assert.match(fnd, /Kasse 1 \(1005\): mangler 105–108 \(4\)/);
+  assert.match(fnd, /Kasserer A \(1005\): 2 av 2 oppgjør med minus, totalt -70 kr/);
   const diff = (await page.innerText('[data-sec=diff]')).replace(/\s+/g, ' ');
-  assert.match(diff, /Kasserer A 2 2 0 −70,00/);
+  assert.match(diff, /Kasserer A \(1005\) 2 2 0 −70,00/);
   assert.match(await page.innerText('[data-sec=numbers]'), /Benford \(første siffer i totalbeløp\): \d+ bonger/);
   assert.ok(await page.$('[data-sec=ch-benford]') === null, 'Benford-diagrammet ligger under Diagram');
   // rabatt og kupong: rabatt uten årsak er et funn, rabatt med årsak og kupong er bare tall
-  assert.match(fnd, /Rabatt: Rabatt uten årsak Kasse 5 10:00 kasserer E: VARE V −40 kr \(50 %\) uten rabattårsak/);
+  assert.match(fnd, /Rabatt: Rabatt uten årsak Kasse 5 \(1010\) 10:00 kasserer E: VARE V −40 kr \(50 %\) uten rabattårsak/);
   assert.ok(!/Datovare|Best før|VARE X −/.test(fnd), 'rabatt med årsak flagges ikke');
   const dsc = (await page.innerText('[data-sec=disc]')).replace(/\s+/g, ' ');
   assert.match(dsc, /4 bonger har rabattlinje \(67,00 kr\), 1 av dem uten årsak \(40,00 kr\)\. 1 bonger har kupong\/kampanje \(1 kuponger\)/);
-  assert.match(dsc, /Kasserer E 1 1 40,00 1 40,00 100 % 0 1 1/);
+  assert.match(dsc, /Kasserer E \(1010\) 1 1 40,00 1 40,00 100 % 0 1 1/);
   assert.match(dsc, /Rabatt per årsak Årsak Linjer Bonger Rabatt kr Snitt % Overvåket Datovare 1 1 5,00 6 Feil pris 1 1 12,00 9,1 ja Best før 1 1 10,00 9,1 Uten årsak 1 1 40,00 50/);
-  assert.match(fnd, /Rabatt: Rabatt med overvåket årsak Kasse 1 22:15 kasserer C: VARE Y −12 kr \(9.1 %\) – årsak Feil pris/);
-  assert.match(dsc, /Kasserer C 2 1 12,00 0 0,00 0 % 1 0 0/);
+  assert.match(fnd, /Rabatt: Rabatt med overvåket årsak Kasse 1 \(1005\) 22:15 kasserer C: VARE Y −12 kr \(9.1 %\) – årsak Feil pris/);
+  assert.match(dsc, /Kasserer C \(1005\) 2 1 12,00 0 0,00 0 % 1 0 0/);
   assert.match(dsc, /Overvåkede årsaker: Feil pris, Reserveløsning kupong, Annen rabattårsak\. Bongen flagges ved rabatt på minst 0 % og 0 kr; kassereren markeres ved minst 3 bonger/);
-  assert.match(dsc, /Kasserer × årsak \(antall rabattlinjer\) Kasserer Datovare Feil pris Best før Uten årsak Kasserer A 1 · 1 · Kasserer C · 1 · · Kasserer E · · · 1/);
+  assert.match(dsc, /Kasserer × årsak \(antall rabattlinjer\) Kasserer Datovare Feil pris Best før Uten årsak Kasserer A \(1005\) 1 · 1 · Kasserer C \(1005\) · 1 · · Kasserer E \(1010\) · · · 1/);
   assert.match(dsc, /1ESD2P6DRVPCCJY1 Gruppe - Coop koppnudler, 65 g 1 0,00/);
   if (process.env.SHOT) { await page.evaluate(() => { document.querySelector('[data-sec=findings]').scrollIntoView({ block: 'start' }); }); await page.waitForTimeout(200); await (await page.$('#kvr-panel')).screenshot({ path: process.env.SHOT.replace('.png', '-funn.png') }); await page.evaluate(() => { document.querySelector('[data-sec=diff]').scrollIntoView({ block: 'start' }); }); await page.waitForTimeout(200); await (await page.$('#kvr-panel')).screenshot({ path: process.env.SHOT.replace('.png', '-diff.png') }); }
 
   // kasserer-omfang: bare funn som gjelder kassereren
   await go('Analyse', 'Sjekk først');
-  await page.click('[data-sec=scope] .kvr-pills .kvr-pill:text-is("C")');
-  assert.match(await scopeTxt(), /kasserer C → 2 av 11/);
+  await page.click('[data-sec=scope] .kvr-pills .kvr-pill:text-is("C (1005)")');
+  assert.match(await scopeTxt(), /kasserer C \(1005\) → 2 av 11/);
   await runAnalysis();
   const cl = await listTxt();
   assert.match(cl, /Salg etter kassaoppgjør/); assert.match(cl, /Hull i bongnummer/);
@@ -151,7 +151,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   await runAnalysis();
   const cmp = (await page.innerText('[data-sec=chk-cmp]')).replace(/\s+/g, ' ');
   assert.match(cmp, /Alle 5 3 40 % → 0 %/);
-  assert.match(cmp, /Kasserer D 0 1 .*risikoscore \+5/);
+  assert.match(cmp, /Kasserer D \(1005\) 0 1 .*risikoscore \+5/);
   assert.match(cmp, /Kasserer A/);
   if (process.env.SHOT) { await page.setViewportSize({ width: 1100, height: 1500 }); await page.evaluate(() => { document.getElementById('kvr-panel').style.top = '10px'; }); await (await page.$('#kvr-panel')).screenshot({ path: process.env.SHOT.replace('.png', '-omfang.png') }); }
   await page.click('[data-sec=scope] label:has-text("Sammenlign med en annen periode") input');

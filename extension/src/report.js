@@ -2,7 +2,7 @@
   'use strict';
 
   var L = typeof module !== 'undefined' && module.exports ? require('./logic.js') : root.KvLogic;
-  var VERSION = '3.21.0';
+  var VERSION = '3.21.1';
 
   // ---- SHA-256 (ren JS, så rapporten ikke avhenger av crypto.subtle) -------------------
   var K256 = [
@@ -238,7 +238,7 @@
     var perTest = {};
     m.findings.forEach(function (f) { var k = f.kind + ': ' + f.title; perTest[k] = (perTest[k] || 0) + 1; });
     if (Object.keys(perTest).length) P(table(['Test', { t: 'Funn', n: true }], Object.keys(perTest).sort().map(function (k) { return { cells: [k, { t: perTest[k], n: true }] }; })));
-    if (m.cashiers.length) P('<h3>Kasserere å se nærmere på</h3>' + table(['Kasserer', { t: 'Poeng', n: true }, { t: 'Flaggede bonger', n: true }, 'Merknad'], m.cashiers.map(function (c) { return { cells: ['Kasserer ' + c.id, { t: c.score, n: true }, { t: c.flagged, n: true }, (c.profile || []).join(', ')] }; })));
+    if (m.cashiers.length) P('<h3>Kasserere å se nærmere på</h3>' + table(['Kasserer', { t: 'Poeng', n: true }, { t: 'Flaggede bonger', n: true }, 'Merknad'], m.cashiers.map(function (c) { return { cells: ['Kasserer ' + L.idLabel(c.id), { t: c.score, n: true }, { t: c.flagged, n: true }, (c.profile || []).join(', ')] }; })));
 
     P('<h2>2. Omfang og datagrunnlag</h2>');
     var types = {};
@@ -252,8 +252,8 @@
       { cells: ['Datagrunnlag for tester på tvers av bonger', m.pop.length + ' kvitteringer (alle innlastede i valgte butikker)'] },
       { cells: ['Tidsrom i omfanget', times.length ? times[0] + ' → ' + times[times.length - 1] : '–'] },
       { cells: ['Butikker', uniq(function (it) { return it.storeNumber; }).map(function (s) { return m.storeLabels[s] || s; }).join(', ')] },
-      { cells: ['Kasserere', uniq(function (it) { return it.cashierNumber; }).join(', ')] },
-      { cells: ['Kasser', uniq(function (it) { return it.workstationNumber; }).join(', ')] }
+      { cells: ['Kasserere', uniq(function (it) { return L.cashierLabel(it); }).join(', ')] },
+      { cells: ['Kasser', uniq(function (it) { return L.idLabel(L.wsId(it)); }).join(', ')] }
     ], 'meta').replace('<tr><th></th><th></th></tr>', ''));
 
     P('<h2>3. Dekningsgrad og begrensninger</h2>');
@@ -355,7 +355,7 @@
     h.receipts = add('data/kvitteringer.csv', receiptsCsv(all, inScope));
     h.content = add('data/innhold.json', contentJson(all, m.scan));
     h.findings = add('data/funn.csv', L.toCsv([['Test', 'Tittel', 'Detalj', 'Bonger', 'Kasserer', 'Flagger bong']].concat(m.findings.map(function (f) {
-      return [f.kind, f.title, f.detail, f.ids.map(bongOf).join('; '), f.cashier || '', f.flag ? 'ja' : 'nei'];
+      return [f.kind, f.title, f.detail, f.ids.map(bongOf).join('; '), f.cashier ? L.idLabel(f.cashier) : '', f.flag ? 'ja' : 'nei'];
     }))));
     h.flagged = add('data/flaggede_bonger.csv', L.toCsv([['Rang', 'Risiko', 'Poeng', 'RRS', 'Bongnr', 'Tidspunkt', 'Butikk', 'Kasse', 'Kasserer', 'Sum', 'Avvik', 'Status', 'Notat', 'Bevis']].concat(m.ranked.map(function (r, i) {
       var it = itemOf[r.id] || {}, n = m.notes[r.id] || {}, ev = m.evidence.byId[r.id];
