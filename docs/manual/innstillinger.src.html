@@ -1,0 +1,85 @@
+<header class="hero">
+  <h1>Slik setter du innstillinger</h1>
+  <p class="sub">Kvitteringshenter {{version}}</p>
+  <p class="lead">Her står hvordan du åpner og endrer innstillingene, hvordan du løser de vanligste oppgavene, og hva hver eneste innstilling og hvert poeng gjør, med standardverdi og eksempel.</p>
+</header>
+
+<h2 id="slik"><span class="n">1</span>Slik gjør du det</h2>
+<h3>Åpne innstillingene</h3>
+<ul>
+  <li>Trykk <strong>Mer</strong> og deretter <strong>Innstillinger</strong>, eller trykk tannhjulet <strong>⚙</strong> øverst i panelet.</li>
+  <li>I <strong>Analyse → Sjekk først</strong> står knappen <strong>Juster</strong> ved siden av hver forklaring på en flagget bong. Den åpner riktig gruppe.</li>
+  <li>Hver test har sin egen gruppe. Trykk på gruppen for å åpne den.</li>
+</ul>
+{{shots:innstillinger-lukket}}
+{{annotated:innstillinger-rad}}
+<h3>Endre en verdi</h3>
+<ol>
+  <li>Åpne gruppen.</li>
+  <li>Skriv ny verdi i feltet og trykk <kbd>Tab</kbd> eller klikk utenfor feltet.</li>
+  <li>Verdien er lagret med en gang. Det finnes ingen «Lagre»-knapp.</li>
+  <li>Feltet får <span class="sw yellow">gul kant</span>, og gruppen viser «N endret».</li>
+  <li><strong>Terskler</strong> gjelder fra neste analyse: kjør analysen på nytt under <strong>Analyse → Sjekk først</strong> (panelet viser en gul melding og en knapp). <strong>Poeng</strong> gjelder med en gang.</li>
+</ol>
+{{dia:settingsFlow}}
+<h3>Slå en test av og på</h3>
+<ul>
+  <li>Innstillinger som kan slås av har en <strong>På</strong>-bryter. Avskrudd betyr at testen ikke kjøres.</li>
+  <li>Tømmer du et slikt felt og trykker <kbd>Tab</kbd>, slås testen av. Slår du bryteren på igjen, kommer standardverdien tilbake.</li>
+  <li>Innstillinger som bare er på eller av (for eksempel «Marker kasserer over snittet») har bare en På-avkrysning.</li>
+</ul>
+<h3>Sett tilbake</h3>
+<ul>
+  <li><strong>Standard for denne gruppen</strong> setter bare den gruppen tilbake (verdier og poeng).</li>
+  <li><strong>Alt til standard</strong> under Mer → Innstillinger → Generelt setter alle terskler og poeng tilbake etter en bekreftelse. Egne regler, varegrupper og butikknavn beholdes.</li>
+</ul>
+<h3>Del oppsettet mellom butikker</h3>
+<ul>
+  <li><strong>Eksporter innstillinger</strong> lager en fil med terskler, poeng, egne regler, varegrupper og butikknavn.</li>
+  <li><strong>Importer…</strong> leser inn en slik fil. Skannet innhold og notater følger ikke med.</li>
+  <li>Revisjonsrapporten har samme fil (<code>innstillinger.json</code>) med verdiene som gjaldt da analysen ble kjørt.</li>
+</ul>
+
+<h2 id="oppgaver"><span class="n">2</span>Vanlige oppgaver</h2>
+<p>Navnene under er teksten du ser på innstillingssiden.</p>
+<div class="tw"><table>
+  <thead><tr><th>Jeg vil …</th><th>Gjør slik</th></tr></thead>
+  <tbody>
+    <tr><td>Få færre falske treff</td><td>Øk grensen (for eksempel «Stor panteretur fra», «Mange pantelapper fra») eller sett ned poengene i gruppen. Slå av testen hvis den ikke passer i din butikk.</td></tr>
+    <tr><td>Fange flere avvik</td><td>Senk grensen, eller øk poengene så bongene havner høyere i «Sjekk først». Tomt felt med På-bryter betyr at testen er av.</td></tr>
+    <tr><td>Sette åpningstiden</td><td>Gruppen <em>Transaksjoner før åpning og etter stengetid, og returer</em>: skriv klokkeslett i «Åpner» og «Stenger». Standard er 07:00 og 23:00. Tidene brukes også til å avgjøre hvilken dag et kassaoppgjør hører til.</td></tr>
+    <tr><td>Bruke andre pantelapp-koder</td><td>Gruppen <em>Pantelapper</em>: skriv kodene i «Manuell pantelapp: koder» og «Pantelapp fra pantemaskin: koder». Flere koder skilles med komma, for eksempel <code>99, 98</code>. Standard er 99 og 399.</td></tr>
+    <tr><td>Sette opp hendelsesord</td><td>Gruppen <em>Hendelsesord</em>: slå på bryteren og skriv ordene adskilt med komma, for eksempel <code>annullert, parkert, eget forbruk</code>. Listen er tom til du fyller den ut. Skann bongene på nytt så nye ord fanges.</td></tr>
+    <tr><td>Overvåke bestemte varer</td><td>Gruppen <em>Overvåkede varer</em>: skriv EAN (starten på koden) eller del av varenavnet i «Varer», for eksempel <code>tobakk, gavekort</code>.</td></tr>
+    <tr><td>Velge rabattårsaker som overvåkes</td><td>Gruppen <em>Rabatt med årsakskode</em>: skriv tekstnummer i «Overvåkede årsaker», for eksempel <code>2,4,5</code>. Bare rabatt med årsakskode analyseres.</td></tr>
+    <tr><td>Legge inn ansattes medlemsnummer</td><td>Gruppen <em>Medlemsnummer</em>: slå på «Ansattes medlemsnr». <code>1234567</code> flagger alle bonger med nummeret. <code>12=1234567</code> flagger når kasserer 12 selv har tastet det, og <code>12@1005=1234567</code> gjelder bare butikk 1005.</td></tr>
+    <tr><td>Gjøre kasserersammenligningen strengere</td><td>Gruppen <em>Kassererprofil og avstemming</em>: «Avviker fra snittet fra» (standard 1,5 ganger butikkens snitt) og «Minst antall bonger for profil». Mange tester bruker disse to.</td></tr>
+    <tr><td>Se hva som er endret</td><td>Hver gruppe viser «N endret», og endrede felt har gul kant. Rapporten merker også endrede verdier.</td></tr>
+  </tbody></table></div>
+
+<h2 id="poeng"><span class="n">3</span>Slik virker poeng</h2>
+{{dia:scoring}}
+<ul>
+  <li>Hver bong får poeng for hver test den utløser. <strong>Høy risiko</strong> er fra 8 poeng, <strong>middels</strong> fra 4. <strong>RRS</strong> 0–100 er samme tall på en skala der 8 poeng = 50.</li>
+  <li><strong>Samme forhold teller bare én gang.</strong> Når flere tester måler samme ting, teller bare den med høyest poeng. De andre står overstrøket i «Sjekk først». Gruppene er: pant og kontant tilbake, rabatt, pris, etter stengetid, retur av vare, sletting og medlemsbruk.</li>
+  <li>Funn på <strong>kassereren</strong> (ikke bongen) gir poeng på kassereren, og vises i rangeringen av kasserere.</li>
+  <li>Poengene står i tabellene «Poeng i risikoscore» under hver gruppe lenger ned.</li>
+</ul>
+
+<h2 id="generelt"><span class="n">4</span>Generelt</h2>
+{{shot:innstillinger-generelt}}
+<div class="tw"><table>
+  <thead><tr><th>Valg</th><th>Hva det gjør</th></tr></thead>
+  <tbody>
+    <tr><td>Egne butikknavn</td><td>Hvis Lindbak ikke leverer butikklisten, kan du skrive <code>1001=Navn</code>, ett per linje. Et nivå kan også få navn (<code>131=Navn</code>). Egne navn går foran navn fra Lindbak.</td></tr>
+    <tr><td>Tidsforskyvning for listen</td><td>Normalt 0. Brukes bare hvis klokkeslettet i listen avviker fast fra bongen. Diagnostikk foreslår verdien.</td></tr>
+    <tr><td>Panelstørrelse</td><td>Vanlig, Stor (dokket til høyre, lista i Lindbak synlig) eller Full (hele skjermen).</td></tr>
+    <tr><td>Tastaturflyt</td><td>Slår på <kbd>↑</kbd> <kbd>↓</kbd> for å bytte bong, <kbd>N</kbd> for notat og <kbd>M</kbd> for å velge eller fjerne valg.</td></tr>
+    <tr><td>Eksporter / Importer innstillinger</td><td>Lagrer og leser inn oppsettet som en fil.</td></tr>
+    <tr><td>Tilbakestill plassering</td><td>Setter panelets plass og størrelse tilbake.</td></tr>
+    <tr><td>Alt til standard</td><td>Tilbake til standardverdier for alle terskler og poeng.</td></tr>
+  </tbody></table></div>
+
+<h2 id="alle"><span class="n">5</span>Alle innstillingene</h2>
+<p>Hver gruppe viser hva testen gjør, hva den fanger, vanlige uskyldige årsaker og hva den krever. Tabellen under har alle innstillingene i gruppen med forklaring, standardverdi, tips og eksempel, og så poengene for testene i gruppen. «Kan slås av» betyr at feltet har en På-bryter. «Krever skanning» betyr at bongene må være skannet først.</p>
+{{settings}}

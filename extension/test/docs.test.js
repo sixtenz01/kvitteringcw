@@ -69,6 +69,15 @@ L.DISC_REASONS.forEach((r, i) => has(r));
 ['Søk i bongen', 'Betalingsmåte', 'Tempo: tid mellom bonger', 'Overvåkede varer', 'Retur av vare uten kjøp', 'Topptekst og bunn', 'versjon 7', 'kanaltabell', 'Overstrøket årsak', 'Rabatt med årsakskode', 'Kasserere over snittet', 'Snitt alle kasserere', 'Nivå og avdelingsnummer', 'Hendelsesord', 'Spør pris', 'Samme forhold', 'Gi butikken navn'].forEach(has);
 ['Overstrøket årsak', 'Panelstørrelse'].forEach((t) => assert.ok(content.includes(t), 'hjelpen i panelet mangler «' + t + '»'));
 
+// ---- «Slik setter du innstillinger» (egen PDF) har alle innstillinger og ingen ubrukte plassholdere
+{
+  const sp = B.settingsPage({});
+  assert.ok(!/\{\{/.test(sp), 'ubrukt plassholder i innstillingsguiden');
+  const st = sp.replace(/<img[^>]*>/g, '').replace(/<style>[\s\S]*?<\/style>/g, '').replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ');
+  L.SETTING_GROUPS.forEach((g) => { assert.ok(st.includes(g.title), 'innstillingsguiden mangler ' + g.title); g.fields.forEach((f) => assert.ok(st.includes(f.label), 'innstillingsguiden mangler ' + f.label)); });
+  assert.ok(st.includes('Slik setter du innstillinger') && st.includes('Standard for denne gruppen'));
+}
+
 // ---- lenker og bilder er hele
 const ids = {};
 html.replace(/\sid="([^"]+)"/g, (m, id) => { ids[id] = true; return m; });

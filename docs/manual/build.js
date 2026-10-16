@@ -179,6 +179,29 @@ function pdfPage(pages) {
   return `<!doctype html><html lang="nb"><head><meta charset="utf-8"><title>Kvitteringshenter brukerveiledning ${R.VERSION}</title><style>${css}</style></head><body class="pdf"><div class="cover"><div class="brandline"></div>${hero}<p class="coverdate">Laget ${new Date().toLocaleDateString('nb-NO', { day: 'numeric', month: 'long', year: 'numeric' })}</p></div>${tocHtml}<div class="wrap"><main>${rest}</main></div></body></html>`;
 }
 
+// ---- «Slik setter du innstillinger»: egen PDF med innstillingsdelen og en trinn-for-trinn-del
+function settingsEntries() {
+  const src = fs.readFileSync(path.join(__dirname, 'innstillinger.src.html'), 'utf8');
+  const chapters = [];
+  src.replace(/<h2 id="([\w-]+)"><span class="n">(\d+)<\/span>([^<]+)<\/h2>/g, (m, id, n, t) => { chapters.push({ id, n, t: t.trim() }); return m; });
+  return { chapters, groups: L.SETTING_GROUPS.map((g) => ({ id: 'set-' + g.id, t: g.title })) };
+}
+
+function settingsPage(pages) {
+  pages = pages || {};
+  const src = fs.readFileSync(path.join(__dirname, 'innstillinger.src.html'), 'utf8');
+  const css = fs.readFileSync(path.join(__dirname, 'style.css'), 'utf8') + '\n' + fs.readFileSync(path.join(__dirname, 'pdf.css'), 'utf8');
+  const main = body(src).replace(/ loading="lazy"/g, '');
+  const cut = main.indexOf('<h2 id="');
+  const hero = main.slice(0, cut), rest = main.slice(cut);
+  const e = settingsEntries();
+  const li = (id, n, t, cls) => `<li class="${cls}"><a href="#${id}">${n ? '<span class="n">' + n + '</span>' : ''}<span class="t">${esc(t)}</span><span class="dots"></span><span class="p">${pages[id] || '00'}</span></a></li>`;
+  const toc = e.chapters.map((c) => li(c.id, c.n, c.t, 'ch') + (c.id === 'alle' ? e.groups.map((g) => li(g.id, '', g.t, 'gr')).join('') : '')).join('');
+  const tocHtml = `<section class="pdf-toc"><h2>Innhold</h2><ol>${toc}</ol></section>`;
+  const extra = '@page{@top-left{content:"Kvitteringshenter · innstillinger"}}.pdf .pdf-toc li.gr a{padding:3pt 0 3pt 2.4em;font-size:10pt;color:#334}.pdf .pdf-toc li.gr .n{display:none}';
+  return `<!doctype html><html lang="nb"><head><meta charset="utf-8"><title>Slik setter du innstillinger – Kvitteringshenter ${R.VERSION}</title><style>${css}${extra}</style></head><body class="pdf"><div class="cover"><div class="brandline"></div>${hero}<p class="coverdate">Laget ${new Date().toLocaleDateString('nb-NO', { day: 'numeric', month: 'long', year: 'numeric' })}</p></div>${tocHtml}<div class="wrap"><main>${rest}</main></div></body></html>`;
+}
+
 if (require.main === module) {
   const artifact = process.argv.indexOf('--artifact') !== -1;
   const out = artifact ? process.argv[process.argv.indexOf('--artifact') + 1] : path.join(__dirname, '..', 'brukerveiledning.html');
@@ -186,4 +209,4 @@ if (require.main === module) {
   fs.writeFileSync(out, html);
   console.log('skrev ' + out + ' (' + (html.length / 1048576).toFixed(1) + ' MB)');
 }
-module.exports = { page, pdfPage, IMG, LEGENDS };
+module.exports = { page, pdfPage, settingsPage, settingsEntries, IMG, LEGENDS };
