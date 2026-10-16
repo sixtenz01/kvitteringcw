@@ -34,7 +34,7 @@ const scan = {
 };
 scan['x-100'].t = 111; scan['x-101'].t = 222;
 const cfg = L.defaultControl(), anom = L.defaultAnom(), W = L.sanitizeWeights(null);
-cfg.diffTotal = '60'; W['Stor panteretur'] = 7;
+cfg.saleReturnMin = '45'; W['Stor panteretur'] = 7;
 const finding = { kind: 'Falsk retur', title: 'Salg og retur av samme beløp', detail: 'Kasse 1: salg 10:00 og retur 10:20, begge 100 kr', ids: ['x-101', 'x-100'], flag: true };
 const cashierFinding = { kind: 'Tallanalyse', title: 'Mange runde beløp', detail: 'Kasserer A: 100 % hele kroner', ids: [], flag: false, cashier: 'A' };
 const model = () => ({
@@ -42,7 +42,7 @@ const model = () => ({
   scope: { text: '2026-10-01 → 2026-10-01 · 1005 – Coop Mega Kolbotn', mode: 'scope', filters: [], coverageText: '', compare: null },
   items, pop: items.concat([extra]), scan, storeLabels: { 1005: '1005 – Coop Mega Kolbotn' },
   settings: { ctl: cfg, anom, weights: W, currentDiffers: false },
-  checks: { falseRet: { coverage: 0.5, lineCheck: false }, skippedGaps: 2, numbers: { overall: { n: 3, enough: false } } },
+  checks: { falseRet: { coverage: 0.5, lineCheck: false }, numbers: { overall: { n: 3, enough: false } } },
   findings: [finding, cashierFinding],
   ranked: [{ id: 'x-101', reasons: ['Salg og retur av samme beløp', 'Kortkjøp refundert kontant'], score: 9 }, { id: 'x-100', reasons: ['Rabatt med overvåket årsak'], score: 3 }],
   explain: { 'x-101': ['Kasse 1: salg og retur <img src=x onerror=alert(1)> av samme beløp.'] },
@@ -102,12 +102,12 @@ assert.ok(html.includes('2026-10-01 → 2026-10-01 · 1005 – Coop Mega Kolbotn
 assert.ok(html.includes('4 kvitteringer i omfanget') && html.includes('2 funn, 2 flaggede kvitteringer (1 høy risiko, 0 middels, 1 lav)'));
 assert.ok(html.includes('Skannet innhold: 2 av 3 salg (67 %)'));
 assert.ok(html.includes('«Retur uten salg» ble ikke vurdert: bare 50 % av salgene'));
-assert.ok(html.includes('2 store hull i bongnummer') && html.includes('Benford: bare 3 bonger') && html.includes('1 kvitteringer kunne ikke skannes'));
+assert.ok(html.includes('Benford: bare 3 bonger') && html.includes('1 kvitteringer kunne ikke skannes'));
 assert.ok(html.includes('begrenset til de 1 høyest rangerte av 2') && html.includes('Bevis-PNG mangler for 1 bonger'));
-assert.ok(html.includes('<div class="chg">Eller minus totalt over: <b>60 kr</b></div>'), 'endret terskel er markert');
+assert.ok(html.includes('<div class="chg">Salg og retur av samme beløp innen: <b>45 min</b></div>'), 'endret terskel er markert');
 assert.ok(html.includes('<div class="chg">Stor panteretur: <b>7</b></div>'), 'endret poeng er markert');
 assert.ok(html.includes('<div>Stenger (bonger etter dette flagges): <b>23:00</b></div>'), 'klokkeslett uten enhet');
-assert.ok(html.includes('<div>Rundt beløp fra: <b>500 kr</b></div>') && html.split('<b><span class="off">av</span></b>').length === 4, 'ansattlisten, overvåkede varer og retur uten kort/medlem samme dag er av i standardoppsettet');
+assert.ok(html.includes('<div>Rundt beløp fra: <b>500 kr</b></div>') && html.split('<b><span class="off">av</span></b>').length === 5, 'ansattlisten, hendelsesord, overvåkede varer og retur uten kort/medlem samme dag er av i standardoppsettet');
 assert.ok(html.includes('Kasse 1: salg 10:00 og retur 10:20, begge 100 kr'));
 assert.ok(html.includes('(kassererfunn, gir poeng på kassereren)'));
 assert.ok(html.includes('href="bevis/01_1005-1-101.png"') && html.includes('a'.repeat(64)));
@@ -118,8 +118,8 @@ assert.ok(html.includes('Til oppfølging: Sjekk med &lt;script&gt;'));
 // dekning og begrensninger
 const cov = R.coverageOf(model());
 assert.deepStrictEqual([cov.sales, cov.salesScanned, cov.salesDisc, cov.settle, cov.settleScanned], [3, 2, 2, 1, 1]);
-const lim = R.limitations(Object.assign(model(), { checks: { falseRet: { coverage: 0.95, lineCheck: true }, skippedGaps: 0, numbers: { overall: { n: 500, enough: true } } }, failedScans: 0, evidence: { files: [], byId: {}, missing: [], requested: 5, cappedFrom: 5 }, scope: { text: '', mode: 'scope', filters: [], coverageText: 'fra 2026-09-01' }, settings: { ctl: cfg, anom, weights: W, currentDiffers: true } }), cov);
-assert.ok(!lim.some(t => /ikke vurdert|store hull|Benford|kunne ikke skannes|begrenset til|mangler for/.test(t)));
+const lim = R.limitations(Object.assign(model(), { checks: { falseRet: { coverage: 0.95, lineCheck: true }, numbers: { overall: { n: 500, enough: true } } }, failedScans: 0, evidence: { files: [], byId: {}, missing: [], requested: 5, cappedFrom: 5 }, scope: { text: '', mode: 'scope', filters: [], coverageText: 'fra 2026-09-01' }, settings: { ctl: cfg, anom, weights: W, currentDiffers: true } }), cov);
+assert.ok(!lim.some(t => /ikke vurdert|Benford|kunne ikke skannes|begrenset til|mangler for/.test(t)));
 assert.ok(lim.some(t => /utenfor det som er hentet fra CW \(fra 2026-09-01\)/.test(t)) && lim.some(t => /endret etter analysen/.test(t)));
 
 // tomt resultat gir fortsatt en gyldig rapport

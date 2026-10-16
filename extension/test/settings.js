@@ -87,7 +87,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   assert.strictEqual(await idbGet('kv', 'kvr.help.v1'), 1);
 
   // innstillingssiden: alle grupper, endring, av/på, standard
-  assert.strictEqual(await page.$$eval('details.kvr-set', n => n.length), 28);
+  assert.strictEqual(await page.$$eval('details.kvr-set', n => n.length), 23);
   await group('bong');
   assert.strictEqual(await badge('bong'), '');
   await input('bong', 'Stor panteretur fra').fill('250');
@@ -109,7 +109,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   assert.strictEqual(await badge('bong'), '');
   assert.strictEqual(await input('bong', 'Stor panteretur fra').inputValue(), '300');
   assert.strictEqual(await input('bong', 'Poeng: Stor panteretur').inputValue(), '3');
-  assert.match(await page.innerText('.kvr-stats'), /«Avvik per bong» er satt tilbake til standard/);
+  assert.match(await page.innerText('.kvr-stats'), /«Avvik per bong og kontant tilbake» er satt tilbake til standard/);
 
   // Avvik per bong har ikke lenger kassadifferanse per oppgjør
   assert.strictEqual(await page.locator('[data-sec=set-bong] input[aria-label="Kassadifferanse fra"]').count(), 0);
@@ -135,9 +135,9 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   await page.waitForFunction(() => /Kontroller ferdig/.test(document.getElementById('kvr-panel').innerText), null, { timeout: 40000 });
   assert.ok(await page.isHidden('[data-sec=chk-top] .kvr-notice'));
   await go('Mer', 'Innstillinger');
-  await group('diff');
-  await input('diff', 'Eller minus totalt over').fill('60');
-  await input('diff', 'Eller minus totalt over').press('Tab');
+  await group('falseRet');
+  await input('falseRet', 'Salg og retur av samme beløp innen').fill('45');
+  await input('falseRet', 'Salg og retur av samme beløp innen').press('Tab');
   assert.ok(await page.isVisible('.kvr-notice:has-text("endret siden siste analyse")'));
   await go('Analyse', 'Sjekk først');
   assert.match(await page.innerText('[data-sec=chk-top] .kvr-notice'), /Innstillingene er endret siden sist/);
@@ -159,14 +159,14 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   await dl.saveAs(file);
   const exported = JSON.parse(require('fs').readFileSync(file, 'utf8'));
   assert.strictEqual(exported.app, 'kvitteringshenter');
-  assert.strictEqual(exported.ctl.diffTotal, '60');
+  assert.strictEqual(exported.ctl.saleReturnMin, '45');
   await group('numbers');
   await input('numbers', 'Benford: minst antall bonger').fill('7');
   await input('numbers', 'Benford: minst antall bonger').press('Tab');
   await page.setInputFiles('[data-sec=set-general] input[type=file]', file);
   await page.waitForFunction(() => /Innstillingene er lest inn/.test(document.getElementById('kvr-panel').innerText));
   assert.strictEqual(await input('numbers', 'Benford: minst antall bonger').inputValue(), '100');
-  assert.strictEqual(await input('diff', 'Eller minus totalt over').inputValue(), '60');
+  assert.strictEqual(await input('falseRet', 'Salg og retur av samme beløp innen').inputValue(), '45');
   const bad = path.join(require('os').tmpdir(), 'kvr-bad.json');
   require('fs').writeFileSync(bad, '{"x":1}');
   await page.setInputFiles('[data-sec=set-general] input[type=file]', bad);
@@ -176,10 +176,10 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   await page.click('button:text-is("Alt til standard")');
   assert.match(await page.innerText('.kvr-modal'), /Sette alle terskler/);
   await page.click('.kvr-modal button:text-is("Avbryt")');
-  assert.strictEqual(await input('diff', 'Eller minus totalt over').inputValue(), '60');
+  assert.strictEqual(await input('falseRet', 'Salg og retur av samme beløp innen').inputValue(), '45');
   await page.click('button:text-is("Alt til standard")');
   await page.click('.kvr-modal button:text-is("Tilbakestill")');
-  assert.strictEqual(await input('diff', 'Eller minus totalt over').inputValue(), '100');
+  assert.strictEqual(await input('falseRet', 'Salg og retur av samme beløp innen').inputValue(), '60');
 
   // sletting bekreftes i panelet, ikke med nettleserdialog
   await go('Analyse', 'Detaljer');

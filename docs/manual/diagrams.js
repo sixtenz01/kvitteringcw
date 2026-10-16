@@ -123,32 +123,15 @@ function tAfter() {
   'Et kassaoppgjør skal avslutte dagen på kassen. Salg etter siste oppgjør (utover fristen) flagges. Oppgjør før åpningstid regnes som forrige dags avslutning.');
 }
 
-function tGap() {
-  return fig(svg(780, 128, 'Bongnummer 2121 til 2123, så 2130: seks bonger mangler', () => {
+function tSeq() {
+  return fig(svg(780, 128, 'Bongnummer 2121 kl 10:00, 2122 kl 10:05 og 2123 kl 09:58: nummer 2123 kommer i feil tidsrekkefølge', () => {
     let o = '';
-    [['2121', 0], ['2122', 1], ['2123', 2]].forEach((b) => { o += rect(20 + b[1] * 84, 30, 72, 40, 'd-box') + text(56 + b[1] * 84, 56, b[0], { anchor: 'middle', cls: 'd-mono' }); });
-    o += rect(280, 30, 270, 40, 'd-badsoft') + text(415, 50, '2124–2129 mangler', { anchor: 'middle', bold: true }) + text(415, 64, '6 bonger', { anchor: 'middle', size: 11, cls: 'd-muted' });
-    o += rect(570, 30, 72, 40, 'd-box') + text(606, 56, '2130', { anchor: 'middle', cls: 'd-mono' });
-    o += text(20, 102, 'Bongnummer går opp med én for hver kvittering på en kasse. Et hull kan bety slettede bonger, men også at listen er filtrert.', { size: 11, cls: 'd-muted' });
+    [['2121', 'kl 10:00', 0], ['2122', 'kl 10:05', 1]].forEach((b) => { o += rect(20 + b[2] * 148, 26, 136, 48, 'd-box') + text(88 + b[2] * 148, 46, b[0], { anchor: 'middle', cls: 'd-mono' }) + text(88 + b[2] * 148, 64, b[1], { anchor: 'middle', size: 11, cls: 'd-muted' }); });
+    o += rect(316, 26, 136, 48, 'd-badsoft') + text(384, 46, '2123', { anchor: 'middle', cls: 'd-mono', bold: true }) + text(384, 64, 'kl 09:58', { anchor: 'middle', size: 11, bold: true });
+    o += text(470, 54, '← kommer før 2122 i tid', { size: 12 });
+    o += text(20, 102, 'Bongnummer går opp med én for hver kvittering, og klokkeslettet skal følge med. Nummer i feil rekkefølge kan bety innsatte eller endrede bonger.', { size: 11, cls: 'd-muted' });
     return o;
-  }, 'tgap'), 'Hull opp til grensen «Størst hull som regnes som slettede bonger» flagges. Større hull hoppes over fordi de nesten alltid skyldes filtrering.');
-}
-
-function tDiff() {
-  const bars = [['29.09', -40], ['30.09', -35], ['01.10', -60], ['—', 0]];
-  return fig(svg(780, 220, 'Kassadifferanse per kassaoppgjør for kasserer 4103: minus 40, 35 og 60 kroner på tre dager', () => {
-    let o = '';
-    const y0 = 70, sc = 1.1;
-    o += line(60, y0, 700, y0) + text(52, y0 + 4, '0', { anchor: 'end', cls: 'd-muted', size: 11 }) + text(52, y0 + 60 * sc + 4, '−60', { anchor: 'end', cls: 'd-muted', size: 11 });
-    o += line(60, y0 + 40 * sc, 700, y0 + 40 * sc, { dash: true, cls: 'd-line-thin' });
-    [['29.09', -40], ['30.09', -35], ['01.10', -60]].forEach((b, i) => {
-      const x = 110 + i * 150;
-      o += rect(x, y0, 60, -b[1] * sc, 'd-bad', 3) + text(x + 30, y0 + (-b[1]) * sc + 16, '−' + (-b[1]), { anchor: 'middle', bold: true, size: 12 }) + text(x + 30, y0 - 8, b[0], { anchor: 'middle', cls: 'd-muted', size: 11 });
-    });
-    o += rect(580, 40, 190, 92, 'd-acc') + text(675, 66, '3 oppgjør med minus', { anchor: 'middle', bold: true }) + text(675, 86, 'fordelt på 3 dager', { anchor: 'middle', size: 12 }) + text(675, 108, 'samlet −135 kr', { anchor: 'middle', size: 12 }) + text(675, 124, 'flagges som gjentatt', { anchor: 'middle', size: 11, cls: 'd-muted' });
-    o += text(20, 190, 'Flagges ved minst «Minus i minst» oppgjør på minst to dager, eller når samlet minus passerer «Eller minus totalt over».', { size: 11, cls: 'd-muted' });
-    return o;
-  }, 'tdiff'), 'Enkeltdifferanser kan ha mange uskyldige årsaker. Gjentatte minus for samme kasserer eller kasse over flere dager er det testen leter etter.');
+  }, 'tseq'), 'Gjelder bare hvis listen ikke er filtrert på type, kasse eller tid. En bong som ligger langt fra naboene i tid pekes ut for seg og telles ikke en gang til.');
 }
 
 function tBenford() {
@@ -168,15 +151,15 @@ function tBenford() {
 }
 
 function tDisc() {
-  return fig(svg(780, 236, 'Rabattlinje uten årsak, rabattlinje med årsak og kupong på en kvittering', () => {
-    let o = rect(8, 8, 410, 214, 'd-box', 6);
-    const rows = [[34, '7071862047727 LINEA GAVEBÅND 20M', '4.36'], [54, '   Rabatt: Kr 4.36 (50.0%)', ''], [74, '   Rabatt årsak:', ''], [102, '7044610877488 PEPSI MAX 0.5L', '26.32'], [122, '   Rabatt: Kr 6.58 (20.0%)', ''], [142, '   Rabatt årsak: Datovare', ''], [172, 'Kupong (1ESD2P6D… - Gruppe - Coop koppnudler):', '0.00']];
+  return fig(svg(780, 236, 'Rabattlinje uten årsak og rabattlinje med årsak på en kvittering', () => {
+    let o = rect(8, 8, 410, 190, 'd-box', 6);
+    const rows = [[34, '7071862047727 LINEA GAVEBÅND 20M', '4.36'], [54, '   Rabatt: Kr 4.36 (50.0%)', ''], [74, '   Rabatt årsak:', ''], [112, '7044610877488 PEPSI MAX 0.5L', '26.32'], [132, '   Rabatt: Kr 6.58 (20.0%)', ''], [152, '   Rabatt årsak: Datovare', '']];
     rows.forEach((r) => { o += text(20, r[0] + 4, r[1], { cls: 'd-mono', size: 11 }) + (r[2] ? text(406, r[0] + 4, r[2], { anchor: 'end', cls: 'd-mono', size: 11 }) : ''); });
-    const tags = [[64, 'Rabatt uten årsak (50 %)', 'd-badsoft'], [132, 'Rabatt med årsak: Datovare', 'd-acc'], [172, 'Kupong: kampanje knyttet til bongen', 'd-box']];
+    const tags = [[64, 'Uten årsak: analyseres ikke', 'd-box'], [142, 'Med årsakskode: Datovare', 'd-acc']];
     tags.forEach((t) => { o += rect(498, t[0] - 15, 270, 30, t[2], 6) + text(633, t[0] + 5, t[1], { anchor: 'middle', size: 12 }) + line(420, t[0], 496, t[0], { cls: 'd-line-thin' }); });
-    o += text(498, 214, 'Beløpet på varelinjen er etter rabatt.', { size: 11, cls: 'd-muted' });
+    o += text(498, 190, 'Beløpet på varelinjen er etter rabatt.', { size: 11, cls: 'd-muted' });
     return o;
-  }, 'tdisc'), 'Rabatt uten årsak betyr at ingen rabattårsak ble valgt. Kupong-linjer har ofte beløp 0,00, så de viser at en kampanje er knyttet til bongen, ikke nødvendigvis at den ble innløst.');
+  }, 'tdisc'), 'Bare rabatt der kassereren har valgt en årsakskode analyseres. Kasserere sammenlignes med snittet i butikken og snittet for alle kasserere.');
 }
 
 function tFalse2() {
@@ -240,4 +223,4 @@ function storage() {
   }, 'storage'), 'Cachen er hardt begrenset og kan tømmes under Skann → Tøm cache. Panelets egne data deles ikke med Lindbak.');
 }
 
-module.exports = { flow, scan, scoring, scope, tHours, tFalse, tFalse2, tAfter, tGap, tDiff, tBenford, tDisc, tPant, zip, settingsFlow, storage };
+module.exports = { flow, scan, scoring, scope, tHours, tFalse, tFalse2, tAfter, tSeq, tBenford, tDisc, tPant, zip, settingsFlow, storage };

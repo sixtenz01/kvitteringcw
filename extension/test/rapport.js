@@ -108,7 +108,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   await runAnalysis();
   await page.click('[data-sec=chk-list] .kvr-ck:first-child button:text-is("Til oppfølging")');
   await page.click('[data-sec=chk-top] button:text-is("Lag revisjonsrapport…")');
-  assert.match(await page.innerText('.kvr-modal'), /Omfang: hele listen · 11 bonger · 6 flaggede/);
+  assert.match(await page.innerText('.kvr-modal'), /Omfang: hele listen · 11 bonger · 5 flaggede/);
   const r1 = await makeReport('TEST-1', 'Rev Isor', 3);
   assert.match(r1.name, /^revisjonsrapport_\d{8}_\d{4}\.zip$/);
   assert.strictEqual(r1.zipHash, sha(r1.buf), 'kontrollsummen i panelet er SHA-256 av ZIP-filen');
@@ -136,15 +136,15 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   const csv = await r1.zip.file('data/kvitteringer.csv').async('string');
   assert.ok(rep1.includes(sha(Buffer.from(csv, 'utf8'))), 'datasettets kontrollsum står i rapporten');
   assert.strictEqual(csv.trim().split('\r\n').length, 12, '11 kvitteringer og overskrift');
-  for (const t of ['TEST-1', 'Rev Isor', 'Omfang', 'hele listen', 'Dekningsgrad', 'Skannet innhold: 8 av 8 salg (100 %)', 'Stor panteretur fra', 'Falsk retur', 'Salg etter kassaoppgjør', 'Hull i bongnummer', '1005-1-104', 'Til oppfølging', 'href="bevis/01_', 'sha256sum -c KONTROLLSUM.txt', 'Kvitteringshenter 3.23.0'])
+  for (const t of ['TEST-1', 'Rev Isor', 'Omfang', 'hele listen', 'Dekningsgrad', 'Skannet innhold: 8 av 8 salg (100 %)', 'Stor panteretur fra', 'Falsk retur', 'Salg etter kassaoppgjør', 'Rabatt med overvåket årsak', '1005-1-104', 'Til oppfølging', 'href="bevis/01_', 'sha256sum -c KONTROLLSUM.txt', 'Kvitteringshenter 3.24.0'])
     assert.ok(rep1.includes(t), 'rapporten mangler «' + t + '»');
   for (const p of pngs) assert.ok(rep1.includes('href="' + p + '"'), p + ' er lenket');
   const exported = JSON.parse(await r1.zip.file('innstillinger.json').async('string'));
   assert.strictEqual(exported.app, 'kvitteringshenter');
-  assert.strictEqual(exported.ctl.diffTotal, '100');
-  assert.ok(exported.camp && typeof exported.camp === 'object', 'innstillinger.json har kampanjesvar');
+  assert.strictEqual(exported.ctl.saleReturnMin, '60');
+  assert.ok(!('camp' in exported), 'innstillinger.json har ikke kampanjesvar');
   const flagged = await r1.zip.file('data/flaggede_bonger.csv').async('string');
-  assert.ok(flagged.split('\r\n')[1].startsWith('1;Høy;10;58;1005-1-104'), 'rangert etter risiko');
+  assert.ok(flagged.split('\r\n')[1].startsWith('1;Høy;9;54;1005-1-101'), 'rangert etter risiko');
   assert.ok(flagged.includes('oppfolging'), 'status fra notater er med');
 
   if (process.env.REPORT_OUT) {
@@ -154,25 +154,25 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   // loggen i Eksport og versjon i hjelpen
   await go('Mer', 'Eksport');
   const logTxt = await page.innerText('[data-sec=auditrep]');
-  assert.ok(logTxt.includes('TEST-1') && logTxt.includes(r1.zipHash.slice(0, 12)) && logTxt.includes("6 av 11"));
-  assert.deepStrictEqual(await page.evaluate(() => JSON.parse(JSON.stringify(window.KvReport.VERSION))), '3.23.0');
+  assert.ok(logTxt.includes('TEST-1') && logTxt.includes(r1.zipHash.slice(0, 12)) && logTxt.includes("5 av 11"));
+  assert.deepStrictEqual(await page.evaluate(() => JSON.parse(JSON.stringify(window.KvReport.VERSION))), '3.24.0');
 
   // innstillinger endret etter analysen: rapporten viser verdiene som ble brukt
   await go('Mer', 'Innstillinger');
-  await page.click('[data-sec=set-diff] summary');
-  await page.fill('[data-sec=set-diff] input[aria-label="Eller minus totalt over"]', '77');
-  await page.press('[data-sec=set-diff] input[aria-label="Eller minus totalt over"]', 'Tab');
+  await page.click('[data-sec=set-falseRet] summary');
+  await page.fill('[data-sec=set-falseRet] input[aria-label="Salg og retur av samme beløp innen"]', '33');
+  await page.press('[data-sec=set-falseRet] input[aria-label="Salg og retur av samme beløp innen"]', 'Tab');
   await go('Mer', 'Eksport');
   await page.click('[data-sec=auditrep] button:text-is("Lag revisjonsrapport…")');
   assert.match(await page.innerText('.kvr-modal'), /Innstillingene er endret etter analysen/);
   assert.strictEqual(await page.inputValue('.kvr-modal input[placeholder="navn"]'), 'Rev Isor', 'navn huskes');
   const r2 = await makeReport('TEST-2', 'Rev Isor', 0);
   const rep2 = await r2.zip.file('rapport.html').async('string');
-  assert.ok(rep2.includes('Eller minus totalt over: <b>100 kr</b>') && !rep2.includes('77 kr'), 'terskelen fra analysen, ikke den nye');
+  assert.ok(rep2.includes('Salg og retur av samme beløp innen: <b>60 min</b>') && !rep2.includes('33 min'), 'terskelen fra analysen, ikke den nye');
   assert.ok(rep2.includes('Innstillingene er endret etter analysen'));
   assert.ok(rep2.includes('Ingen bevis-PNG er tatt med.'));
   assert.ok(!Object.keys(r2.zip.files).some(n => n.startsWith('bevis/') && !r2.zip.files[n].dir));
-  assert.strictEqual(JSON.parse(await r2.zip.file('innstillinger.json').async('string')).ctl.diffTotal, '100');
+  assert.strictEqual(JSON.parse(await r2.zip.file('innstillinger.json').async('string')).ctl.saleReturnMin, '60');
   assert.strictEqual(sha(await r2.zip.file('data/kvitteringer.csv').async('nodebuffer')), sha(await r1.zip.file('data/kvitteringer.csv').async('nodebuffer')), 'samme data gir samme kontrollsum');
   assert.strictEqual(sha(await r2.zip.file('data/innhold.json').async('nodebuffer')), sha(await r1.zip.file('data/innhold.json').async('nodebuffer')));
   assert.notStrictEqual(r2.zipHash, r1.zipHash);
@@ -183,7 +183,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   fs.writeFileSync(sfile, await r1.zip.file('innstillinger.json').async('string'));
   await page.setInputFiles('[data-sec=set-general] input[type=file]', sfile);
   await page.waitForFunction(() => /Innstillingene er lest inn/.test(document.getElementById('kvr-panel').innerText));
-  assert.strictEqual(await page.inputValue('[data-sec=set-diff] input[aria-label="Eller minus totalt over"]'), '100');
+  assert.strictEqual(await page.inputValue('[data-sec=set-falseRet] input[aria-label="Salg og retur av samme beløp innen"]'), '60');
 
   // synlige-modus (Kontroll-knappen) gir egen beskrivelse av omfanget
   await go('Analyse', 'Detaljer');

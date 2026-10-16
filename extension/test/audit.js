@@ -97,38 +97,32 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
 
   // hele analysen: alle fem nye tester
   await page.click('[data-sec=scope] button:text-is("Hele listen")');
-  await go('Mer', 'Innstillinger');
-  await page.click('[data-sec=set-diff] summary');
-  await page.fill('[data-sec=set-diff] input[aria-label="Eller minus totalt over"]', '60');
-  await page.press('[data-sec=set-diff] input[aria-label="Eller minus totalt over"]', 'Tab');
   await go('Analyse', 'Sjekk først');
   await runAnalysis();
   const lt = await listTxt();
-  for (const re of [/Salg og retur av samme beløp/, /Kortkjøp refundert kontant/, /Retur uten salg/, /Salg etter kassaoppgjør/, /Hull i bongnummer/, /Gjentatte kassadifferanser/]) assert.match(lt, re);
+  for (const re of [/Salg og retur av samme beløp/, /Kortkjøp refundert kontant/, /Retur uten salg/, /Salg etter kassaoppgjør/]) assert.match(lt, re);
+  assert.doesNotMatch(lt, /Hull i bongnummer|Gjentatte kassadifferanser|Rabatt uten årsak/, 'fjernede kontroller finnes ikke');
   await go('Analyse', 'Detaljer');
   await page.click('button:text-is("Åpne alle")');
   const fnd = (await page.innerText('[data-sec=findings]')).replace(/\s+/g, ' ');
   assert.match(fnd, /Kasse 1 \(1005\): salg 10:00 og retur 10:20, begge 100 kr \(kasserer A\)/);
   assert.match(fnd, /UKJENT VARE \(50 kr\) uten tilsvarende salg/);
   assert.match(fnd, /Kasse 1 \(1005\) 2026-09-28: 2 salg \(150 kr\) etter kassaoppgjør kl 22:00 \(oppgjør av kasserer A; salg av C\)/);
-  assert.match(fnd, /Kasse 1 \(1005\): mangler 105–108 \(4\)/);
-  assert.match(fnd, /Kasserer A \(1005\): 2 av 2 oppgjør med minus, totalt -70 kr/);
-  const diff = (await page.innerText('[data-sec=diff]')).replace(/\s+/g, ' ');
-  assert.match(diff, /Kasserer A \(1005\) 2 2 0 −70,00/);
+  assert.doesNotMatch(fnd, /mangler 105–108|oppgjør med minus/, 'hull i bongnummer og kassadifferanse over tid er fjernet');
+  assert.ok(await page.$('[data-sec=diff]') === null, 'kortet Kassadifferanse over tid finnes ikke');
   assert.match(await page.innerText('[data-sec=numbers]'), /Benford \(første siffer i totalbeløp\): \d+ bonger/);
   assert.ok(await page.$('[data-sec=ch-benford]') === null, 'Benford-diagrammet ligger under Diagram');
-  // rabatt og kupong: rabatt uten årsak er et funn, rabatt med årsak og kupong er bare tall
-  assert.match(fnd, /Rabatt: Rabatt uten årsak Kasse 5 \(1010\) 10:00 kasserer E: VARE V −40 kr \(50 %\) uten rabattårsak/);
-  assert.ok(!/Datovare|Best før|VARE X −/.test(fnd), 'rabatt med årsak flagges ikke');
-  const dsc = (await page.innerText('[data-sec=disc]')).replace(/\s+/g, ' ');
-  assert.match(dsc, /4 bonger har rabattlinje \(67,00 kr\), 1 av dem uten årsak \(40,00 kr\)\. 1 bonger har kupong\/kampanje \(1 kuponger\)/);
-  assert.match(dsc, /Kasserer E \(1010\) 1 1 40,00 1 40,00 100 % 0 1 1/);
-  assert.match(dsc, /Rabatt per årsak Årsak Linjer Bonger Rabatt kr Snitt % Overvåket Datovare 1 1 5,00 6 Feil pris 1 1 12,00 9,1 ja Best før 1 1 10,00 9,1 Uten årsak 1 1 40,00 50/);
+  // rabatt med årsakskode: rabatt uten årsak (og kupong) er ikke med
+  assert.doesNotMatch(fnd, /uten rabattårsak|VARE V/, 'rabatt uten årsak flagges ikke');
   assert.match(fnd, /Rabatt: Rabatt med overvåket årsak Kasse 1 \(1005\) 22:15 kasserer C: VARE Y −12 kr \(9.1 %\) – årsak Feil pris/);
-  assert.match(dsc, /Kasserer C \(1005\) 2 1 12,00 0 0,00 0 % 1 0 0/);
-  assert.match(dsc, /Overvåkede årsaker: Feil pris, Reserveløsning kupong, Annen rabattårsak\. Bongen flagges ved rabatt på minst 0 % og 0 kr; kassereren markeres ved minst 3 bonger/);
-  assert.match(dsc, /Kasserer × årsak \(antall rabattlinjer\) Kasserer Datovare Feil pris Best før Uten årsak Kasserer A \(1005\) 1 · 1 · Kasserer C \(1005\) · 1 · · Kasserer E \(1010\) · · · 1/);
-  assert.match(dsc, /1ESD2P6DRVPCCJY1 Gruppe - Coop koppnudler, 65 g 1 0,00/);
+  assert.ok(!/Datovare|Best før|VARE X −/.test(fnd), 'rabatt med uovervåket årsak flagges ikke');
+  const dsc = (await page.innerText('[data-sec=disc]')).replace(/\s+/g, ' ');
+  assert.match(dsc, /Rabattdata for 8 av 8 salg\. 3 bonger \(38 %\) har rabatt med årsakskode: 3 linjer, 27,00 kr\. Rabatt uten årsak er ikke med\./);
+  assert.match(dsc, /Kasserer A \(1005\) 3 2 15,00 67 % 43 % 38 %/);
+  assert.match(dsc, /Snitt butikk 1005 7 3 27,00 43 % Snitt butikk 1010 1 0 0,00 0 % Snitt alle kasserere 8 3 27,00 38 %/, 'snitt for butikk og for alle kasserere');
+  assert.match(dsc, /Rabatt per årsakskode Årsak Linjer Bonger Rabatt kr Snitt % Overvåket Datovare 1 1 5,00 6 Feil pris 1 1 12,00 9,1 ja Best før 1 1 10,00 9,1 Kasserer × årsakskode/);
+  assert.match(dsc, /Kasserer A \(1005\) 1 \(33 %\) · 1 \(33 %\)/);
+  assert.doesNotMatch(dsc, /Uten årsak [0-9]|Kuponger|kampanje/i, 'ingen rabatt uten årsak, kuponger eller kampanjer');
   if (process.env.SHOT) { await page.evaluate(() => { document.querySelector('[data-sec=findings]').scrollIntoView({ block: 'start' }); }); await page.waitForTimeout(200); await (await page.$('#kvr-panel')).screenshot({ path: process.env.SHOT.replace('.png', '-funn.png') }); await page.evaluate(() => { document.querySelector('[data-sec=diff]').scrollIntoView({ block: 'start' }); }); await page.waitForTimeout(200); await (await page.$('#kvr-panel')).screenshot({ path: process.env.SHOT.replace('.png', '-diff.png') }); }
 
   // kasserer-omfang: bare funn som gjelder kassereren
@@ -137,7 +131,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   assert.match(await scopeTxt(), /kasserer C \(1005\) → 2 av 11/);
   await runAnalysis();
   const cl = await listTxt();
-  assert.match(cl, /Salg etter kassaoppgjør/); assert.match(cl, /Hull i bongnummer/);
+  assert.match(cl, /Salg etter kassaoppgjør/);
   assert.ok(!/Retur uten salg|Kortkjøp/.test(cl), 'funn for andre kasserere vises ikke');
   await page.click('[data-sec=scope] button:text-is("Nullstill omfang")');
 

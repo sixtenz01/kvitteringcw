@@ -168,19 +168,6 @@ async function main() {
     await save('sjekk-kort', await page.$(first), { l: 8, r: 40, t: 8, b: 8 });
     await c.un();
   }
-  if (want('kampanje')) {
-    await go('Analyse', 'Sjekk først');
-    const q = '[data-sec=chk-list] .kvr-ck:has(.kvr-ck-t:has-text("09-29 10:12"))';
-    for (let i = 0; i < 10 && !(await page.$(q)); i++) { const more = await page.$('[data-sec=chk-list] button:has-text("Vis flere")'); if (!more) break; await more.click(); await page.waitForTimeout(150); }
-    if (!(await page.$eval(q, (n) => n.classList.contains('kvr-open')))) await page.click(q + ' .kvr-ck-h');
-    await (await page.$(q)).scrollIntoViewIfNeeded();
-    await save('sjekk-kampanje', await page.$(q), { l: 8, r: 40, t: 8, b: 8 });
-    await go('Analyse', 'Sjekk først');
-    await page.click('[data-sec=chk-top] button:text-is("Svar nå")');
-    await page.waitForSelector('.kvr-modal .kvr-camp, .kvr-modal table');
-    await save('kampanje-dialog', await page.$('.kvr-dlg'));
-    await page.click('.kvr-modal button:text-is("Lukk")');
-  }
   if (want('diagram')) {
     await go('Analyse', 'Diagram'); await view(1000);
     for (const id of ['ch-hours', 'ch-days', 'ch-cash', 'ch-heat', 'ch-benford', 'ch-pant']) await cardShot(id, `[data-sec=${id}]`);
@@ -189,7 +176,7 @@ async function main() {
   if (want('fokus')) {
     await go('Analyse', 'Fokus'); await view(900);
     await save('fokus-start');
-    await page.click('.kvr-card:has(h4:text-is("Kasserere i listen")) .kvr-ent:text-is("Kasserer 4103")');
+    await page.click('.kvr-card:has(h4:text-is("Kasserere i listen")) .kvr-ent:has-text("Kasserer 4103")');
     await page.waitForTimeout(300);
     await scrollTo(0); await save('fokus-a');
     await scrollTo(700); await save('fokus-b');
@@ -199,8 +186,8 @@ async function main() {
     await go('Analyse', 'Detaljer'); await view(1000);
     await save('detaljer-topp');
     await page.evaluate(() => { document.getElementById('kvr-panel').style.width = '860px'; });
-    for (const id of ['profile', 'findings', 'pantbal', 'recon', 'diff', 'numbers', 'disc', 'member', 'misc', 'lapp', 'lines', 'acct']) { await unfold(id); }
-    for (const id of ['profile', 'findings', 'pantbal', 'recon', 'diff', 'numbers', 'disc', 'member', 'misc', 'lapp', 'lines', 'acct']) await cardShot('d-' + id, `[data-sec=${id}]`);
+    for (const id of ['profile', 'findings', 'pantbal', 'recon', 'numbers', 'disc', 'member', 'misc', 'lapp', 'lines', 'acct']) { await unfold(id); }
+    for (const id of ['profile', 'findings', 'pantbal', 'recon', 'numbers', 'disc', 'member', 'misc', 'lapp', 'lines', 'acct']) await cardShot('d-' + id, `[data-sec=${id}]`);
     await cardShot('d-anom', '[data-sec=anom]'); await cardShot('d-custom', '[data-sec=custom]'); await cardShot('d-tasks', '[data-sec=tasks]'); await cardShot('d-notes', '[data-sec=notes]');
     await page.evaluate(() => { document.getElementById('kvr-panel').style.width = ''; });
   }

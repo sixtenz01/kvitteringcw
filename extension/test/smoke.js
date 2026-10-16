@@ -204,11 +204,10 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   await page.selectOption('select[aria-label="Pant"]', 'sale');
   assert.deepStrictEqual(await vis(), ['t-3']);
   const dsel = (v) => page.selectOption('select[aria-label="Rabatt"]', v);
-  await dsel('noreason'); assert.deepStrictEqual(await vis(), ['t-3']);
-  assert.match(await page.innerText('.kvr-chipsrow'), /Rabatt: uten årsak/);
-  await dsel('coupon'); assert.deepStrictEqual(await vis(), ['t-3']);
-  await dsel('reason'); assert.deepStrictEqual(await vis(), []);
-  await dsel('any'); assert.deepStrictEqual(await vis(), ['t-3']);
+  await dsel('reason'); assert.deepStrictEqual(await vis(), [], 'rabatt uten årsak (t-3) er ikke med');
+  assert.match(await page.innerText('.kvr-chipsrow'), /Rabatt: med årsakskode/);
+  assert.deepStrictEqual(await page.$$eval('select[aria-label="Rabatt"] option', (o) => o.map((x) => x.value)).then((v) => v.slice(0, 3)), ['', 'reason', 'r:Datovare'], 'ingen filter for rabatt uten årsak eller kupong');
+  await dsel('r:Datovare'); assert.deepStrictEqual(await vis(), []);
   await wipe();
   assert.strictEqual(await page.inputValue('select[aria-label="Rabatt"]'), '');
 

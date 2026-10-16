@@ -251,10 +251,7 @@ const si = [mkI('x-100', '2026-10-02', '10:00', 1, 'A', 10), mkI('x-101', '2026-
   mkI('x-105', '2026-10-02', '10:15', 1, 'A', 10), mkI('y-500', '2026-10-02', '10:00', 2, 'A', 10), mkI('y-900', '2026-10-02', '10:30', 2, 'A', 10),
   mkI('z-1', '2026-10-02', '03:10', 3, 'A', 10), mkI('z-2', '2026-10-02', '23:30', 3, 'A', 10), mkI('z-3', '2026-10-02', '12:00', 3, 'A', 10)];
 const sq = L.sequence(si, C);
-const gaps = sq.findings.filter(f => f.code === 'gap');
-assert.strictEqual(gaps.length, 1 + 0);
-assert.match(gaps[0].detail, /Kasse 1: mangler 102–103 \(2\)/);
-assert.strictEqual(sq.skippedGaps, 1, 'hull over maks hoppes over');
+assert.ok(!sq.findings.some(f => f.code === 'gap') && !('skippedGaps' in sq), 'hull i bongnummer er fjernet');
 const hrs = sq.findings.filter(f => f.code === 'hours');
 assert.strictEqual(hrs.length, 1);
 assert.strictEqual(hrs[0].ids.length, 2);
@@ -323,18 +320,23 @@ const W = L.sanitizeWeights(null);
 assert.strictEqual(L.riskScore(['Stor panteretur (256 kr)', 'Kontant tilbake uten salg', 'Rundt beløp'], W), 5, 'pant og kontant tilbake er samme familie: høyeste (4) + rundt beløp (1)');
 // tester som måler samme forhold teller bare det høyeste poenget per bong
 assert.strictEqual(L.riskScore(['Kontant tilbake uten salg', 'Kontant tilbake uten salg flere ganger', 'Varelinjer slettet, pant utbetalt kontant'], W), 5);
-assert.strictEqual(L.riskScore(['Høy rabattprosent', 'Rabatt uten årsak', 'Rabatt uten treff på andre salg'], W), 4);
-assert.strictEqual(L.riskScore(['Linjer stemmer ikke med totalen', 'Betaling stemmer ikke med totalen', 'MVA stemmer ikke'], W), 4);
+assert.strictEqual(L.riskScore(['Høy rabattprosent', 'Rabatt med overvåket årsak', 'Rabatt uten treff på andre salg'], W), 4);
+assert.strictEqual(L.riskScore(['Transaksjoner utenfor åpningstid', 'Salg etter kassaoppgjør'], W), 4, 'samme hendelse etter stengetid og oppgjør teller én gang');
+assert.strictEqual(L.riskScore(['Retur uten salg', 'Vare ikke på kvitteringen', 'Retur av vare uten salg samme dag'], W), 4, 'returer uten kjøp er én familie');
+assert.strictEqual(L.riskScore(['Overvåket vare slettet', 'Makulert vare ikke solgt på ny'], W), 3);
 assert.strictEqual(L.riskScore(['Avvikende pris på vare', 'Spør pris avviker fra dagens salg'], W), 3);
-assert.strictEqual(L.riskScore(['Gjentatte kassadifferanser'], W), 4);
-assert.strictEqual(L.riskScore(['Medlemsnr flere ganger samme dag', 'Medlemsnr brukt svært mye'], W), 4, 'ulike signaler summeres');
+assert.strictEqual(L.riskScore(['Medlemsnr flere ganger samme dag', 'Medlemsnr brukt svært mye'], W), 2, 'samme bruk av medlemsnr, to tidsvinduer');
+assert.strictEqual(L.riskScore(['Medlemsnr flere ganger samme dag', 'Medlemsnr nesten bare hos én kasserer'], W), 5, 'ulike signaler summeres');
 assert.strictEqual(L.riskScore(['Retur uten salg', 'Kortkjøp refundert kontant'], W), 8, 'ulike familier summeres');
-assert.strictEqual(L.riskScore(['Kontant tilbake uten salg', 'Rabatt uten årsak', 'Linjer stemmer ikke med totalen'], W), 11, 'ulike familier summeres');
-const bd = L.scoreBreakdown(['Rabatt uten årsak', 'Høy rabattprosent', 'Rundt beløp (500 kr)'], W);
-assert.deepStrictEqual(bd.map((x) => [x.counts, x.by]), [[true, null], [false, 'Rabatt uten årsak'], [true, null]], 'lik vekt: den første teller');
+assert.strictEqual(L.riskScore(['Kontant tilbake uten salg', 'Høy rabattprosent', 'Dobbelt bongnummer'], W), 10, 'ulike familier summeres');
+const bd = L.scoreBreakdown(['Rabatt med overvåket årsak', 'Høy rabattprosent', 'Rundt beløp (500 kr)'], W);
+assert.deepStrictEqual(bd.map((x) => [x.counts, x.by]), [[true, null], [false, 'Rabatt med overvåket årsak'], [true, null]], 'lik vekt: den første teller');
 assert.strictEqual(L.reasonFamily('Stor panteretur (256 kr)'), 'kontant');
 assert.strictEqual(L.reasonFamily('Rundt beløp'), null);
-assert.strictEqual(L.scoreBreakdown(['Høy rabattprosent', 'Rabatt uten årsak'], Object.assign({}, W, { 'Rabatt uten årsak': 9 })).find((x) => x.counts).reason, 'Rabatt uten årsak', 'vektene avgjør hvilken som teller');
+assert.strictEqual(L.scoreBreakdown(['Høy rabattprosent', 'Rabatt med overvåket årsak'], Object.assign({}, W, { 'Rabatt med overvåket årsak': 9 })).find((x) => x.counts).reason, 'Rabatt med overvåket årsak', 'vektene avgjør hvilken som teller');
+// kassererfunn i samme familie teller bare det høyeste
+const cx = L.cashierExtras([{ flag: false, cashier: 'A', title: 'Mange runde beløp' }, { flag: false, cashier: 'A', title: 'Avvikende siste siffer' }, { flag: false, cashier: 'A', title: 'Avvikende sifferfordeling' }, { flag: false, cashier: 'B', title: 'Mange spør pris' }, { flag: true, cashier: 'B', title: 'Rundt beløp' }], W);
+assert.deepStrictEqual([cx.A.points, cx.A.notes.length, cx.B.points], [4, 2, 2], 'runde beløp og siste siffer er samme forhold');
 Object.keys(L.FAMILIES).forEach((f) => L.FAMILIES[f].forEach((t) => assert.ok(t in L.RISK_WEIGHTS, 'ukjent test i familie: ' + t)));
 assert.strictEqual(L.riskScore(['Regel: Min regel'], W), 3);
 assert.strictEqual(L.riskScore(['Ukjent grunn'], W), 2);
@@ -425,36 +427,12 @@ const dPop = [dl('x-100', '10:00', 1), dl('x-101', '10:05', 1), dl('x-104', '10:
 dPop[8].transactionId = 'y-8'; dPop[7].transactionId = 'y-8x';
 const dr = L.deletedReceipts(dPop, C2);
 const dBy = c => dr.findings.filter(f => f.code === c);
-assert.strictEqual(dBy('gap').length, 1);
-assert.match(dBy('gap')[0].detail, /Kasse 1: mangler 102–103 \(2\) mellom kl 10:05 og 10:20 2026-10-02/);
-assert.strictEqual(dBy('gap')[0].missing, 2);
+assert.strictEqual(dBy('gap').length, 0, 'hull i bongnummer er fjernet');
 assert.strictEqual(dBy('timeInversion').length, 1);
 assert.match(dBy('timeInversion')[0].detail, /nr 105 kl 10:10 kommer etter nr 104 kl 10:20/);
 assert.strictEqual(dBy('dupSeq').length, 1);
 assert.match(dBy('dupSeq')[0].detail, /Kasse 2: bongnummer 8 finnes to ganger/);
-assert.strictEqual(dr.skippedGaps, 1, 'z: hull på 898 hoppes over');
-assert.strictEqual(L.deletedReceipts(dPop, Object.assign({}, C2, { maxGap: '' })).findings.filter(f => f.code === 'gap').length, 0);
 assert.ok(dr.findings.every(f => f.flag === true));
-
-// ---- kassadifferanse over tid
-const dtI = [], dtS = {};
-[['d-1', '2026-09-28', 'A', 1, -30], ['d-2', '2026-09-29', 'A', 1, -45], ['d-3', '2026-09-30', 'A', 1, -50], ['d-4', '2026-10-01', 'A', 1, 20],
- ['e-1', '2026-09-28', 'B', 2, 0], ['e-2', '2026-09-29', 'B', 2, 100], ['e-3', '2026-09-30', 'B', 2, -150], ['f-1', '2026-10-01', 'C', 3, -2], ['f-2', '2026-10-02', 'C', 3, -3]].forEach(r => {
-  dtI.push(mkI(r[0], r[1], '22:00', r[3], r[2], null, 2));
-  dtS[r[0]] = L.parseSettlement([['Sum', '100.00'], ['Differanse'], ['Sum', String(r[4])]]);
-});
-const dtr = L.diffTrend(dtI, dtS, C2);
-const rowOf = (kind, id) => dtr.rows.find(r => r.kind === kind && r.id === id);
-assert.deepStrictEqual([rowOf('kasserer', 'A').n, rowOf('kasserer', 'A').minus, rowOf('kasserer', 'A').sumMinus, rowOf('kasserer', 'A').plus], [4, 3, -125, 1]);
-assert.strictEqual(rowOf('kasserer', 'A').flag, true, '3 minusdifferanser på 3 dager');
-assert.strictEqual(rowOf('kasserer', 'B').flag, true, 'totalt minus ≥ 100 kr');
-assert.strictEqual(rowOf('kasserer', 'C').flag, false);
-assert.strictEqual(rowOf('kasse', '1').flag, true);
-const dtf = dtr.findings.filter(f => f.cashier);
-assert.deepStrictEqual(dtf.map(f => f.cashier).sort(), ['A', 'B']);
-assert.match(dtf.find(f => f.cashier === 'A').detail, /Kasserer A: 3 av 4 oppgjør med minus, totalt -125 kr/);
-assert.deepStrictEqual(rowOf('kasserer', 'A').list.map(x => x.diff), [-30, -45, -50, 20]);
-assert.strictEqual(L.diffTrend(dtI, {}, C2).rows.length, 0);
 
 // ---- Benford og runde beløp
 const bf = [];
@@ -532,39 +510,60 @@ const dmm = { 'd-1': dsc, 'd-2': withReason, 'd-3': rcpt([['7000 VARE', '', '10.
 const dmeta = (id, o) => Object.assign({ transactionId: id, endDateTime: '2026-10-01 12:00', storeNumber: 1005, workstationNumber: 1, cashierNumber: 'A', totalAmount: 10, receiptType: 1, memberNumber: null }, o || {});
 const ditems = ['d-1', 'd-2', 'd-3', 'd-4'].map(id => dmeta(id));
 const didsf = (disc) => ditems.filter(r => L.matches(r, F({ disc }), { scan: dmm })).map(r => r.transactionId);
-assert.deepStrictEqual(didsf('any'), ['d-1', 'd-2']);
-assert.deepStrictEqual(didsf('noreason'), ['d-1']);
-assert.deepStrictEqual(didsf('reason'), ['d-2']);
-assert.deepStrictEqual(didsf('coupon'), ['d-1']);
-assert.deepStrictEqual(ditems.filter(r => L.matches(r, F({ disc: 'any' }), {})).length, 0);
-assert.strictEqual(L.activeCount(F({ disc: 'any' })), 1);
+assert.deepStrictEqual(didsf('reason'), ['d-2'], 'bare rabatt med årsakskode');
+assert.deepStrictEqual([L.sanitizeFilters({ disc: 'any' }).disc, L.sanitizeFilters({ disc: 'noreason' }).disc, L.sanitizeFilters({ disc: 'coupon' }).disc, L.sanitizeFilters({ disc: 'r:Best før' }).disc], ['reason', '', '', 'r:Best før']);
+assert.deepStrictEqual(ditems.filter(r => L.matches(r, F({ disc: 'reason' }), {})).length, 0);
+assert.strictEqual(L.activeCount(F({ disc: 'reason' })), 1);
 assert.strictEqual(L.hasDisc(oldRec), false);
-assert.strictEqual(L.matches(dmeta('d-4'), F({ disc: 'any' }), { scan: dmm }), false);
+assert.strictEqual(L.matches(dmeta('d-4'), F({ disc: 'reason' }), { scan: dmm }), false);
+assert.strictEqual(L.matches(ditems[0], F({ discFrom: '40' }), { scan: dmm }), false, 'prosentfilteret gjelder bare rabatt med årsakskode');
+assert.strictEqual(L.matches(ditems[1], F({ discFrom: '30', discTo: '40' }), { scan: dmm }), true);
 const drul = (f, op, v) => ({ name: 'r', enabled: true, conds: [{ f, op, v }] });
-assert.strictEqual(L.evalRule(drul('rabattuten', '>=', '1'), ditems[0], dsc), true);
 assert.strictEqual(L.evalRule(drul('rabattpst', '>=', '50'), ditems[0], dsc), true);
-assert.strictEqual(L.evalRule(drul('kupong', 'inneholder', 'koppnudler'), ditems[0], dsc), true);
-assert.strictEqual(L.evalRule(drul('kuponger', '>=', '1'), ditems[0], oldRec), false);
+assert.ok(!('rabattuten' in L.RULE_FIELDS) && !('kuponger' in L.RULE_FIELDS) && !('kupong' in L.RULE_FIELDS), 'rabatt uten årsak og kupong finnes ikke som regelfelt');
+const gone = L.sanitizeCustom([{ name: 'g', conds: [{ f: 'kuponger', op: '>=', v: '1' }, { f: 'sum', op: '>', v: '10' }] }, { name: 'h', conds: [{ f: 'sum', op: '>', v: '10' }] }]);
+assert.deepStrictEqual(gone.map(r => [r.enabled, r.conds.length]), [[false, 1], [true, 1]], 'regel med fjernet felt skrus av i stedet for å bli bredere');
 const dsFo = L.focusStats(ditems, dmm);
-assert.deepStrictEqual([dsFo.disc, dsFo.discN, dsFo.discNR, dsFo.cpn, dsFo.discScanned], [9.36, 2, 1, 2, 3]);
+assert.deepStrictEqual([dsFo.disc, dsFo.discN, dsFo.discScanned], [5, 1, 3], 'fokus teller bare rabatt med årsakskode');
 
-// discounts(): rabatt uten årsak og kasserer-sammenligning
-const dbase = Object.assign({}, C2, { discPct: '30', discCash: '1', profMin: '5', profFactor: '1.5', discHiFrom: '', discMatchPct: '' });
+// discounts(): bare rabatt med årsakskode, og kasserer-sammenligning mot butikk og alle kasserere
+const dbase = Object.assign({}, C2, { discCash: '1', discCashN: '3', profMin: '5', profFactor: '1.5', discHiFrom: '', discMatchPct: '' });
 const ddd = L.discounts(ditems, dmm, dbase);
 assert.strictEqual(ddd.scanned, 3);
 assert.strictEqual(ddd.sales, 4);
 assert.ok(ddd.coverage < 1);
-assert.deepStrictEqual([ddd.total.withDisc, ddd.total.withNR, ddd.total.disc, ddd.total.nr, ddd.total.cpn], [2, 1, 9.36, 4.36, 2]);
-assert.deepStrictEqual(ddd.findings.filter(f => f.code === 'discNoReason').map(f => f.ids[0]), ['d-1']);
-assert.strictEqual(ddd.campaigns.length, 2);
-assert.strictEqual(L.discounts(ditems, dmm, Object.assign({}, dbase, { discPct: '60' })).findings.length, 0);
-assert.strictEqual(L.discounts(ditems, dmm, Object.assign({}, dbase, { discPct: '' })).findings.length, 0);
+assert.deepStrictEqual([ddd.total.n, ddd.total.withR, ddd.total.disc, ddd.total.lines], [3, 1, 5, 1], 'rabatt uten årsak (d-1) er ikke med');
+assert.ok(!('campaigns' in ddd) && !('camp' in ddd) && !ddd.findings.some(f => /NoReason/.test(f.code)));
 const dcs = {}, dci = [];
-for (let k = 0; k < 10; k++) { dcs['x-' + k] = rcpt([['7000 V', '', '50.00'], ...(k < 4 ? [['Rabatt: Kr 5.00 (10.0%)'], ['Rabatt årsak:']] : [])]); dci.push(dmeta('x-' + k, { cashierNumber: 'Z', endDateTime: '2026-10-01 10:0' + k })); }
-for (let k = 0; k < 10; k++) { dcs['y-' + k] = rcpt([['7000 V', '', '50.00'], ...(k < 1 ? [['Rabatt: Kr 5.00 (10.0%)'], ['Rabatt årsak:']] : [])]); dci.push(dmeta('y-' + k, { cashierNumber: 'Y', endDateTime: '2026-10-01 11:0' + k })); }
+const withR = (k, reason, lim) => [['7000 V', '', '50.00'], ...(k < lim ? [['Rabatt: Kr 5.00 (10.0%)'], ['Rabatt årsak: ' + reason]] : [])];
+for (let k = 0; k < 10; k++) { dcs['x-' + k] = rcpt(withR(k, 'Datovare', 4)); dci.push(dmeta('x-' + k, { cashierNumber: 'Z', endDateTime: '2026-10-01 10:0' + k })); }
+for (let k = 0; k < 10; k++) { dcs['y-' + k] = rcpt(withR(k, 'Feil pris', 1)); dci.push(dmeta('y-' + k, { cashierNumber: 'Y', endDateTime: '2026-10-01 11:0' + k })); }
+for (let k = 0; k < 10; k++) { dcs['w-' + k] = rcpt([['7000 V', '', '50.00'], ['Rabatt: Kr 5.00 (10.0%)'], ['Rabatt årsak: ']]); dci.push(dmeta('w-' + k, { cashierNumber: 'W', endDateTime: '2026-10-01 12:0' + k })); }
 const dcdsc = L.discounts(dci, dcs, dbase);
-assert.deepStrictEqual(dcdsc.findings.filter(f => f.code === 'discCash').map(f => [f.cashier, f.flag]), [['Z', false]]);
-assert.strictEqual(dcdsc.findings.filter(f => f.code === 'discNoReason').length, 0);
+const dcf = dcdsc.findings.filter(f => f.code === 'discCash');
+assert.deepStrictEqual(dcf.map(f => [f.cashier, f.flag]), [['Z', false]], 'Z ligger over snittet; W har bare rabatt uten årsak og telles ikke');
+assert.match(dcf[0].detail, /Kasserer Z: 4 av 10 bonger \(40 %\) har rabatt med årsakskode\. Snitt butikk 16,7 %, alle kasserere 16,7 %\. Over snittet per årsak: Datovare 4 \(40 % mot butikk 13,3 %\) \(grense 1,5× butikksnittet\)/);
+const zr = dcdsc.rows.find(r => r.id === 'Z'), wr = dcdsc.rows.find(r => r.id === 'W');
+assert.deepStrictEqual([zr.flag, zr.flagCodes, Math.round(zr.storeShare * 1000), Math.round(zr.allShare * 1000)], [true, ['Datovare'], 167, 167]);
+assert.deepStrictEqual([wr.withR, wr.share, wr.flag], [0, 0, false]);
+assert.deepStrictEqual([dcdsc.total.n, dcdsc.total.withR, Math.round(dcdsc.total.share * 1000)], [30, 5, 167]);
+assert.deepStrictEqual(Object.keys(dcdsc.byStore), ['1005']);
+assert.strictEqual(dcdsc.byStore['1005'].codes['Datovare'].n, 4);
+assert.strictEqual(L.discounts(dci, dcs, Object.assign({}, dbase, { discCashN: '5' })).findings.filter(f => f.code === 'discCash').length, 0, 'under minste antall');
+assert.strictEqual(L.discounts(dci, dcs, Object.assign({}, dbase, { discCash: '' })).findings.filter(f => f.code === 'discCash').length, 0);
+assert.strictEqual(L.discounts(dci, dcs, Object.assign({}, dbase, { profMin: '11' })).findings.filter(f => f.code === 'discCash').length, 0, 'under minste antall bonger for profil');
+// to butikker: egen butikkandel og felles snitt for alle kasserere
+const dci2 = dci.map(r => Object.assign({}, r, r.cashierNumber === 'Y' || r.cashierNumber === 'W' ? { storeNumber: 2002 } : {}));
+const d2 = L.discounts(dci2, dcs, dbase);
+assert.deepStrictEqual(Object.keys(d2.byStore), ['1005', '2002']);
+assert.deepStrictEqual([Math.round(d2.rows.find(r => r.id === 'Z').storeShare * 1000), Math.round(d2.rows.find(r => r.id === 'Y').storeShare * 1000), Math.round(d2.rows.find(r => r.id === 'Z').allShare * 1000)], [400, 50, 167]);
+// høy rabattprosent og manglende treff gjelder bare rabatt med årsakskode
+const hcs = { 'h-1': rcpt([['7000000000001 VARE', '', '15.00'], ['Rabatt: Kr 15.00 (50.0%)'], ['Rabatt årsak: Feil pris']]), 'h-2': rcpt([['7000000000002 ANNEN', '', '15.00'], ['Rabatt: Kr 15.00 (50.0%)'], ['Rabatt årsak: ']]) };
+const hit = ['h-1', 'h-2'].map(id => dmeta(id));
+const hd = L.discounts(hit, hcs, Object.assign({}, dbase, { discHiFrom: '40', discHiTo: '100', discMatchPct: '30' }));
+assert.deepStrictEqual(hd.findings.filter(f => f.code === 'discHigh').map(f => f.ids[0]), ['h-1']);
+assert.deepStrictEqual(hd.findings.filter(f => f.code === 'discNoMatch').map(f => f.ids[0]), ['h-1']);
+assert.match(hd.findings.find(f => f.code === 'discHigh').detail, /VARE −15 kr \(50 %\), årsak Feil pris/);
 // rabattårsaker (tekstnr 1–6 eller tekst)
 assert.deepStrictEqual(L.DISC_REASONS, ['Datovare', 'Feil pris', 'Prisløfte', 'Reserveløsning kupong', 'Annen rabattårsak', 'Best før']);
 assert.deepStrictEqual(['', ' ', '1', '6', '4 ', 'datovare', '2 Feil pris', 'ANNEN RABATTÅRSAK', 'Reserveløsning kupong', '9', 'Medarbeider'].map(L.reasonName),
@@ -578,16 +577,15 @@ const qrf = (v) => qit.filter(r => L.matches(r, F({ disc: v }), { scan: qrs })).
 assert.deepStrictEqual(qrf('r:Datovare'), ['e-1', 'e-2']);
 assert.deepStrictEqual(qrf('r:Best før'), ['e-1']);
 assert.deepStrictEqual(qrf('r:Prisløfte'), []);
-assert.deepStrictEqual(qrf('noreason'), ['e-4']);
 assert.strictEqual(L.evalRule(drul('rabattarsak', '=', 'Best før'), qit[0], qrs['e-1']), true);
 assert.strictEqual(L.evalRule(drul('rabattarsak', '=', 'Best før'), qit[1], qrs['e-2']), false);
 const qrd2 = L.discounts(qit, qrs, dbase);
 assert.deepStrictEqual(qrd2.reasons.map(r => [r.name, r.lines, r.bongs, r.sum, r.known]),
-  [['Datovare', 2, 2, 5, true], ['Best før', 1, 1, 5, true], ['Uten årsak', 1, 1, 1, false], ['Medarbeider', 1, 1, 1, false]]);
+  [['Datovare', 2, 2, 5, true], ['Best før', 1, 1, 5, true], ['Medarbeider', 1, 1, 1, false]]);
 assert.strictEqual(qrd2.reasons.find(r => r.name === 'Datovare').avgPct, 19.9);
-assert.deepStrictEqual(qrd2.matrix.cols, qrd2.reasons.map(r => r.name));
-assert.deepStrictEqual(qrd2.matrix.rows.find(r => r.id === 'A').counts, { 'Datovare': 1, 'Best før': 1 });
-assert.deepStrictEqual(qrd2.matrix.rows.find(r => r.id === 'B').counts, { 'Datovare': 1, 'Medarbeider': 1, 'Uten årsak': 1 });
+assert.deepStrictEqual(qrd2.codes, qrd2.reasons.map(r => r.name));
+const codeN = (id) => qrd2.codes.map(c => qrd2.rows.find(r => r.id === id).codes[c].n);
+assert.deepStrictEqual([codeN('A'), codeN('B')], [[1, 1, 0], [1, 0, 1]]);
 // overvåkede rabattårsaker: bong-flagg, terskler og kasserer-flagg
 assert.deepStrictEqual(L.watchReasons({ discWatch: '2, 4;5,5,xyz, Best før' }), ['Feil pris', 'Reserveløsning kupong', 'Annen rabattårsak', 'Best før']);
 assert.deepStrictEqual(L.watchReasons({ discWatch: '' }), []);
@@ -600,17 +598,17 @@ const wd = L.discounts(wit, wsc, C2);
 assert.deepStrictEqual(wd.findings.filter(f => f.code === 'discWatch').map(f => f.ids[0]), ['w-1', 'w-2', 'w-3', 'w-5', 'w-6']);
 assert.match(wd.findings.find(f => f.code === 'discWatch').detail, /Kasse 1 12:00 kasserer A: VARE −10 kr \(16.7 %\) – årsak Feil pris/);
 assert.strictEqual(wd.findings.find(f => f.code === 'discWatch').flag, true);
-assert.deepStrictEqual(wd.findings.filter(f => f.code === 'discWatchCash').map(f => [f.cashier, f.flag]), [['A', false]]);
-assert.match(wd.findings.find(f => f.code === 'discWatchCash').detail, /3 av 4 bonger.*Feil pris 1, Reserveløsning kupong 1, Annen rabattårsak 1; grense 3/);
-assert.deepStrictEqual([wd.total.withW, wd.rows.find(r => r.id === 'A').withW, wd.rows.find(r => r.id === 'A').flagW, wd.rows.find(r => r.id === 'B').flagW], [5, 3, true, false]);
-const wf = (o) => L.discounts(wit, wsc, Object.assign({}, C2, o)).findings.filter(f => /^discWatch/.test(f.code)).map(f => f.code === 'discWatch' ? f.ids[0] : f.cashier);
-assert.deepStrictEqual(wf({ discWatchPct: '5' }), ['w-1', 'w-2', 'w-3', 'w-6', 'A']);
+const wf = (o) => L.discounts(wit, wsc, Object.assign({}, C2, o)).findings.filter(f => /^discWatch/.test(f.code)).map(f => f.ids[0]);
+assert.deepStrictEqual(wf({ discWatchPct: '5' }), ['w-1', 'w-2', 'w-3', 'w-6']);
 assert.deepStrictEqual(wf({ discWatchKr: '5' }), ['w-1', 'w-3', 'w-6']);
-assert.deepStrictEqual(wf({ discWatchN: '' }), ['w-1', 'w-2', 'w-3', 'w-5', 'w-6']);
 assert.deepStrictEqual(wf({ discWatch: '' }), []);
 assert.deepStrictEqual(wf({ discWatch: '1' }), ['w-4']);
-assert.ok(L.RISK_WEIGHTS['Rabatt med overvåket årsak'] > 0 && L.reasonWeight('Mange rabatter med overvåket årsak', W) > 0);
-assert.ok(L.reasonWeight('Rabatt uten årsak', W) > 0 && L.RISK_WEIGHTS['Mange rabatter uten årsak'] > 0);
+assert.ok(L.RISK_WEIGHTS['Rabatt med overvåket årsak'] > 0 && L.reasonWeight('Mange rabatter med årsakskode', W) > 0);
+['Rabatt uten årsak', 'Mange rabatter uten årsak', 'Mange rabatter med overvåket årsak', 'Hull i bongnummer', 'Gjentatte kassadifferanser', 'Retur og kassadifferanse henger sammen', 'Medlem uten kjøpeutbytte', 'Kjøpeutbytte avviker fra varesum',
+  'Linjer stemmer ikke med totalen', 'Betaling stemmer ikke med totalen', 'MVA stemmer ikke', 'Ugyldig MVA-sats', 'Samme betalingsreferanse på flere bonger', 'Spesialbetaling på bong', 'Mange spesialbetalinger'].forEach(k => assert.ok(!(k in L.RISK_WEIGHTS), 'fjernet: ' + k));
+['maxGap', 'diffRepeatN', 'diffMin', 'diffTotal', 'corrRho', 'corrDays', 'discPct', 'discMatchNR', 'discWatchN', 'kuMissing', 'kuDiffPct', 'kuDiffKr', 'evOn', 'lineTol', 'payTol', 'vatOn', 'vatTol', 'vatRates', 'refDup', 'specialWords', 'specialN', 'campBongs', 'campCashiers', 'campDay']
+  .forEach(k => assert.ok(!(k in L.defaultControl()), 'fjernet terskel: ' + k));
+assert.deepStrictEqual([L.defaultControl().evWords, L.defaultControl().discCashN], ['', '3'], 'hendelsesord er en tom liste brukeren setter opp selv');
 // innstillingsgrupper: hver terskel, avviksgrense og vekt ligger i nøyaktig én gruppe
 const sgFields = L.SETTING_GROUPS.flatMap(g => g.fields.map(f => f.src + ':' + f.k));
 assert.strictEqual(new Set(sgFields).size, sgFields.length, 'ingen felt i to grupper');
@@ -714,45 +712,36 @@ assert.strictEqual(L.priceDeviation([lowA], pitems, pscan, L.defaultControl()).f
 const pOld = Object.assign({}, pscan, { [lowA.transactionId]: Object.assign({}, pscan[lowA.transactionId], { v: 3 }) });
 assert.ok(L.priceDeviation(pitems, pitems, pOld, L.defaultControl()).coverage < 1, 'v3-skanninger har ikke enhetspris');
 
-// ---- kjøpeutbytte ----
-const kitems = [], kscan = {};
-for (let i = 0; i < 12; i++) {
-  const it = R4(1005, 1, '10', '2026-10-06', '1' + (i % 10) + ':3' + (i % 6), 200, 'K' + i);
-  kitems.push(it);
-  kscan[it.transactionId] = sc4([{ c: '7000000000009', n: 'VARE', a: 200 }], { ku: { g: 190, k: 3.8, m: 0.7 } });
-}
-const noTab = kitems[0], oddG = kitems[1];
-delete kscan[noTab.transactionId].ku;
-kscan[oddG.transactionId].ku = { g: 60, k: 1.2, m: 0.2 };
-const kc = L.kuChecks(kitems, kitems, kscan, L.defaultControl());
-assert.strictEqual(kc.applicable, true);
-assert.deepStrictEqual(kc.findings.map(f => [f.code, f.ids[0]]).sort(), [['kuDiff', oddG.transactionId], ['kuMissing', noTab.transactionId]].sort());
-assert.ok(Math.abs(kc.ratio - 0.95) < 0.001);
-assert.match(kc.findings.find(f => f.code === 'kuDiff').detail, /grunnlag 60\.00 kr mot varesum 200\.00 kr \(vanlig forhold 95 %, her 30 %\)/);
-const kHalf = Object.assign({}, kscan);
-kitems.slice(0, 5).forEach(it => { kHalf[it.transactionId] = sc4([{ c: '7000000000009', n: 'VARE', a: 200 }]); });
-const kc2 = L.kuChecks(kitems, kitems, kHalf, L.defaultControl());
-assert.strictEqual(kc2.applicable, false);
-assert.ok(!kc2.findings.some(f => f.code === 'kuMissing'), 'tabell mangler på de fleste medlemsbonger: fravær er ikke et signal');
-assert.strictEqual(L.kuChecks(kitems, kitems, kscan, Object.assign(L.defaultControl(), { kuMissing: '', kuDiffPct: '' })).findings.length, 0);
-assert.strictEqual(L.kuChecks(kitems.slice(0, 5), kitems.slice(0, 5), kscan, L.defaultControl()).applicable, false, 'under 10 medlemsbonger');
-
 // ---- hendelsesord og diagnostikk ----
 const evIt = R4(1005, 1, '10', '2026-10-07', '09:00', 10, null), evIt2 = R4(1005, 1, '11', '2026-10-07', '09:05', 10, null);
 const evScan = { [evIt.transactionId]: sc4([], { ev: [{ k: 'annull', t: 'Linje annullert' }], unk: ['Linje annullert', 'Rar tekst'] }), [evIt2.transactionId]: sc4([], { unk: ['Rar tekst'] }), old: { v: 3, items: [] } };
-const ew = L.eventWords([evIt, evIt2], evScan, L.defaultControl());
+const evCfg = (w) => Object.assign(L.defaultControl(), { evWords: w });
+const ew0 = L.eventWords([evIt, evIt2], evScan, L.defaultControl());
+assert.deepStrictEqual([ew0.findings.length, ew0.hits, ew0.words], [0, 0, []], 'tom liste: av');
+const ew = L.eventWords([evIt, evIt2], evScan, evCfg('annullert'));
 assert.deepStrictEqual(ew.findings.map(f => [f.title, f.flag, f.ids[0]]), [['Hendelsesord på bong', true, evIt.transactionId]]);
-assert.match(ew.findings[0].detail, /Kasse 1 09:00 kasserer 10: «Linje annullert»/);
-const ew0 = L.eventWords([evIt, evIt2], evScan, Object.assign(L.defaultControl(), { evOn: '' }));
-assert.deepStrictEqual([ew0.findings.length, ew0.hits], [0, 1]);
+assert.match(ew.findings[0].detail, /Kasse 1 09:00 kasserer 10: «Linje annullert» \(tekst\)/);
+assert.deepStrictEqual([ew.hits, ew.scanned, ew.byWord['annullert'].bongs], [1, 2, 1]);
+assert.strictEqual(L.eventWords([evIt, evIt2], evScan, evCfg('rar tekst, annullert')).findings.length, 2, 'egne ord treffer også andre tekstlinjer');
+assert.strictEqual(L.eventWords([evIt, evIt2], evScan, evCfg('annull')).findings.length, 0, 'hele ord');
+const evCov = L.eventWords([evIt], evScan, evCfg('annullert'), { [evIt.transactionId]: true });
+assert.strictEqual(evCov.findings.length, 1, 'andre ord enn spør pris og manuell telles også på dekkede bonger');
+const evCov2 = L.eventWords([evIt], { [evIt.transactionId]: sc4([], { ev: [{ k: 'manuell', t: 'Manuell pris' }] }) }, evCfg('manuell'), { [evIt.transactionId]: true });
+assert.deepStrictEqual([evCov2.findings.length, evCov2.covered], [0, 1], 'manuell og spør pris er dekket av egne tester');
+const evPay = L.eventWords([evIt], { [evIt.transactionId]: sc4([{ c: '1', n: 'Gavekort', a: 100 }], { pay: { 'Eget forbruk': 30 } }) }, evCfg('eget forbruk, gavekort'));
+assert.match(evPay.findings[0].detail, /«Eget forbruk» \(betaling, 30\.00 kr\), «Gavekort» \(linje, 100\.00 kr\)/);
+assert.strictEqual(L.matches(evIt, F({ event: '*' }), { scan: { [evIt.transactionId]: evScan[evIt.transactionId] }, evWords: 'annullert' }), true);
+assert.strictEqual(L.matches(evIt2, F({ event: 'annullert' }), { scan: { [evIt2.transactionId]: evScan[evIt2.transactionId] }, evWords: 'annullert' }), false);
+assert.strictEqual(L.matches(evIt, F({ event: '*' }), { scan: { [evIt.transactionId]: evScan[evIt.transactionId] }, evWords: '' }), false, 'tom liste gir ingen treff');
 const dg = L.diagnostics(evScan);
 assert.deepStrictEqual([dg.total, dg.v4], [3, 2]);
 assert.deepStrictEqual(dg.unk.map(u => [u.t, u.n]), [['Rar tekst', 2], ['Linje annullert', 1]]);
 assert.deepStrictEqual(dg.ev.map(e => [e.k, e.n, e.id]), [['annull', 1, evIt.transactionId]]);
-assert.deepStrictEqual(dg.ku, { with: 0, without: 2 });
+assert.ok(!('ku' in dg));
 assert.strictEqual(L.groupForReason('Kasserer bruker eget medlemsnr'), 'member');
 assert.strictEqual(L.groupForReason('Hendelsesord på bong'), 'events');
-assert.strictEqual(L.groupForReason('Kjøpeutbytte avviker fra varesum'), 'ku');
+assert.strictEqual(L.groupForReason('Mange rabatter med årsakskode'), 'disc');
+assert.strictEqual(L.groupForReason('Kontant tilbake uten salg flere ganger'), 'bong');
 assert.strictEqual(L.groupForReason('Mange avvikende priser'), 'price');
 }
 
@@ -851,7 +840,7 @@ assert.strictEqual(L.groupForReason('Mange avvikende priser'), 'price');
 }
 
 
-// ---- bongregnskap: Totalt, betaling, MVA og betalingsreferanse ----
+// ---- parser: Totalt, Øreavrunding, referanser og MVA-tabell ----
 {
   const T = (a, c) => [a, '', c];
   const f2 = (n) => n.toFixed(2);
@@ -865,71 +854,6 @@ assert.strictEqual(L.groupForReason('Mange avvikende priser'), 'price');
     if (o.mva) { rows.push(['MVA-grunnlag', 'MVA-%', 'MVA', 'Sum']); o.mva.forEach((v) => rows.push([f2(v[0]), v[1] + ' %', f2(v[2]), f2(v[3])])); }
     return rows;
   };
-  const mk = (o) => {
-    const id = '1001-1-' + (++seq);
-    const it = { transactionId: id, endDateTime: o.time || '2026-10-02 10:' + String(10 + (seq % 40)), storeNumber: 1001, workstationNumber: o.ws || 1, cashierNumber: '10', totalAmount: o.tot, receiptType: 1 };
-    return { it, sc: L.parseReceipt(mkRows(o)) };
-  };
-  const good = (i) => mk({ lines: [100 + i, 20], tot: 120 + i, pay: { Bank: 120 + i }, mva: [[96 + i * 0.8, 25, 24 + i * 0.2, 120 + i]] });
-  // 25 % MVA: grunnlag = total/1,25
-  const vatOf = (tot) => [[Math.round(tot / 1.25 * 100) / 100, 25, Math.round((tot - tot / 1.25) * 100) / 100, tot]];
-  const base = []; for (let i = 0; i < 12; i++) base.push(mk({ lines: [100 + i, 20], tot: 120 + i, pay: { Bank: 120 + i }, mva: vatOf(120 + i) }));
-  const badLine = mk({ lines: [100, 150], tot: 250, pay: { Bank: 250 }, mva: vatOf(250) }); badLine.sc = L.parseReceipt(mkRows({ lines: [100, 132], tot: 250, pay: { Bank: 250 }, mva: vatOf(250) }));
-  const badPay = mk({ lines: [100, 20], tot: 120, pay: { Bank: 100 }, mva: vatOf(120) });
-  const badVat = mk({ lines: [100, 20], tot: 120, pay: { Bank: 120 }, mva: [[96, 25, 30, 126]] });
-  const badRate = mk({ lines: [100, 20], tot: 120, pay: { Bank: 120 }, mva: [[100, 20, 20, 120]] });
-  const noTot = mk({ lines: [50], tot: 50, pay: { Bank: 50 } }); delete noTot.sc.tot;
-  const roundA = mk({ lines: [99.7], tot: 99.5, rnd: -0.2, pay: { Kontant: 99.5 } });
-  const roundB = mk({ lines: [99.7], tot: 99.7, rnd: -0.2, pay: { Kontant: 99.5 } });
-  const change = mk({ lines: [60], tot: 60, pay: { Kontant: 100, 'Kontant tilbake': 40 } });
-  const ret = mk({ lines: [-150], tot: -150, pay: { 'Kontant tilbake': 150 } });
-  const all = base.concat([badLine, badPay, badVat, badRate, noTot, roundA, roundB, change, ret]);
-  const scan = {}, items = all.map((x) => { scan[x.it.transactionId] = x.sc; return x.it; });
-  const lg = L.ledger(items, items, scan, L.defaultControl());
-  const byCode = (c) => lg.findings.filter((f) => f.code === c);
-  assert.deepStrictEqual([lg.lines.applicable, lg.pay.applicable, lg.vat.applicable], [true, true, true]);
-  assert.deepStrictEqual(byCode('lineSum').map((f) => f.ids[0]), [badLine.it.transactionId]);
-  assert.match(byCode('lineSum')[0].detail, /linjene summerer til 232\.00 kr, Totalt er 250\.00 kr \(differanse -18\.00\)/);
-  assert.deepStrictEqual(byCode('paySum').map((f) => f.ids[0]), [badPay.it.transactionId]);
-  assert.match(byCode('paySum')[0].detail, /betalt netto 100\.00 kr, Totalt er 120\.00 kr/);
-  assert.deepStrictEqual(byCode('vatSum').map((f) => f.ids[0]), [badVat.it.transactionId]);
-  assert.match(byCode('vatSum')[0].detail, /MVA 30\.00 mot grunnlag 96\.00 × 25 % = 24\.00/);
-  assert.deepStrictEqual(byCode('vatRate').map((f) => f.ids[0]), [badRate.it.transactionId]);
-  assert.match(byCode('vatRate')[0].detail, /sats 20 % \(gyldige: 0, 12, 15, 25\)/);
-  assert.ok(!lg.findings.some((f) => [roundA, roundB, change, ret, noTot].some((x) => f.ids.includes(x.it.transactionId))), 'avrunding, veksel, retur og manglende Totalt gir ikke funn');
-  assert.ok(lg.findings.every((f) => f.flag === true));
-  assert.strictEqual(lg.withTot, all.length - 1);
-  // uten tilstrekkelig bevis for regnskapsmåten gis ingen funn
-  const few = L.ledger(items.slice(0, 5), items.slice(0, 5), scan, L.defaultControl());
-  assert.deepStrictEqual([few.lines.applicable, few.findings.length], [false, 0]);
-  const wrong = all.map((x) => mk({ lines: [10], tot: 99, pay: { Bank: 99 } }));
-  const wScan = {}, wItems = wrong.map((x) => { wScan[x.it.transactionId] = x.sc; return x.it; });
-  const wl = L.ledger(wItems, wItems, wScan, L.defaultControl());
-  assert.deepStrictEqual([wl.lines.applicable, wl.findings.filter((f) => f.code === 'lineSum').length], [false, 0], 'konsekvent annen regnskapsmåte: ikke et funn');
-  // av/på og toleranser
-  const off = L.ledger(items, items, scan, Object.assign(L.defaultControl(), { lineTol: '', payTol: '', vatOn: '' }));
-  assert.deepStrictEqual(off.findings.map((f) => f.code), []);
-  assert.strictEqual(L.ledger(items, items, scan, Object.assign(L.defaultControl(), { lineTol: '30' })).findings.filter((f) => f.code === 'lineSum').length, 0);
-  assert.strictEqual(L.ledger(items, items, scan, Object.assign(L.defaultControl(), { vatRates: '0,25,20' })).findings.filter((f) => f.code === 'vatRate').length, 0);
-  // v4-skanninger har ikke Totalt: dekning, ingen funn
-  const v4 = {}; items.forEach((it) => { v4[it.transactionId] = Object.assign({}, scan[it.transactionId], { v: 4 }); });
-  const lv4 = L.ledger(items, items, v4, L.defaultControl());
-  assert.deepStrictEqual([lv4.scanned, lv4.findings.length], [0, 0]);
-  // betalingsreferanse
-  const r1 = mk({ lines: [10], tot: 10, pay: { Bank: 10 }, rf: ['TransId: DK7TV5W2F', 'Referanse: 44321'], time: '2026-10-02 11:00' });
-  const r2 = mk({ lines: [20], tot: 20, pay: { Bank: 20 }, rf: ['TransId: DK7TV5W2F'], time: '2026-10-02 11:20', ws: 2 });
-  const r3 = mk({ lines: [30], tot: 30, pay: { Bank: 30 }, rf: ['Referanse: 44321'], time: '2026-10-02 11:30' });
-  const r4 = mk({ lines: [40], tot: 40, pay: { Bank: 40 }, rf: ['Referanse: 44321'], time: '2026-10-03 11:30' });
-  const r5 = mk({ lines: [50], tot: 50, pay: { Bank: 50 }, rf: ['Referanse: 12'], time: '2026-10-02 12:00' });
-  const r6 = mk({ lines: [60], tot: 60, pay: { Bank: 60 }, rf: ['Referanse: 12'], time: '2026-10-02 12:05' });
-  const rr = [r1, r2, r3, r4, r5, r6], rScan = {}, rItems = rr.map((x) => { rScan[x.it.transactionId] = x.sc; return x.it; });
-  assert.deepStrictEqual(r1.sc.rf, ['T:DK7TV5W2F', 'R:44321']);
-  const lr = L.ledger(rItems, rItems, rScan, L.defaultControl());
-  assert.deepStrictEqual(lr.findings.map((f) => f.code), ['refDup', 'refDup']);
-  assert.deepStrictEqual(lr.findings[0].ids.sort(), [r1.it.transactionId, r2.it.transactionId].sort(), 'TransId gjelder alle kasser');
-  assert.deepStrictEqual(lr.findings[1].ids.sort(), [r1.it.transactionId, r3.it.transactionId].sort(), 'Referanse: samme kasse og dag, ikke dagen etter og ikke korte tall');
-  assert.match(lr.findings[0].detail, /Referanse DK7TV5W2F \(TransId\) på 2 bonger: kasse 1 11:00, kasse 2 11:20/);
-  assert.strictEqual(L.ledger(rItems, rItems, rScan, Object.assign(L.defaultControl(), { refDup: '' })).findings.length, 0);
   // parser: Totalt, Øreavrunding, referanser og MVA-tabell fra den virkelige bongen
   const real = L.parseReceipt([T('7071862047727 LINEA GAVEBÅND 20M', '4.36'), T('5712 APPELSIN', '28.41'), ['', 'Totalt', '72.77'], ['Øreavrunding', '-0.30'], T('Coopay:', '72.77'), ['TransId: DK7TVRW5F2PC5'],
     ['MVA-grunnlag', 'MVA-%', 'MVA', 'Sum'], ['35.49', '25 %', '8.87', '44.36', ''], ['25.00', '15 %', '3.75', '28.75', '']]);
@@ -955,13 +879,12 @@ assert.strictEqual(L.groupForReason('Mange avvikende priser'), 'price');
 }
 
 
-// ---- siste siffer, løpenummer mot tid, retur mot kassadifferanse ----
+// ---- siste siffer og løpenummer mot tid ----
 {
   // χ²-fordelingen og Spearman
   const near = (a, b, e) => Math.abs(a - b) <= e;
   assert.ok(near(L.chiSqP(16.919, 9), 0.05, 0.0005) && near(L.chiSqP(21.666, 9), 0.01, 0.0002) && near(L.chiSqP(27.877, 9), 0.001, 0.00002) && near(L.chiSqP(3.841, 1), 0.05, 0.0005) && L.chiSqP(0, 5) === 1);
-  assert.deepStrictEqual([L.spearman([1, 2, 3, 4, 5], [5, 4, 3, 2, 1]), L.spearman([1, 2, 3, 4, 5], [10, 20, 30, 40, 50]), L.spearman([1, 1, 1], [1, 2, 3]), L.spearman([1, 2], [1, 2])], [-1, 1, null, null]);
-  assert.ok(near(L.spearman([1, 2, 3, 4], [1, 3, 2, 4]), 0.8, 1e-9));
+  assert.ok(!('spearman' in L) && !('retDiffCorr' in L) && !('diffTrend' in L), 'kassadifferanse over tid er fjernet');
   // siste siffer
   const even = [10, 10, 10, 10, 10, 10, 10, 10, 10, 10];
   assert.ok(L.lastDigitTest(even.map((x) => x / 2), even).p > 0.99, 'samme fordeling gir høy p');
@@ -988,30 +911,10 @@ assert.strictEqual(L.groupForReason('Mange avvikende priser'), 'price');
   assert.deepStrictEqual(dr.findings.filter((f) => f.code === 'seqReg').map((f) => f.ids[0]), ['1001-1-105'], 'bare ett punkt ligger utenfor naboene; dagsskiftet gir ikke treff');
   assert.match(dr.findings.find((f) => f.code === 'seqReg').detail, /Kasse 1: nr 105 kl 09:03 2026-10-02 ligger 299 min fra de nærmeste nabonumrene \(2026-10-02 14:02 – 2026-10-02 14:08\)/);
   assert.ok(dr.findings.find((f) => f.code === 'seqReg').flag);
+  assert.strictEqual(dr.findings.filter((f) => f.code === 'timeInversion').length, 0, 'bongen som ligger langt fra naboene telles ikke en gang til som byttet rekkefølge');
   assert.strictEqual(L.deletedReceipts(qs, Object.assign(L.defaultControl(), { seqRegMin: '' })).findings.filter((f) => f.code === 'seqReg').length, 0);
   assert.strictEqual(L.deletedReceipts(qs, Object.assign(L.defaultControl(), { seqRegMin: '400' })).findings.filter((f) => f.code === 'seqReg').length, 0);
   assert.strictEqual(L.deletedReceipts(qs.slice(0, 4), L.defaultControl()).findings.filter((f) => f.code === 'seqReg').length, 0, 'for få naboer');
-  // retur mot kassadifferanse
-  const cItems = [], cScan = {};
-  const day = (d) => '2026-10-' + String(d + 1).padStart(2, '0');
-  for (let d = 0; d < 10; d++) {
-    ['X', 'Y', 'Z'].forEach((c) => {
-      for (let i = 0; i < 10; i++) {
-        const ret = c === 'X' ? d : c === 'Y' ? 1 : 0;
-        cItems.push({ transactionId: c + d + '-' + i, endDateTime: day(d) + ' 10:' + String(10 + i), storeNumber: 1, workstationNumber: 1, cashierNumber: c, receiptType: 1, totalAmount: i < ret ? -20 : 50 });
-      }
-      const sid = c + d + '-settle', diff = c === 'X' ? -10 * d - 5 : c === 'Y' ? (d % 2 ? -3 : 4) : 0;
-      cItems.push({ transactionId: sid, endDateTime: day(d) + ' 21:00', storeNumber: 1, workstationNumber: 1, cashierNumber: c, receiptType: 2, totalAmount: null });
-      cScan[sid] = { settle: { diff: { sum: diff } } };
-    });
-  }
-  const cr = L.retDiffCorr(cItems, cScan, L.defaultControl());
-  assert.deepStrictEqual(cr.findings.map((f) => [f.cashier, f.flag, f.title]), [['X', false, 'Retur og kassadifferanse henger sammen']]);
-  assert.match(cr.findings[0].detail, /Kasserer X: dager med mange returer har mer minus i kassen \(ρ -1,00 over 10 dager\), differanse totalt -500 kr, returandel 45 % mot butikkens 18 %/);
-  assert.deepStrictEqual(cr.rows.map((r) => [r.id, r.days, r.flag]), [['X', 10, true], ['Y', 10, false], ['Z', 10, false]]);
-  assert.strictEqual(L.retDiffCorr(cItems, cScan, Object.assign(L.defaultControl(), { corrRho: '' })).findings.length, 0);
-  assert.strictEqual(L.retDiffCorr(cItems, cScan, Object.assign(L.defaultControl(), { corrDays: '11' })).findings.length, 0, 'for få dager');
-  assert.strictEqual(L.retDiffCorr(cItems.filter((i) => i.receiptType !== 2), cScan, L.defaultControl()).rows.length, 0, 'uten oppgjør ingen punkter');
 }
 
 // butikknavn fra cellen i BUTIKK-kolonnen

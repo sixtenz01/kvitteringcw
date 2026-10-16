@@ -65,9 +65,9 @@ L.DISC_REASONS.forEach((r, i) => has(r));
 // tast og snarveier som pluginen faktisk har
 ['Alt+K', 'Alt+klikk'].forEach((t) => assert.ok(html.includes(t.replace('Alt+', '<kbd>Alt</kbd>+').replace('+K', '+<kbd>K</kbd>')) || text.includes(t) || html.includes('<kbd>Alt</kbd>+'), t));
 
-// tegnforklaringen i hjelpen og i veiledningen følger hverandre, og kampanjespørsmålet og butikknavn er forklart
-['Søk i bongen', 'Betalingsmåte', 'Tempo: tid mellom bonger', 'Overvåkede varer', 'Retur av vare uten kjøp', 'Topptekst og bunn', 'versjon 7', 'kanaltabell', 'Overstrøket årsak', 'Kan være sentral kampanje', 'Svar nå', 'Rabatt uten årsak', 'Mulig sentral kampanje', 'Nivå og avdelingsnummer', 'Spesialbetaling', 'Spør pris', 'Samme forhold', 'kampanjesvar', 'Ja, kampanje', 'Nei, ikke kampanje', 'Angre', 'Gi butikken navn'].forEach(has);
-['Overstrøket årsak', 'sentral kampanje', 'Panelstørrelse'].forEach((t) => assert.ok(content.includes(t), 'hjelpen i panelet mangler «' + t + '»'));
+// tegnforklaringen i hjelpen og i veiledningen følger hverandre, og rabatt med årsakskode og butikknavn er forklart
+['Søk i bongen', 'Betalingsmåte', 'Tempo: tid mellom bonger', 'Overvåkede varer', 'Retur av vare uten kjøp', 'Topptekst og bunn', 'versjon 7', 'kanaltabell', 'Overstrøket årsak', 'Rabatt med årsakskode', 'Kasserere over snittet', 'Snitt alle kasserere', 'Nivå og avdelingsnummer', 'Hendelsesord', 'Spør pris', 'Samme forhold', 'Gi butikken navn'].forEach(has);
+['Overstrøket årsak', 'Panelstørrelse'].forEach((t) => assert.ok(content.includes(t), 'hjelpen i panelet mangler «' + t + '»'));
 
 // ---- lenker og bilder er hele
 const ids = {};

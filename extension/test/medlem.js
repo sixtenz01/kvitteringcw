@@ -2,7 +2,7 @@ const { chromium } = require('playwright');
 const path = require('path');
 const assert = require('assert');
 
-// Kryssjekker på tvers av bonger: medlemsnr, pris per vare, kjøpeutbytte, hendelsesord og diagnostikk.
+// Kryssjekker på tvers av bonger: medlemsnr, pris per vare, hendelsesord (egen liste) og diagnostikk. Kjøpeutbytte-tabellen leses fortsatt, men kontrolleres ikke.
 const T = (a, c) => `<tr><td>${a}</td><td></td><td>${c}</td></tr>`;
 const ONE = (c, n, a) => T(`${c} ${n}`, a);
 const KU = (g, k) => `<tr><td>Grunnlag</td><td>Kjøpeutbytte</td><td>MVA bonus</td></tr><tr><td>${g}</td><td>${k}</td><td>0.10</td></tr>`;
@@ -74,6 +74,13 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
     await page.waitForFunction(() => /Kontroller ferdig/.test(document.getElementById('kvr-panel').innerText), null, { timeout: 60000 });
   };
 
+  // hendelsesord er en liste brukeren setter opp selv: tom til de legger inn ord
+  await go('Mer', 'Innstillinger');
+  await page.click('[data-sec=set-events] summary');
+  assert.strictEqual(await page.locator('[data-sec=set-events] input[aria-label="Ord (komma)"]').inputValue(), '');
+  await page.check('[data-sec=set-events] input[aria-label="Ord (komma): på"]');
+  await page.locator('[data-sec=set-events] input[aria-label="Ord (komma)"]').fill('annullert, makulert');
+  await page.locator('[data-sec=set-events] input[aria-label="Ord (komma)"]').press('Tab');
   await go('Analyse', 'Sjekk først');
   await runAnalysis();
   await go('Analyse', 'Detaljer');
@@ -88,14 +95,13 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   // pris per vare
   assert.match(fnd, /Pris: Avvikende pris på vare Kasse 2 \(1005\) 15:00 kasserer C: MELK 1L kr 8\.00 mot vanlig 12\.90 \(−38 %\)/);
   assert.match(fnd, /Pris: Mange avvikende priser Kasserer C \(1005\): 3 varelinjer/);
-  // kjøpeutbytte
-  assert.match(fnd, /Kjøpeutbytte: Medlem uten kjøpeutbytte Kasse 1 \(1005\) 00:45 kasserer B: medlemsnr K0 men ingen Kjøpeutbytte-tabell \(16 av 17 medlemsbonger har den\)/);
+  assert.doesNotMatch(fnd, /Kjøpeutbytte|kjøpeutbytte/, 'kjøpeutbytte kontrolleres ikke lenger');
   // hendelsesord
   assert.match(fnd, /Hendelse: Hendelsesord på bong Kasse 1 \(1005\) 09:00 kasserer A: «Linje annullert av kasserer»/);
   const misc = await txt('[data-sec=misc]');
   assert.match(misc, /Pris per vare 29 av 29 salg har enhetspris/);
-  assert.match(misc, /Kjøpeutbytte 17 medlemssalg, 17 skannet med ny skanning, 16 med Kjøpeutbytte-tabell\. Tabellen finnes på de fleste medlemsbonger/);
-  assert.match(misc, /1 av 29 skannede bonger har ord som annullert/);
+  assert.doesNotMatch(misc, /Kjøpeutbytte/);
+  assert.match(misc, /Hendelsesord 1 av 29 skannede bonger har ett av ordene: annullert, makulert\./);
 
   // flaggene gir poeng og forklaring
   await go('Analyse', 'Sjekk først');

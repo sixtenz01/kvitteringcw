@@ -2,7 +2,7 @@ const { chromium } = require('playwright');
 const path = require('path');
 const assert = require('assert');
 
-// Pantelapper (99 manuell, 399 maskin), slettede linjer, spesialbetaling, rabatt-prosent, spør pris og kort via skanning i visningsfeltet.
+// Pantelapper (99 manuell, 399 maskin), slettede linjer, hendelsesord, rabatt med årsakskode, rabatt-prosent, spør pris og kort via skanning i visningsfeltet.
 const f2 = (n) => n.toFixed(2);
 const TR = (a, c) => `<tr><td>${a}</td><td></td><td>${c}</td></tr>`;
 const E1 = '7038010000010', E2 = '7038010000027', E3 = '7038010000034';
@@ -23,8 +23,10 @@ add({ cashier: 'C', time: '2026-10-02 13:00', tot: -150, body: [vare(E1, 'MELK',
 // 4: eget forbruk
 add({ cashier: 'C', tot: 30, body: [vare(E2, 'KAFFE', 30), TR('Eget forbruk:', '30.00')] });
 // 5: rabatt 80 % og 40 % uten treff
-add({ cashier: 'D', tot: 10, body: [vare(E2, 'KAFFE', 10), '<tr><td>Rabatt: Kr 40.00 (80 %)</td></tr>', TR('Bank:', '10.00')] });
-add({ cashier: 'D', tot: 12, body: [vare(E3, 'JUICE', 12), '<tr><td>Rabatt: Kr 8.00 (40 %)</td></tr>', TR('Bank:', '12.00')] });
+add({ cashier: 'D', tot: 10, body: [vare(E2, 'KAFFE', 10), '<tr><td>Rabatt: Kr 40.00 (80 %)</td></tr>', '<tr><td>Rabatt årsak: 1</td></tr>', TR('Bank:', '10.00')] });
+add({ cashier: 'D', tot: 12, body: [vare(E3, 'JUICE', 12), '<tr><td>Rabatt: Kr 8.00 (40 %)</td></tr>', '<tr><td>Rabatt årsak: 1</td></tr>', TR('Bank:', '12.00')] });
+// rabatt uten årsak (90 %) analyseres ikke
+add({ cashier: 'D', tot: 5, body: [vare(E2, 'KAFFE', 5), '<tr><td>Rabatt: Kr 45.00 (90 %)</td></tr>', TR('Bank:', '5.00')] });
 // 6: tre returer på samme Visa
 for (let i = 0; i < 3; i++) add({ cashier: i === 1 ? 'B' : 'A', tot: -100, time: `2026-10-0${i + 1} 15:00`, body: [vare(E1, 'RETUR', -100), TR('Visa:', '-100.00'), '<tr><td>Kort: ************1234</td></tr>'] });
 // 7: spør pris: fire vanlige salg av melk til 20, én med spør pris til 12
@@ -86,6 +88,14 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
     await go('Analyse', 'Detaljer');
     await page.click('button:text-is("Åpne alle")');
   };
+  // hendelsesord er en liste brukeren setter opp selv
+  await go('Mer', 'Innstillinger');
+  if (!(await page.$eval('[data-sec=set-events]', d => d.open))) await page.click('[data-sec=set-events] summary');
+  assert.strictEqual(await page.locator('[data-sec=set-events] input[aria-label="Ord (komma)"]').inputValue(), '', 'tom liste som standard');
+  await page.check('[data-sec=set-events] input[aria-label="Ord (komma): på"]');
+  await page.locator('[data-sec=set-events] input[aria-label="Ord (komma)"]').fill('eget forbruk, internt forbruk, utbetaling, finansiering, sjekk');
+  await page.locator('[data-sec=set-events] input[aria-label="Ord (komma)"]').press('Tab');
+  await page.waitForTimeout(300);
   await analyse();
   const fnd = await txt('[data-sec=findings]');
   assert.match(fnd, /Pantelapp: Manuell pantelapp Kasse 1 10:\d\d kasserer A: 1 manuell pantelapp \(kode 99\), 60\.00 kr/);
@@ -93,7 +103,8 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   assert.match(fnd, /Pantelapp: Pantelapp slettet .*kasserer C: 1 × pantelapp 25\.00 kr slettet \(linje og motlinje\)/);
   assert.match(fnd, /Slettede linjer: Varelinjer slettet, pant utbetalt kontant .*1 varelinje slettet \(150\.00 kr\)\. Igjen er bare pant, og 150\.00 kr betalt tilbake kontant/);
   assert.match(fnd, /Mønster: Kontant tilbake uten salg flere ganger|Slettede linjer: Varelinjer slettet/);
-  assert.match(fnd, /Spesialbetaling: Spesialbetaling på bong .*«Eget forbruk» \(betaling, 30\.00 kr\)/);
+  assert.match(fnd, /Hendelse: Hendelsesord på bong .*«Eget forbruk» \(betaling, 30\.00 kr\)/);
+  assert.doesNotMatch(fnd, /−45 kr \(90 %\)/, 'rabatt uten årsak flagges ikke');
   assert.match(fnd, /Rabatt: Høy rabattprosent .*KAFFE −40 kr \(80 %\)/);
   assert.match(fnd, /Rabatt: Rabatt uten treff på andre salg .*JUICE −40 % \(ingen andre dager heller\)/);
   assert.match(fnd, /Kort: Gjentatte returer på samme kort Kort VISA …1234: 3 returer innen 30 dager, totalt 300\.00 kr \(kasserer A ×2, B ×1\)/);
@@ -103,9 +114,10 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   const lapp = await txt('[data-sec=lapp]');
   assert.match(lapp, /Pantemaskin \(kode 399\): \d+ pantelapper, 2\d\d,\d\d kr\. Manuelt innlagt \(kode 99\): 1 pantelapper, 60,00 kr/);
   assert.match(lapp, /Kasserer A\s+1 0 · 0,00 1 · 60,00/);
-  const lines = await txt('[data-sec=lines]');
+  const lines = await txt('[data-sec=lines]'), misc = await txt('[data-sec=misc]');
   assert.match(lines, /1 varelinje slettet på 1 bong, 1 av dem med pant og kontant tilbake/);
-  assert.match(lines, /Eget forbruk 1 30,00/);
+  assert.match(misc, /Eget forbruk 1 30,00/);
+  assert.doesNotMatch(lines, /Spesialbetaling/);
   assert.match(lines, /VISA …1234 3 3 300,00/);
 
   // samme forhold teller bare én gang: den svakeste årsaken vises overstrøket med forklaring
@@ -116,17 +128,17 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   assert.ok(cov.some((c) => /Kontant tilbake uten salg\b/.test(c.split('|')[1])), 'kontant tilbake uten salg er dekket av høyere poeng i samme familie');
   assert.ok(await page.$('.kvr-reason:not(.kvr-cov)'));
 
-  // søk: spesialbetaling og rabatt-prosent
+  // søk: hendelsesord og rabatt-prosent
   const viser = async () => (await txt('.kvr-tiles')).match(/^(\d+) \/ (\d+)/)[1];
   await go('Filtrer');
-  await page.selectOption('select[aria-label="Spesialbetaling"]', '*');
+  await page.selectOption('select[aria-label="Hendelsesord"]', '*');
   assert.strictEqual(await viser(), '1');
-  assert.match(await txt('.kvr-chipsrow'), /Spesial: alle ord/);
-  await page.selectOption('select[aria-label="Spesialbetaling"]', 'eget forbruk');
+  assert.match(await txt('.kvr-chipsrow'), /Hendelsesord: alle ord/);
+  await page.selectOption('select[aria-label="Hendelsesord"]', 'eget forbruk');
   assert.strictEqual(await viser(), '1');
-  await page.selectOption('select[aria-label="Spesialbetaling"]', 'sjekk');
+  await page.selectOption('select[aria-label="Hendelsesord"]', 'sjekk');
   assert.strictEqual(await viser(), '0');
-  await page.selectOption('select[aria-label="Spesialbetaling"]', '');
+  await page.selectOption('select[aria-label="Hendelsesord"]', '');
   await page.fill('input[placeholder="fra %"]', '70');
   assert.strictEqual(await viser(), '1', 'bare 80 %-rabatten');
   await page.fill('input[placeholder="fra %"]', '40');

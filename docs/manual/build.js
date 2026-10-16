@@ -28,21 +28,19 @@ const IMG = {
   'sjekk-etter': ['Sjekk først etter analysen', 'Etter analysen: rangerte kasserere og flaggede bonger.'],
   'sjekk-omfang': ['Velg omfang åpnet', 'Velg omfang: periode, sammenligning, butikk, kasserer og kasse.'],
   'sjekk-kort': ['Åpnet kort for flagget bong med markører', 'Et åpnet kort i «Sjekk først».'],
-  'sjekk-kampanje': ['Spørsmål om sentral kampanje under en bong', 'Sjekk først: bongen får et notat og spørsmålet «Stemmer det?» med Ja og Nei.'],
-  'kampanje-dialog': ['Dialogen Mulige sentrale kampanjer', 'Svar nå: alle varer som kan være sentral kampanje, med svar og Angre.'],
   'ch-hours': ['Salg per time', 'Salg per time.'], 'ch-days': ['Salg per dag', 'Salg per dag.'], 'ch-cash': ['Returandel per kasserer', 'Returandel per kasserer.'],
   'ch-heat': ['Kasse mot time', 'Kasse × time.'], 'ch-benford': ['Benford', 'Benford: første siffer i totalbeløp.'], 'ch-pant': ['Pant per dag', 'Pant per dag.'],
   rapport: ['Dagsrapport', 'Rapport-fanen: dagsrapport per kasse.'],
   'fokus-start': ['Fokus uten valg', 'Fokus uten valg: velg kasserer eller kasse.'], 'fokus-a': ['Fokus for en kasserer', 'Fokus for kasserer 4103.'],
   'detaljer-topp': ['Detaljer, øverste del', 'Detaljer: resultat og kontroller, deretter kortene.'],
   'd-profile': ['Kassererprofil', 'Kassererprofil mot butikksnitt.'], 'd-findings': ['Mønstre og funn', 'Mønstre og funn.'], 'd-pantbal': ['Pantelapp-sjekk', 'Pantelapp-sjekk.'],
-  'd-recon': ['Dagsavstemming', 'Dagsavstemming per kasse.'], 'd-diff': ['Kassadifferanse over tid', 'Kassadifferanse over tid.'], 'd-numbers': ['Tallanalyse', 'Tallanalyse: Benford og runde beløp.'],
-  'd-disc': ['Rabatter og kuponger', 'Rabatter og kuponger: tabell per kasserer, per årsak og kasserer × årsak.'],
+  'd-recon': ['Dagsavstemming', 'Dagsavstemming per kasse.'], 'd-numbers': ['Tallanalyse', 'Tallanalyse: Benford og runde beløp.'],
+  'd-disc': ['Rabatt med årsakskode', 'Rabatt med årsakskode: tabell per kasserer med snitt for butikk og alle kasserere, per årsakskode og kasserer × årsakskode.'],
   'd-member': ['Medlemsnummer', 'Medlemsnummer: nummer med flest bonger og funn, med kasserer og andel.'],
-  'd-acct': ['Bongregnskap og referanser', 'Bongregnskap og referanser: dekning og treff for linjer, betaling, MVA og betalingsreferanse.'],
+  'd-acct': ['Topptekst og bunn', 'Topptekst og bunn: dekning og treff for kasserer, kasse, medlem og autorisasjonskode.'],
   'd-lapp': ['Pantelapper: manuell og maskin', 'Pantelapper: manuell (kode 99) mot maskin (kode 399), slettede og gjenbrukte lapper per kasserer.'],
-  'd-lines': ['Linjer, kort og spesialbetaling', 'Slettede og makulerte linjer, spesialbetalinger, spør pris, returer på samme kort og manuell kvittering.'],
-  'd-misc': ['Pris, kjøpeutbytte og hendelser', 'Pris, kjøpeutbytte og hendelser: dekning, avvik og knappen Diagnostikk.'],
+  'd-lines': ['Linjer, kort og retur', 'Slettede og makulerte linjer, spør pris, returer på samme kort, manuell kvittering, tempo, overvåkede varer og retur mot kvittering.'],
+  'd-misc': ['Pris og hendelsesord', 'Pris og hendelsesord: dekning, avvik og knappen Diagnostikk.'],
   'stor-dokket': ['Stor: panelet dokket til høyre', 'Stor: panelet dokkes til høyre, og Lindbak-lista står synlig til venstre.'], 'stor-full': ['Full: panelet over hele skjermen', 'Full: hele skjermen, med kortene i kolonner og brede tabeller.'],
   'd-custom': ['Egne avviksregler', 'Egne avviksregler.'], 'd-tasks': ['Arbeidsoppgaver', 'Arbeidsoppgaver.'], 'd-notes': ['Oppfølging og tastatur', 'Oppfølging og tastatur.'],
   eksport: ['Eksport', 'Mer → Eksport: CSV og PNG.'], 'eksport-revisjon': ['Revisjonsrapport-kortet', 'Mer → Eksport: Revisjonsrapport og loggen.'],
@@ -102,8 +100,8 @@ ${wrows ? `<h4>Poeng i risikoscore</h4><div class="tw"><table class="ref"><thead
   }).join('\n');
 }
 
-const DIA = { hours: ['tHours'], falseRet: ['tFalse', 'tFalse2'], afterSettle: ['tAfter'], deleted: ['tGap'], diff: ['tDiff'], numbers: ['tBenford'], pant: ['tPant'] };
-const SCOPE_OF = { bong: ['Delvis', 'Bong'], patterns: ['Delvis', 'Bong'], falseRet: ['Ja', 'Bong'], afterSettle: ['Nei', 'Bong'], deleted: ['Nei', 'Bong'], diff: ['Ja (oppgjør)', 'Bong (oppgjør)'], numbers: ['Nei', 'Kasserer'], disc: ['Ja', 'Bong og kasserer'], pant: ['Ja', 'Bong'], hours: ['Delvis', 'Bong'], profile: ['Delvis', 'Kasserer'], rules: ['Delvis', 'Bong'], ledger: ['Ja', 'Bong'], lapp: ['Ja', 'Bong og kasserer'], voids: ['Ja', 'Bong og kasserer'], special: ['Ja', 'Bong og kasserer'], ask: ['Ja', 'Bong og kasserer'], card: ['Ja (versjon 6)', 'Bong'], manual: ['Ja', 'Bong'], tempo: ['Nei', 'Bong og kasserer'], watch: ['Ja', 'Bong og kasserer'], retEan: ['Ja', 'Bong'], retkv: ['Ja', 'Bong og kasserer'], hdr: ['Ja (versjon 7)', 'Bong'], member: ['Nei', 'Bong'], price: ['Ja', 'Bong og kasserer'], ku: ['Ja', 'Bong'], events: ['Ja', 'Bong'] };
+const DIA = { hours: ['tHours'], falseRet: ['tFalse', 'tFalse2'], afterSettle: ['tAfter'], deleted: ['tSeq'], numbers: ['tBenford'], pant: ['tPant'] };
+const SCOPE_OF = { bong: ['Delvis', 'Bong'], falseRet: ['Ja', 'Bong'], afterSettle: ['Nei', 'Bong'], deleted: ['Nei', 'Bong'], numbers: ['Nei', 'Kasserer'], disc: ['Ja', 'Bong og kasserer'], pant: ['Ja', 'Bong'], hours: ['Delvis', 'Bong'], profile: ['Delvis', 'Kasserer'], rules: ['Delvis', 'Bong'], lapp: ['Ja', 'Bong og kasserer'], voids: ['Ja', 'Bong og kasserer'], ask: ['Ja', 'Bong og kasserer'], card: ['Ja (versjon 6)', 'Bong'], manual: ['Ja', 'Bong'], tempo: ['Nei', 'Bong og kasserer'], watch: ['Ja', 'Bong og kasserer'], retEan: ['Ja', 'Bong'], retkv: ['Ja', 'Bong og kasserer'], hdr: ['Ja (versjon 7)', 'Bong'], member: ['Nei', 'Bong'], price: ['Ja', 'Bong og kasserer'], events: ['Ja', 'Bong'] };
 
 function testsHtml() {
   const overview = `<div class="tw"><table><thead><tr><th>Test</th><th>Finner</th><th>Krever skanning</th><th>Poeng til</th></tr></thead><tbody>${L.SETTING_GROUPS.map((g) => `<tr><td><a href="#test-${g.id}">${esc(g.title)}</a></td><td>${esc(H.groups[g.id].flags.join('; '))}</td><td>${SCOPE_OF[g.id][0]}</td><td>${SCOPE_OF[g.id][1]}</td></tr>`).join('')}</tbody></table></div>`;
@@ -176,7 +174,7 @@ function pdfPage(pages) {
   const hero = main.slice(0, cut), rest = main.slice(cut);
   const toc = [];
   src.replace(/<h2 id="([\w-]+)"><span class="n">(\d+)<\/span>([^<]+)<\/h2>/g, (m, id, n, t) => { toc.push([id, n, t]); return m; });
-  const subs = { 'kom-i-gang': 'Installere, oppdatere og første gang', panelet: 'Oversikt, arbeidsflyt og hva skanning er', faner: 'Hent, Filtrer, Skann, Analyse og Mer', analysen: 'Poeng, risikonivå, omfang og alle testene', rabatt: 'Rabattlinjer, årsaker og kuponger', revisjon: 'Lag, les og verifiser en revisjonsrapport', innstillinger: 'Alle innstillinger og poengvekter med standardverdier', verktoy: 'Egne regler, arbeidsoppgaver, notater og tastatur' };
+  const subs = { 'kom-i-gang': 'Installere, oppdatere og første gang', panelet: 'Oversikt, arbeidsflyt og hva skanning er', faner: 'Hent, Filtrer, Skann, Analyse og Mer', analysen: 'Poeng, risikonivå, omfang og alle testene', rabatt: 'Rabatt med årsakskode og kasserere over snittet', revisjon: 'Lag, les og verifiser en revisjonsrapport', innstillinger: 'Alle innstillinger og poengvekter med standardverdier', verktoy: 'Egne regler, arbeidsoppgaver, notater og tastatur' };
   const tocHtml = `<section class="pdf-toc"><h2>Innhold</h2><ol>${toc.map((t) => `<li><a href="#${t[0]}"><span class="n">${t[1]}</span><span class="t">${esc(t[2])}</span><span class="dots"></span><span class="p">${pages[t[0]] || '00'}</span></a>${subs[t[0]] ? `<p class="sub">${esc(subs[t[0]])}</p>` : ''}</li>`).join('')}</ol></section>`;
   return `<!doctype html><html lang="nb"><head><meta charset="utf-8"><title>Kvitteringshenter brukerveiledning ${R.VERSION}</title><style>${css}</style></head><body class="pdf"><div class="cover"><div class="brandline"></div>${hero}<p class="coverdate">Laget ${new Date().toLocaleDateString('nb-NO', { day: 'numeric', month: 'long', year: 'numeric' })}</p></div>${tocHtml}<div class="wrap"><main>${rest}</main></div></body></html>`;
 }

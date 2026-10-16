@@ -76,7 +76,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   assert.deepStrictEqual(await labels(), ['1001 – Coop Mega Kolbotn', '1002 – Extra Testby', '1003 – Coop Prix Test', '1004']);
   // innholdsfiltrene ligger under Filtrer, Skann har bare skanning og varegrupper
   const filt = await page.innerText('[data-sec=content]');
-  assert.match(filt, /INNHOLD[\s\S]*Vare[\s\S]*Varegruppe[\s\S]*Pant[\s\S]*Rabatt[\s\S]*Spesialbetaling/);
+  assert.match(filt, /INNHOLD[\s\S]*Vare[\s\S]*Varegruppe[\s\S]*Pant[\s\S]*Rabatt[\s\S]*Hendelsesord/);
   assert.ok(!(await page.$('[data-sec=scan] select')), 'ingen filtervalg igjen i Skann');
   assert.deepStrictEqual(errors, []);
   assert.deepStrictEqual(apiCalls, []);

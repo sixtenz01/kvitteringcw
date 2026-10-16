@@ -2,7 +2,7 @@ const { chromium } = require('playwright');
 const path = require('path');
 const assert = require('assert');
 
-// Bongregnskap: Totalt, betaling, MVA og betalingsreferanse via skanning i visningsfeltet.
+// Regnskapskontrollene (linjer mot Totalt, betaling, MVA, betalingsreferanse) er fjernet: feil på bongene gir ingen funn. CSV og «Skann på nytt» for eldre skanninger.
 const f2 = (n) => n.toFixed(2);
 const TR = (a, c) => `<tr><td>${a}</td><td></td><td>${c}</td></tr>`;
 const vat = (tot, r = 25, bad) => { const g = Math.round(tot / (1 + r / 100) * 100) / 100; const m = bad !== undefined ? bad : Math.round((tot - g) * 100) / 100; return `<tr><td>MVA-grunnlag</td><td>MVA-%</td><td>MVA</td><td>Sum</td></tr><tr><td>${f2(g)}</td><td>${r} %</td><td>${f2(m)}</td><td>${f2(tot)}</td></tr>`; };
@@ -76,17 +76,10 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   };
   await analyse();
   const fnd = await txt('[data-sec=findings]');
-  assert.match(fnd, /Regnskap: Linjer stemmer ikke med totalen Kasse 1 10:23 kasserer A: linjene summerer til 232\.00 kr, Totalt er 250\.00 kr/);
-  assert.match(fnd, /Regnskap: Betaling stemmer ikke med totalen .*betalt netto 100\.00 kr, Totalt er 120\.00 kr/);
-  assert.match(fnd, /Regnskap: MVA stemmer ikke .*MVA 30\.00 mot grunnlag 96\.00 × 25 % = 24\.00/);
-  assert.match(fnd, /Regnskap: Ugyldig MVA-sats .*sats 20 % \(gyldige: 0, 12, 15, 25\)/);
-  assert.match(fnd, /Regnskap: Samme betalingsreferanse på flere bonger Referanse SAMEREF001 \(TransId\) på 2 bonger: kasse 1 10:27, kasse 2 10:28/);
-  assert.strictEqual((fnd.match(/Regnskap: Linjer stemmer ikke/g) || []).length, 1);
+  assert.doesNotMatch(fnd, /Regnskap|stemmer ikke med totalen|MVA|Ugyldig MVA-sats|betalingsreferanse på flere bonger/, 'regnskapskontrollene er fjernet');
   const acct = await txt('[data-sec=acct]');
-  assert.match(acct, /18 av 18 salg har ny skanning \(18 med Totalt\)/);
-  assert.match(acct, /Linjer mot Totalt: 18 bonger vurdert, 94,4 % stemmer\. Kontrollen er aktiv\./);
-  assert.match(acct, /MVA-tabell \(16 tabeller\): 16 bonger vurdert, 93,7 % stemmer\. Kontrollen er aktiv\./);
-  assert.match(acct, /18 betalingsreferanser lest, 1 brukt på flere bonger/);
+  assert.match(acct, /Topptekst og bunn/);
+  assert.doesNotMatch(acct, /Linjer mot Totalt|MVA-tabell|betalingsreferanser lest/);
   assert.ok(!(await page.$('[data-sec=acct] button:text-is("Skann på nytt")')) && !/Skann på nytt \(/.test(acct), 'ingen eldre skanninger ennå');
 
   // CSV har betaling og referanser
@@ -94,24 +87,21 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   const [dl] = await Promise.all([page.waitForEvent('download'), page.click('button:text-is("CSV")')]);
   const csv = require('fs').readFileSync(await dl.path(), 'utf8');
   const head = csv.split('\r\n')[0], line = csv.split('\r\n').find((l) => l.includes('1001-1-13'));
-  assert.match(head, /Betaling;Rabatt kr;Kuponger;Betalingsref;Totalt på bong$/);
-  assert.match(line, /;Bank 250;0;0;BADLINE01;250$/);
+  assert.match(head, /Betaling;Rabatt kr \(årsakskode\);Betalingsref;Totalt på bong$/);
+  assert.match(line, /;Bank 250;0;BADLINE01;250$/);
 
   // gjør skanningene «eldre» (v4), last på nytt: kortet tilbyr omskanning med bekreftelse
   await page.evaluate(() => new Promise(res => { const rq = indexedDB.open('kvr-store', 1); rq.onsuccess = () => { const tx = rq.result.transaction('scan', 'readwrite'), st = tx.objectStore('scan'); const c = st.openCursor(); c.onsuccess = () => { const cur = c.result; if (cur) { const v = cur.value; v.v = 4; delete v.tot; delete v.rf; delete v.mv; delete v.rnd; cur.update(v); cur.continue(); } }; tx.oncomplete = () => res(); }; }));
   await load();
   await analyse();
-  const acct2 = await txt('[data-sec=acct]');
-  assert.match(acct2, /0 av 18 salg har ny skanning/);
-  assert.match(acct2, /Linjer mot Totalt: 0 bonger vurdert, – stemmer\. Kontrollen er ikke aktiv/);
-  assert.ok(!/Regnskap: Linjer stemmer/.test(await txt('[data-sec=findings]')), 'ingen regnskapsfunn uten data');
+  assert.match(await txt('[data-sec=acct]'), /Ingen salg med topptekst og bunn/);
   await page.click('[data-sec=acct] button:has-text("Skann på nytt (18 eldre)")');
-  assert.match(await txt('.kvr-dlg'), /18 bonger har eldre skanning uten topptekst, bunn, kortdata, Totalt, MVA og betalingsreferanse\. Skanner dem på nytt \(ca\. 20 s\)/);
+  assert.match(await txt('.kvr-dlg'), /18 bonger har eldre skanning uten topptekst, bunn og kortdata\. Skanner dem på nytt \(ca\. 20 s\)/);
   await page.click('.kvr-dlg button:text-is("Skann på nytt")');
   await page.waitForFunction(() => /Ferdig\. Skannet 18/.test(document.getElementById('kvr-panel').innerText), null, { timeout: 60000 });
   await analyse();
-  assert.match(await txt('[data-sec=acct]'), /18 av 18 salg har ny skanning \(18 med Totalt\)/);
-  assert.match(await txt('[data-sec=findings]'), /Regnskap: Linjer stemmer ikke med totalen/);
+  assert.match(await txt('[data-sec=acct]'), /0 av 18 skannede salg har lest topptekst/);
+  assert.doesNotMatch(await txt('[data-sec=findings]'), /Regnskap/);
 
   assert.deepStrictEqual(errors, []);
   assert.deepStrictEqual(apiCalls, []);

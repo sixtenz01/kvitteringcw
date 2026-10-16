@@ -117,16 +117,9 @@ const ret = (cash, time, lines, o) => [bong(Object.assign({ cashierNumber: cash,
   try { assert.deepStrictEqual(L.returnLedger(its, its, map, CT()).rows.map((r) => r.id), ['C@1005', 'D@1005']); } finally { L.setMultiStore(false); }
 }
 
-// ---- samme referanse på kjøp og returer er ikke en dublett lenger
+// ---- betalingsreferanse-kontrollen er fjernet: kjøp og retur med samme referanse følges bare her
 {
-  const b = [bong({ endDateTime: '2026-10-05 10:00', totalAmount: 20, storeNumber: 1005 }), scan([{ c: X, a: 20 }], { tot: 20, pay: { Bank: 20 }, rf: [ref] })];
-  const r = [bong({ endDateTime: '2026-10-06 10:00', totalAmount: -20 }), scan([{ c: X, a: -20 }], { tot: -20, pay: { Bank: -20 }, rf: [ref] })];
-  const b2 = [bong({ endDateTime: '2026-10-07 10:00', totalAmount: 20 }), scan([{ c: X, a: 20 }], { tot: 20, pay: { Bank: 20 }, rf: [ref] })];
-  const dups = (all, cfg) => L.ledger(all.map((x) => x[0]), all.map((x) => x[0]), mapOf(all), cfg).findings.filter((x) => x.code === 'refDup').length;
-  assert.strictEqual(dups([b, r], L.defaultControl()), 0, 'ett kjøp og en retur mot det');
-  assert.strictEqual(dups([b, r], CT({ retKv: '' })), 1, 'uten returkontrollen er det som før');
-  assert.strictEqual(dups([b, b2], L.defaultControl()), 1, 'to kjøp med samme referanse er fortsatt en dublett');
-  assert.strictEqual(dups([b, r, b2], L.defaultControl()), 1);
+  assert.ok(!('ledger' in L) && !('refDup' in L.defaultControl()) && !('Samme betalingsreferanse på flere bonger' in L.RISK_WEIGHTS));
 }
 
 // ---- poeng og familie: bare høyeste teller per bong

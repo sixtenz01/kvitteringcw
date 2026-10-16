@@ -84,10 +84,8 @@ try {
   assert.strictEqual(L.reconcile([sA, settle(1005)], scanOf, CT())[0].kasse, 1, 'én butikk: kassenummer som før');
   L.setMultiStore(true);
 
-  // ---- kassadifferanse over tid, kassererrangering og tempo bruker sammensatt id
-  const dt = L.diffTrend([settle(1005), settle(2002)], { 'S-1005': { settle: { diff: { sum: -5 } } }, 'S-2002': { settle: { diff: { sum: -5 } } } }, CT());
-  assert.deepStrictEqual(dt.rows.filter((r) => r.kind === 'kasserer').map((r) => r.id), ['12@1005', '12@2002']);
-  const rank = L.rankCashiers([sA, sB], { RA: ['Gjentatte kassadifferanser'], RB: ['Gjentatte kassadifferanser'] }, null, null, null);
+  // ---- kassererrangering og tempo bruker sammensatt id
+  const rank = L.rankCashiers([sA, sB], { RA: ['Rundt beløp'], RB: ['Rundt beløp'] }, null, null, null);
   assert.deepStrictEqual(rank.map((c) => c.id), ['12@1005', '12@2002']);
   const tmp = [].concat(many(4, (i) => ({ cashierNumber: '12', endDateTime: '2026-10-05 12:00:0' + i })), many(4, (i) => ({ storeNumber: 2002, cashierNumber: '12', endDateTime: '2026-10-05 12:00:0' + i })));
   const tr = L.tempoChecks(tmp, CT());

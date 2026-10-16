@@ -2,7 +2,7 @@
   'use strict';
 
   var L = typeof module !== 'undefined' && module.exports ? require('./logic.js') : root.KvLogic;
-  var VERSION = '3.23.0';
+  var VERSION = '3.24.0';
 
   // ---- SHA-256 (ren JS, så rapporten ikke avhenger av crypto.subtle) -------------------
   var K256 = [
@@ -156,32 +156,19 @@
   function limitations(m, cov) {
     var out = [], pc = function (a, b) { return b ? pctText(a / b) : '–'; };
     out.push('Skannet innhold: ' + cov.salesScanned + ' av ' + cov.sales + ' salg (' + pc(cov.salesScanned, cov.sales) + '). Tester som leser bonginnholdet (pant, retur uten salg, rabatt) dekker bare de skannede.');
-    if (cov.settle) out.push('Kassaoppgjør lest: ' + cov.settleScanned + ' av ' + cov.settle + '. Kassadifferanse over tid bygger bare på de leste.');
+    if (cov.settle) out.push('Kassaoppgjør lest: ' + cov.settleScanned + ' av ' + cov.settle + '. Dagsavstemmingen bygger bare på de leste.');
     var fr = m.checks && m.checks.falseRet;
     if (fr && fr.coverage !== null && fr.coverage !== undefined && fr.lineCheck === false) out.push('«Retur uten salg» ble ikke vurdert: bare ' + pctText(fr.coverage) + ' av salgene i datagrunnlaget er skannet (minst 80 % kreves).');
-    if (cov.sales && cov.salesDisc < cov.sales) out.push('Rabattanalysen dekker ' + cov.salesDisc + ' av ' + cov.sales + ' salg (eldre skanninger mangler rabattdata).');
-    if (cov.sales && cov.salesV4 < cov.sales) out.push('Pris per vare, kjøpeutbytte og hendelsesord dekker ' + cov.salesV4 + ' av ' + cov.sales + ' salg (eldre skanninger mangler enhetspris, kjøpeutbytte og hendelsesord).');
-    if (cov.sales && cov.salesV5 < cov.sales) out.push('Bongregnskap (Totalt, MVA, betalingsreferanse) dekker ' + cov.salesV5 + ' av ' + cov.sales + ' salg (eldre skanninger mangler disse feltene).');
+    if (cov.sales && cov.salesDisc < cov.sales) out.push('Rabattanalysen (rabatt med årsakskode) dekker ' + cov.salesDisc + ' av ' + cov.sales + ' salg (eldre skanninger mangler rabattdata).');
+    if (cov.sales && cov.salesV4 < cov.sales) out.push('Pris per vare og hendelsesord dekker ' + cov.salesV4 + ' av ' + cov.sales + ' salg (eldre skanninger mangler enhetspris og tekstlinjer).');
+    if (cov.sales && cov.salesV5 < cov.sales) out.push('Retur mot kvittering via betalingsreferanse dekker ' + cov.salesV5 + ' av ' + cov.sales + ' salg (eldre skanninger mangler referansene).');
     if (cov.sales && cov.salesV6 < cov.sales) out.push('Gjentatte returer på samme kort bygger på kortdata fra skanning versjon 6 og dekker ' + cov.salesV6 + ' av ' + cov.sales + ' salg.');
     var vd = m.checks && m.checks.voids;
     if (vd && !vd.applicable && cov.sales) out.push('«Makulert vare ikke solgt på ny» ble ikke vurdert: bare ' + pctText(vd.coverage) + ' av salgene i datagrunnlaget er skannet (minst 80 % kreves).');
-    var cg = m.checks && m.checks.campaign;
-    if (cg && cg.items.length) {
-      var yes = cg.items.filter(function (e) { return e.status === 'kampanje'; }), no = cg.items.filter(function (e) { return e.status === 'ikke'; });
-      var nm = function (e) { return (e.name || e.c) + (e.rateText ? ' ' + e.rateText : '') + ' (' + e.n + ' bonger)'; };
-      if (yes.length) out.push('Rabatt på ' + yes.length + (yes.length === 1 ? ' vare' : ' varer') + ' er etter brukerens svar regnet som sentral kampanje og ikke flagget: ' + yes.slice(0, 8).map(nm).join('; ') + (yes.length > 8 ? ' m.fl.' : '') + '.');
-      if (no.length) out.push('Brukeren har avvist kampanje for ' + no.length + (no.length === 1 ? ' vare' : ' varer') + ': ' + no.slice(0, 8).map(nm).join('; ') + (no.length > 8 ? ' m.fl.' : '') + '.');
-    }
-    if (cg && cg.pending) out.push(cg.pending + (cg.pending === 1 ? ' vare' : ' varer') + ' med samme rabatt hos flere kasserere kan være sentral kampanje og er ikke avklart. Bongene er flagget med notat.');
-    var lg = m.checks && m.checks.ledger;
-    if (lg) [['lines', 'Linjer mot Totalt'], ['pay', 'Betaling mot Totalt'], ['vat', 'MVA-tabell']].forEach(function (x) {
-      if (lg[x[0]] && !lg[x[0]].applicable && cov.salesV5) out.push(x[1] + ' ble ikke vurdert: ' + lg[x[0]].n + ' bonger lest, ' + (lg[x[0]].n ? pctText(lg[x[0]].ok / lg[x[0]].n) : '–') + ' stemte (minst 10 bonger og 80 % kreves for at avvik regnes som funn).');
-    });
-    out.push('Pantelapper skilles på kode: 99 er lagt inn manuelt og 399 kommer fra pantemaskinen. Slettet pantelapp og slettede varelinjer forutsetter at CW viser slettingen som en linje med motlinje. Spesialbetaling, spør pris, kort og manuell kvittering leter etter ord og felt som ikke er bekreftet i ekte data; testene fanger dem når de dukker opp.');
+    out.push('Pantelapper skilles på kode (standard 99 manuelt og 399 fra pantemaskinen; kodene velges i innstillingene). Slettet pantelapp og slettede varelinjer forutsetter at CW viser slettingen som en linje med motlinje. Spør pris, kort og manuell kvittering leter etter ord og felt som ikke er bekreftet i ekte data; testene fanger dem når de dukker opp.');
     out.push('Medlemsnummertestene bruker alle innlastede bonger i valgte butikker. Mange bruk av ett nummer kan være en trofast kunde; resultatet avhenger av hvor lang periode som er lastet.');
-    out.push('Annullert, manuell pris, parkert bong og spør pris er ikke observert i ekte data. «Hendelsesord» leter etter slike ord på tekstlinjer, men det er ikke bekreftet at CW viser dem på bongen. Kjøpeutbytte-tabellen er heller ikke bekreftet; testene kalibrerer seg mot det som finnes.');
-    if (m.checks && m.checks.skippedGaps) out.push(m.checks.skippedGaps + ' store hull i bongnummer er ikke tolket som slettede bonger (over grensen for maks hull).');
-    out.push('«Hull i bongnummer» forutsetter at listen ikke er filtrert på type, kasse eller tid, og at kvitteringstypene deler nummerserie per kasse (ikke bekreftet i ekte data).');
+    out.push('«Hendelsesord» leter etter ordene brukeren har satt opp i betalingsmåter, linjenavn og tekstlinjer på bongen. Det er ikke bekreftet hvilke tekstlinjer CW viser. Tekstlinjene lagres når bongen skannes, så nye ord treffer best etter ny skanning.');
+    out.push('«Bongnummer og tid» forutsetter at listen ikke er filtrert på type, kasse eller tid, og at kvitteringstypene deler nummerserie per kasse (ikke bekreftet i ekte data).');
     var nb = m.checks && m.checks.numbers;
     if (nb && nb.overall && nb.overall.enough === false) out.push('Benford: bare ' + nb.overall.n + ' bonger i omfanget, for få til en sikker konklusjon.');
     out.push('Klokkeslett er som vist i CW-listen (lokal tid)' + (m.timeShift ? ', flyttet ' + (m.timeShift > 0 ? '+' : '') + m.timeShift + ' min etter innstillingen «Tidsforskyvning for listen»' : '') + '. Bongens topptekst kan vise starttid mens listen har sluttid.');

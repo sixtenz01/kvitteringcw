@@ -27,111 +27,103 @@ All lagring (innstillinger, lagrede filtre, regler, skannecache) ligger i en ege
 ## Rapport, kassaoppgjør og egne regler
 
 - **Rapport:** dagsrapport for synlige kvitteringer, per kasse eller kasserer, valgfritt per dag: antall salg, sum, retur, pant (skannede), avvik og kassadifferanse. CSV-eksport.
-- **Kassaoppgjør (type 2):** skannes og leses ut: telt kontant/sjekk/kreditt/sum, differanse, pose-nr, sendt bank og valører. Rød markering i oppgjørslisten ved differanse på minst 1 kr. Differanse i ett oppgjør er ikke lenger et avvik per bong; gjentatte differanser følges under «Kassadifferanse over tid».
+- **Kassaoppgjør (type 2):** skannes og leses ut: telt kontant/sjekk/kreditt/sum, differanse, pose-nr, sendt bank og valører. Rød markering i oppgjørslisten ved differanse på minst 1 kr. Differanse i ett oppgjør er ikke et avvik per bong, og kassadifferanse følges ikke lenger over tid.
 - **Egne avviksregler:** bygg regler med flere vilkår (OG) på sum, klokkeslett, kasse, kasserer, butikk, type, medlem, panteretur, pantsalg, antall pantelapper/varelinjer, kontant tilbake, kassadifferanse, vare, varegruppe og betalingsmåte. Regler som bruker innhold (*) krever skanning, og kjøres kun når du trykker «Kjør avviksjekk».
 
 ## Revisjon: omfang og analyser
 
-**Omfang for analysen** (Analyse → Sjekk først) velger hva «Kjør analyse» ser på, uavhengig av filtrene i listen: periode (med hurtigvalg), butikk, kasserer, kasse, og alt dette kombinert. «Sammenlign med en annen periode» gir periode A mot B. Valget huskes. Går omfanget utenfor det som er hentet fra CW, vises en advarsel, og «Kjør analyse» henter det som mangler (setter datoer og butikker i CW, og tømmer medlems-, vare- og bongsøk). Tester som trenger hele bildet (hull i bongnummer, salg etter kassaoppgjør, falsk retur) bruker alle innlastede bonger i valgte butikker og viser bare funn som gjelder omfanget.
+**Omfang for analysen** (Analyse → Sjekk først) velger hva «Kjør analyse» ser på, uavhengig av filtrene i listen: periode (med hurtigvalg), butikk, kasserer, kasse, og alt dette kombinert. «Sammenlign med en annen periode» gir periode A mot B. Valget huskes. Går omfanget utenfor det som er hentet fra CW, vises en advarsel, og «Kjør analyse» henter det som mangler (setter datoer og butikker i CW, og tømmer medlems-, vare- og bongsøk). Tester som trenger hele bildet (bongnummer og tid, salg etter kassaoppgjør, falsk retur) bruker alle innlastede bonger i valgte butikker og viser bare funn som gjelder omfanget.
 
 Nye tester (vekter og terskler justeres under Mer → Innstillinger):
 
 - **Falsk retur:** retur uten salg av varen i datagrunnlaget (krever at minst 80 % av salgene er skannet), kortkjøp refundert kontant, og salg og retur av samme beløp på samme kasse innen 60 minutter. Ren panteretur regnes ikke.
 - **Salg etter kassaoppgjør:** salg på en kasse etter dagens siste kassaoppgjør (frist 5 min). Oppgjør før åpningstid regnes som forrige dags avslutning.
-- **Slettede bonger:** hull i bongnummer per kasse, bongnummer og klokkeslett som ikke stemmer overens, og dobbelt bongnummer. Forutsetter at alle kvitteringstyper deler nummerserie per kasse.
-- **Kassadifferanse over tid:** per kasserer og kasse: minst 3 oppgjør med minus fordelt på flere dager, eller minus totalt over 100 kr.
+- **Bongnummer og tid:** bongnummer og klokkeslett som ikke stemmer overens, og dobbelt bongnummer. Forutsetter at alle kvitteringstyper deler nummerserie per kasse.
 - **Benford og tallanalyse:** første siffer i totalbeløp mot Benford (MAD, Nigrinis grenser), og andel hele kroner per kasserer mot butikken. Diagram under Analyse → Diagram. Funn per kasserer (ikke per bong) teller i kassererrangeringen.
 
 Analysene er indikatorer som må forklares, ikke bevis.
 
-## Rabatter og kuponger
+## Rabatt med årsakskode
 
-Skanningen leser nå to ting fra kvitteringen (skannepost v3):
-
-- **Rabatt:** linjen `Rabatt: Kr x (y %)` under en vare, med `Rabatt årsak:` (ofte tom). Varebeløpet på kvitteringen er etter rabatt.
-- **Kupong:** linjer `Kupong (id - navn)`, antatt kampanjer lagt inn sentralt (CN/VPI). Beløpet er ofte 0,00; linjen viser at kampanjen er knyttet til bongen, ikke at den er innløst. Kupongene regnes ikke lenger som betalingsmåter.
-
-Bruk:
+Skanningen (skannepost v3) leser linjen `Rabatt: Kr x (y %)` under en vare, med `Rabatt årsak:` (tom hvis ingen årsak er valgt). Varebeløpet på kvitteringen er etter rabatt. **Bare rabatt med årsakskode analyseres.** Rabatt uten årsak (vanlige prisnedsettelser) og kuponger gir ingen funn, kolonner eller filter.
 
 - **Rabattårsaker** (tekstnr i Lindbak): 1 Datovare, 2 Feil pris, 3 Prisløfte, 4 Reserveløsning kupong, 5 Annen rabattårsak, 6 Best før. Pluginen kjenner igjen både nummer og tekst på kvitteringen; ukjent tekst vises som den står.
-- **Filter:** «Rabatt» under Filtrer → Innhold (krever skanning): har rabatt, uten årsak, med årsak, har kupong, eller én bestemt årsak.
-- **Analyse → Detaljer → Rabatter og kuponger:** per kasserer antall bonger med rabatt, rabatt i kr, uten årsak, kuponger; butikksum; tabell «Rabatt per årsak» (klikk en årsak for å filtrere listen) og matrisen «Kasserer × årsak»; de vanligste kampanjene. Test «Rabatt uten årsak» flagger rabattlinjer på minst 30 % uten årsak (terskel kan endres, tom = av). «Mange rabatter uten årsak» flagger kasserere som ligger minst 1,5× butikkens andel.
-- **Overvåkede rabattårsaker:** test «Rabatt med overvåket årsak» flagger bonger med rabattlinje der årsaken står på en liste (standard 2 Feil pris, 4 Reserveløsning kupong, 5 Annen rabattårsak). Terskler under Mer → Innstillinger → Rabatt: årsaker (tekstnr, komma; tom = av), rabatt minst x % og y kr (standard 0), og «Mange rabatter med overvåket årsak» når en kasserer har minst 3 bonger (tom = av). Egen vekt for begge (standard 3), justerbar under Innstillinger. Kassererfunnet gir poeng på kassereren, ikke på bongene.
-- **Egne regler:** felt for rabatt (kr), høyeste rabatt (%), rabattårsak, rabattlinjer uten årsak, antall kuponger og kupong (id/navn).
-- **Fokus:** rabatt og kuponger per kasserer eller kasse.
+- **Filter:** «Rabatt» under Filtrer → Innhold (krever skanning): rabatt med årsakskode, eller én bestemt årsak. Rabatt-% fra/til gjelder bare linjer med årsakskode.
+- **Kasserere over snittet:** Analyse → Detaljer → Rabatt med årsakskode viser per kasserer antall bonger, bonger med årsakskode, rabatt i kr og andel, ved siden av **snittet i butikken** og **snittet for alle kasserere**. Nederst står snittradene (en rad per butikk når flere butikker er lastet). Tabellen «Kasserer × årsakskode» viser det samme per kode. Kassereren markeres («Mange rabatter med årsakskode», poeng på kassereren, ikke på bongene) når andelen er minst «Avviker fra snittet» ganger butikkens, samlet eller for én kode, med minst «Minst antall bonger for profil» bonger og minst `discCashN` (3) bonger med årsakskode. Slås av med *Marker kasserer over snittet*.
+- **Overvåkede rabattårsaker:** «Rabatt med overvåket årsak» flagger bonger med rabattlinje der årsaken står på en liste (standard 2 Feil pris, 4 Reserveløsning kupong, 5 Annen rabattårsak), over minstegrensene i % og kr (standard 0).
+- **Høy rabattprosent** (standard 70–100 %) og **Rabatt uten treff på andre salg** (samme vare og rabatt samme dag i butikken, standard ≥ 30 %) gjelder bare rabatt med årsakskode. Andre rabattlinjer på varen, også uten årsak, regnes som treff.
+- **Egne regler:** felt for rabatt (kr), høyeste rabatt (%) og rabattårsak. **Fokus:** rabatt med årsakskode per kasserer eller kasse.
 
-## Medlemsnummer, pris, kjøpeutbytte og hendelsesord (v4)
+## Medlemsnummer, pris og hendelsesord (v4)
 
-Skanningen (v4) leser i tillegg enhetspris (`Antall: … à Kr …`), Kjøpeutbytte-tabellen (`Grunnlag | Kjøpeutbytte | MVA bonus`), hendelsesord på tekstlinjer og ukjente linjer. Eldre skanninger tas på nytt ved neste skanning. Alt leses fra iframen; ingen kall mot CWs API (`test/noapi.test.js`).
+Skanningen (v4) leser i tillegg enhetspris (`Antall: … à Kr …`), hendelsesord på tekstlinjer og ukjente linjer (Kjøpeutbytte-tabellen leses fortsatt, men kontrolleres ikke lenger). Eldre skanninger tas på nytt ved neste skanning. Alt leses fra iframen; ingen kall mot CWs API (`test/noapi.test.js`).
 
 - **Medlemsnummer** (kun listen fra CW, ingen skanning, alle innlastede bonger i valgte butikker): samme medlemsnr i to butikker innen 30 min, minst 4 bonger samme dag, minst 15 totalt, og nesten bare hos én kasserer (minst 5 bonger, over 80 % og minst «Avviker fra snittet» × kassererens vanlige andel). Ansattliste (Innstillinger → Medlemsnummer): `1234567` flagger alle bonger med nummeret, `12=1234567` flagger i tillegg når kasserer 12 selv har tastet det (høyest poeng). Kort: Analyse → Detaljer → Medlemsnummer (klikk nummer for å filtrere).
 - **Pris per vare:** samme vare, samme butikk og dag, enhetspris (rabatt lagt tilbake) som avviker minst 10 % fra vanlig pris (den prisen flest bonger har, minst 60 %, minst 5 salg). Kasserer markeres ved minst 3 avvik.
-- **Kjøpeutbytte:** medlemsbong uten tabell, og grunnlag som avviker fra vanlig forhold til varesum (median over minst 10 bonger). Testene kalibrerer seg: finnes tabellen på under 80 % av medlemsbongene, regnes fravær ikke som avvik. Tabellen er ikke bekreftet i ekte data.
-- **Hendelsesord:** tekstlinjer (ikke varenavn) med annull, makul, storn, parker, på vent, manuell, spør pris, overstyr, prisendring, kansell eller avbrutt. Annullert, manuell pris, parkert og spør pris er ikke observert ennå.
-- **Diagnostikk** (Innstillinger → Generelt, eller kortet «Pris, kjøpeutbytte og hendelser»): hendelsesord og ukjente linjer med antall og eksempelbong; «Kopier som tekst» gir en liste til deling.
+- **Hendelsesord:** en liste brukeren setter opp selv (Innstillinger → Hendelsesord, tom til den fylles ut). En bong flagges når et av ordene står som helt ord i en tekstlinje, en betalingsmåte eller et linjenavn. Tekstlinjer med ordene lagres ved skanning (`setEventList`), så nye ord treffer best etter ny skanning. Søk under Filtrer → Innhold → Hendelsesord.
+- **Diagnostikk** (Innstillinger → Generelt, eller kortet «Pris og hendelsesord»): hendelsesord og ukjente linjer med antall og eksempelbong; «Kopier som tekst» gir en liste til deling.
 - **Klokkeslett:** pluginen bruker tiden som vises i CW-listen (lokal tid). Mangler cellen, brukes rådata, flyttet til norsk tid hvis de har tidssone (`Z`/`+hh:mm`). Skanningen leser også dato og tid i bongens topptekst (`Kvittering: <nr> <dato> <tid>`), og Diagnostikk sammenligner liste og bong. Ligger listen konsekvent bak eller foran (minst 30 min, minst 5 bonger), foreslår Diagnostikk en forskyvning; den kan også settes under Innstillinger → Generelt. Topptekstformatet er ikke bekreftet i ekte data.
 
 ## Bongregnskap, notatlogg og statistikk (v5, versjon 3.12.0)
 
-Skanningen (v5) leser i tillegg `Totalt`/`Sum`, `Øreavrunding`, `Referanse`/`TransId` og MVA-tabellen (`MVA-grunnlag | MVA-% | MVA | Sum`). Etter hvert oppslag kontrolleres løpenummeret i topptekst (`Kvittering: <nr>`) mot valgt rad; feil bong avvises etter ett nytt forsøk (aktiv etter tre treff). Skanninger i eldre versjon tas på nytt fra kortet «Bongregnskap og referanser» etter en bekreftelse med antall og omtrentlig tid.
+Skanningen (v5) leser i tillegg `Totalt`/`Sum`, `Øreavrunding`, `Referanse`/`TransId` og MVA-tabellen (`MVA-grunnlag | MVA-% | MVA | Sum`). Etter hvert oppslag kontrolleres løpenummeret i topptekst (`Kvittering: <nr>`) mot valgt rad; feil bong avvises etter ett nytt forsøk (aktiv etter tre treff). Skanninger i eldre versjon tas på nytt fra kortet «Topptekst og bunn» etter en bekreftelse med antall og omtrentlig tid. Totalt, MVA og betalingsreferansen leses fortsatt (referansen brukes av «Retur mot kvittering»), men linjer mot Totalt, betaling, MVA og samme betalingsreferanse kontrolleres ikke lenger.
 
-- **Bongen går opp:** linjer (etter rabatt, med/uten øreavrunding) mot Totalt, betalinger minus kontant tilbake mot Totalt, MVA (sats × grunnlag, grunnlag + MVA = sum, sum = Totalt, gyldig sats 0/12/15/25 %) og samme TransId/Referanse på flere bonger. Hver kontroll kalibrerer seg: minst 10 vurderte bonger og 80 % som stemmer, ellers regnes avvik ikke som funn. Egen gruppe under Innstillinger. CSV-eksporten har kolonner for betaling, rabatt, kuponger, betalingsref og Totalt på bong.
+- CSV-eksporten har kolonner for betaling, rabatt med årsakskode, betalingsref og Totalt på bong.
 - **Notatlogg:** hver endring av notat/status lagres som hendelse med lenket SHA-256 (append-only). «Notatlogg…» under Oppfølging viser kjeden, og `data/notatlogg.json` følger revisjonsrapporten og står i KONTROLLSUM.txt.
 - **RRS 0–100:** `100·(1−2^(−poeng/8))` vises ved siden av poengene (4 = 29, 8 = 50, 16 = 75); nivåene er uendret.
 - **Krymping i kassererprofilen:** `(n·x + k·snitt)/(n + k)` med k = 10 (innstilling, tom = rå tall).
-- **Siste siffer** (χ² mot medianfordelingen blant kassererne), **løpenummer mot tid** (bong utenfor tidene til tre nabonumre på hver side) og **retur mot kassadifferanse** (Spearman ρ over dager).
+- **Siste siffer** (χ² mot medianfordelingen blant kassererne), og **løpenummer mot tid** (bong utenfor tidene til tre nabonumre på hver side).
 - **Herding:** CSV-injeksjon (`'` foran tekst som starter med `= + - @`), NFC og skjulte tegn i bongtekst, beløpsparser (U+2212, parentes, etterstilt minus, tusenskille), datovalidering, medlemsnr (`007` = `7`), ingen 0 kr-duplikater, ikke-endelige summer hoppes over, og lengdegrense på innstillinger.
 
 Skanner fra tidligere versjoner (v2) har ikke rabattdata. «Skann synlige» skanner dem på nytt, og filteret skjuler dem til de er skannet (gul stripe viser antallet).
 
 Ikke verifisert: om kvitteringen skriver årsaken som nummer eller tekst (begge håndteres), og hvordan lokale kampanjer ser ut. Dette trenger eksempler fra ekte kvitteringer.
 
-## Mulig sentral kampanje: notat og spørsmål (versjon 3.18.0)
-
-- Samme vare (EAN) med rabatt (hvilken som helst prosent) på minst `campBongs` (3) bonger hos minst `campCashiers` (2) kasserere, over alle innlastede dager og butikker, regnes som **mulig sentral kampanje** (`campaigns()` i `logic.js`). Én kassereres gjentakelser er ikke kampanje. Den gamle regelen (10 bonger samme dag og butikk, som skjulte rabatten) er fjernet.
-- **Bongen tas med**: «Rabatt uten årsak», «Høy rabattprosent» og «Rabatt uten treff» flagges som før, men får notatet «Kan være sentral kampanje: … Bekreft eller avvis.» (`finding.camp`). En kampanjedag (≥ 40 % av minst 30 salg har rabatt) gir bare notat.
-- **Brukeren spørres**: *Ja, kampanje* / *Nei, ikke kampanje* under bongen i Sjekk først, i Rabatt-kortet (tabell med Angre) og i dialogen «Mulige sentrale kampanjer» (varsel i Analyse-kortet). Ja: rabatten flagges ikke og telles ikke mot kassereren. Nei: flagges som vanlig, uten notat.
-- **Svaret gjelder varen, uansett rabattprosent**, så alle flaggede bonger med varen oppdateres (statuslinjen viser «6 → 0 flaggede bonger»). Eldre svar med `ean|prosent` gjelder nå varen.
-- Svarene (`kvr.camp.v1`, nøkkel `ean`) lagres i IndexedDB, følger Eksporter/Importer innstillinger, og står i revisjonsrapporten (bekreftet, avvist og ikke avklart).
-
 ## Samlet utseende og butikknavn (versjon 3.16.0)
 
-- **Alle filter under Filtrer.** Innholdsfiltrene (vare, varegruppe, pant, rabatt, rabatt-%, spesialbetaling) ligger i kortet «Innhold» og er merket *skanning*. Skann har bare skanning (knapper og cache) og varegrupper. Sortering og lagrede filtre er ett kort.
+- **Alle filter under Filtrer.** Innholdsfiltrene (vare, varegruppe, pant, rabatt, rabatt-%, hendelsesord) ligger i kortet «Innhold» og er merket *skanning*. Skann har bare skanning (knapper og cache) og varegrupper. Sortering og lagrede filtre er ett kort.
 - **Nivå og avdeling:** butikknummer med mer enn fire siffer er nivå + avdelingsnummer (`1311003` = nivå `131` + avdeling `1003`, `storeParts` i `logic.js`). Etiketten er «1003 – navn (nivå 131)», listen grupperes etter nivå med «Velg»/«Fjern» per nivå, søket treffer hele nummeret, avdeling, nivå og navn, og nivåer kan få navn (`131=Coop Øst`). Navnelesingen fra CW bruker feltnavnene widgeten selv oppgir (`dataValueField`/`dataTextField`).
 - **Butikknavn og nummer overalt** («1005 – Coop Mega Kolbotn»). Navn hentes fra CWs butikkliste, ellers fra BUTIKK-kolonnen i listen (`storeNameFromCell`), og egne navn overstyrer. Butikker uten navn får «Gi butikken navn» direkte under butikklisten.
 - **Felles design:** alle farger, radier og kontrollhøyder kommer fra tokens i `panel.css` (`--kv-*`) og brukes likt i panel og dialoger. Samme overskriftsstil på kort og innstillingsgrupper, ett utseende på varsler, like høye felt og knapper.
 
-## Pantelapper, slettede linjer, spesialbetaling, rabatt og kort (versjon 3.14.0)
+## Pantelapper, slettede linjer, rabatt og kort (versjon 3.14.0)
 
 Alt bygger på skannet innhold og lager funn i samme avviksliste, med innstillinger og poeng per test. Skanning versjon 6 leser i tillegg kortlinjer (`cd`: kortleverandør, siste fire siffer, evt. utstedernr).
 
 Versjon 3.21.0 legger til: **Tempo** (serier av bonger med høyst N sekunder mellom på samme kasse; uten sekunder i listen telles bonger i samme minutt; kasserere med mange 0-kr-bonger), **Overvåkede varer** (EAN eller del av navn; retur, sletting og kassererandel), **Retur av vare uten kjøp** (EAN som kortet eller medlemmet ikke har kjøpt innen N dager, valgfritt samme dag), **Topptekst og bunn** (skanning versjon 7: kasserer, kasse og medlem i toppteksten mot listen, terminal-ID, autorisasjonskode og inngangsmåte; felt kontrolleres bare når minst 90 % av minst ti bonger stemmer fra før), **Betalingsmåter** (tabell i Diagnostikk mot CWs filterliste, og filter i Filtrer) og **Søk i bongen** (fulltekst over det skannede innholdet). Alt leser bare listen og visningsfeltet, ingen kall mot API.
 
-- **Ingen dobbelttelling (3.15.0):** tester som måler samme forhold teller bare det høyeste poenget per bong (`FAMILIES` i `logic.js`: pant og kontant tilbake, rabatt, regnskap, pris, retur av vare). Årsaker som ikke teller vises overstrøket i Sjekk først. «Samme pantebeløp utbetalt flere ganger» er slått sammen med «Pantelapp innløst flere ganger» (samme kasse samme dag, eller innen tidsrommet på tvers av kasser, og bongsum for bonger med flere pantelapper). Prisavviks-testen hopper over spør pris-linjer, og Hendelsesord utelater «manuell» og «spør pris» på bonger som allerede er flagget av de egne testene.
+- **Ingen dobbelttelling (3.15.0):** tester som måler samme forhold teller bare det høyeste poenget per bong (`FAMILIES` i `logic.js`: pant og kontant tilbake, rabatt, pris, etter stengetid, retur av vare, sletting, medlemsbruk, tall; kassererfunn i samme familie telles også bare én gang). Årsaker som ikke teller vises overstrøket i Sjekk først. «Samme pantebeløp utbetalt flere ganger» er slått sammen med «Pantelapp innløst flere ganger» (samme kasse samme dag, eller innen tidsrommet på tvers av kasser, og bongsum for bonger med flere pantelapper). Prisavviks-testen hopper over spør pris-linjer, og Hendelsesord utelater «manuell» og «spør pris» på bonger som allerede er flagget av de egne testene.
 - **Pantelapper:** `99 PANTELAPP` er manuell og `399 PANTELAPP` kommer fra pantemaskinen (standard). Kodene velges under Innstillinger → Pantelapper (`lappManualCodes`, `lappMachineCodes`, flere koder skilles med komma; står en kode i begge, regnes den som manuell). Funn: manuell pantelapp over beløpsgrensen, kasserer med mange manuelle (andel mot butikken), pantelapp slettet (linje + motlinje med samme beløp), og samme pantelapp innløst flere ganger (lappnr hvis bongen viser det, ellers samme sum innen 60 min eller på samme kasse samme dag). Kortet «Pantelapper: manuell og maskin».
 - **Slettede linjer:** en linje og en motlinje (samme kode, motsatt beløp) regnes som slettet. «Kontant tilbake uten salg» bruker nå varelinjer etter sletting. Nytt funn når varelinjer er slettet og bare pant og kontant tilbake står igjen. Makulert vare (EAN) som ikke er solgt på ny i butikken innen 120 min (krever 80 % skannet).
-- **Spesialbetaling:** ordlisten (eget forbruk, internt forbruk, utbetaling, finansiering, sjekk) leses i betalingsmåter, linjenavn og tekstlinjer, som funn og som søk under Filtrer → Innhold.
-- **Rabatt:** høy rabattprosent (standard 70–100 %), rabatt uten treff på andre salg (samme vare og rabatt samme dag i butikken, standard ≥ 30 % og bare uten årsak), mulig kampanje (samme vare og rabatt hos flere kasserere: notat og spørsmål), og søk på rabatt-% under Skann.
+- **Rabatt:** se «Rabatt med årsakskode» over.
 - **Spør pris:** linjen under «SPØR PRIS» sammenlignes med medianprisen for samme EAN samme dag.
 - **Kort:** tre returer på samme kort (leverandør + kortnr) innen 30 dager.
 - **Manuell kvittering / til gode-lapp:** ordliste; flagges når en annen bong i butikken har samme beløp innen 3 dager.
-- Ikke bekreftet i ekte data: hvordan slettede linjer, spør pris, kortlinje, manuell kvittering og spesialbetaling står på bongen. Testene bruker motlinjer, ord og maskerte kortnumre; Diagnostikk samler det som ikke kjennes igjen.
+- Ikke bekreftet i ekte data: hvordan slettede linjer, spør pris, kortlinje og manuell kvittering står på bongen. Testene bruker motlinjer, ord og maskerte kortnumre; Diagnostikk samler det som ikke kjennes igjen.
+
+## Versjon 3.24.0: færre kontroller, rabatt kun med årsakskode, egne hendelsesord
+
+- **Fjernet:** *Kassadifferanse over tid* (gjentatte differanser og retur mot kassadifferanse; kassaoppgjør og dagsavstemming består), *Hull i bongnummer*, *Mulig sentral kampanje* (notat, spørsmål, kampanjedag, `kvr.camp.v1`), *Kjøpeutbytte*, *Bongen går opp, MVA og betalingsreferanse* (linjer mot Totalt, betaling mot Totalt, MVA og samme betalingsreferanse), og *Spesialbetaling*. Skannefeltene lagres fortsatt (Totalt, MVA, referanse, Kjøpeutbytte, kuponger), og referansen brukes av Retur mot kvittering. Eldre innstillingsfiler leses uten feil; ukjente verdier ignoreres. Egne regler som brukte *rabattuten*, *kuponger* eller *kupong* skrus av i stedet for å bli bredere.
+- **Rabatt:** bare rabatt med årsakskode analyseres. *Rabatt uten årsak*, *Mange rabatter uten årsak*, kuponger og det tilhørende filteret er fjernet. *Høy rabattprosent* og *Rabatt uten treff* gjelder bare rabatt med årsakskode.
+- **Kasserere over snittet (rabatt):** ny *Mange rabatter med årsakskode* sammenligner hver kasserer med snittet i butikken, samlet og per årsakskode. Tabellene viser snitt for butikken og for alle kasserere, og rødt for de som ligger over. Erstatter *Mange rabatter med overvåket årsak*.
+- **Hendelsesord:** en liste brukeren setter opp selv (tom som standard). Erstatter den innebygde ordlisten og *Spesialbetaling*; søk under Filtrer → Innhold → Hendelsesord.
+- **Ingen dobbelttelling:** *Løpenummer avviker fra tid* og *Bongnummer og tid stemmer ikke* teller ikke samme bong to ganger. Nye familier (kun høyeste poeng): etter stengetid (utenfor åpningstid, retur utenfor åpningstid, salg etter kassaoppgjør), retur av vare (inkl. *Retur uten salg*), sletting, medlemsbruk og kassererfunn for tall (*Mange runde beløp*, *Avvikende siste siffer*). *Mønstre* er slått sammen med *Avvik per bong*.
 
 ## Versjon 3.23.0: retur mot kvittering, åpningstid og færre mønstre
 
-- **Retur mot kvittering** (Innstillinger → Retur mot kvittering): retur på enkeltvarer mot kvitteringen de ble kjøpt på, aldri mer enn kjøpt antall og beløp og aldri flere ganger enn kjøpt. Kjøp og retur knyttes sammen med betalingsreferansen (`TransId`, eller `Referanse` på samme kasse og dag), og hver vare føres kronologisk uansett hvem som tar returen (`returnLedger` i `logic.js`). Funn: *Retur over kjøpt antall*, *Vare returnert flere ganger*, *Retur til høyere pris enn kjøpt*, *Vare ikke på kvitteringen*. Retur uten kjent kvittering kryss-sjekkes mot kort og medlem over tid (*Retur over kjøpt antall på kortet/for medlemmet*, standard 30 dager, krever 80 % skannede salg og lastet tidsrom). Treffene summeres per kasserer (*Mange returer mot kvittering med avvik*) og vises i Analyse → Detaljer → Pris, kjøpeutbytte og hendelser. Retur vurderes bare når kjøpet er lastet og skannet; ellers står den som «uten kjent kvittering». Ett kjøp og returer mot det med samme referanse regnes ikke lenger som dublett i «Samme betalingsreferanse på flere bonger».
+- **Retur mot kvittering** (Innstillinger → Retur mot kvittering): retur på enkeltvarer mot kvitteringen de ble kjøpt på, aldri mer enn kjøpt antall og beløp og aldri flere ganger enn kjøpt. Kjøp og retur knyttes sammen med betalingsreferansen (`TransId`, eller `Referanse` på samme kasse og dag), og hver vare føres kronologisk uansett hvem som tar returen (`returnLedger` i `logic.js`). Funn: *Retur over kjøpt antall*, *Vare returnert flere ganger*, *Retur til høyere pris enn kjøpt*, *Vare ikke på kvitteringen*. Retur uten kjent kvittering kryss-sjekkes mot kort og medlem over tid (*Retur over kjøpt antall på kortet/for medlemmet*, standard 30 dager, krever 80 % skannede salg og lastet tidsrom). Treffene summeres per kasserer (*Mange returer mot kvittering med avvik*) og vises i Analyse → Detaljer → Linjer, kort og retur. Retur vurderes bare når kjøpet er lastet og skannet; ellers står den som «uten kjent kvittering».
 - **Åpningstid:** «Små returer før stenging» er erstattet av *Transaksjoner utenfor åpningstid* (før 07:00 og etter 23:00, standard) og *Retur utenfor åpningstid*. Bonger med negativ sum eller pantelapper regnes som retur. Åpner er nå 07:00 som standard (var 06:00). Stengetid, liten retur og tidsrom før stenging er fjernet.
 - **Fjernet:** «Samme beløp gjentatt» (`repeatN`, `repeatMin`). Eldre lagrede innstillinger med disse verdiene leses uten feil, og verdiene ignoreres.
 
 ## Versjon 3.22.0: pantelapp-koder og Kassadifferanse per oppgjør fjernet
 
 - **Pantelapp-koder kan velges** (Innstillinger → Pantelapper): *Manuell pantelapp: koder* (standard 99) og *Pantelapp fra pantemaskin: koder* (standard 399). Flere koder skilles med komma. Gjelder testene og kortet «Pantelapper: manuell og maskin». Står en kode i begge lister, regnes den som manuell.
-- **Fjernet:** avviket «Kassadifferanse» per kassaoppgjør (innstillingen *Kassadifferanse fra* under Avvik per bong, og poengvekten). Gjentatte differanser følges fortsatt under «Kassadifferanse over tid» og «Retur og kassadifferanse henger sammen». Eldre lagrede innstillinger og eksportfiler med den gamle verdien leses uten feil, og verdien ignoreres.
+- **Fjernet:** avviket «Kassadifferanse» per kassaoppgjør (innstillingen *Kassadifferanse fra* under Avvik per bong, og poengvekten). Eldre lagrede innstillinger og eksportfiler med den gamle verdien leses uten feil, og verdien ignoreres.
 
 ## Versjon 3.21.1: tempo og flere butikker
 
 - **Tempo (S1):** listen viser ikke lenger «:00» som ikke finnes. `parseCellDT` tar bare med sekunder når CW viser dem, og `mergeDT` bruker sekundene fra rådata når de er samme minutt som listen. Ligger nesten alle bonger på «:00» (minst 20 bonger, over halvparten), regnes listen som hele minutter. Da brukes «bonger i samme minutt» i stedet for sekundgrensen.
-- **Flere butikker (S17):** kasserer-ID og kassenummer er lokale per butikk. Med mer enn én butikk i listen får de sammensatt id (`12@1005`, vist som «12 (1005)»). Profil, rabatt, medlem, tempo, kassadifferanse, avstemming, diagrammer, filtre, omfang og Fokus regner da per person og per kasse. Butikksnittet er snittet i samme butikk (egen rad per butikk i profilen). Med én butikk er alt som før. Ansattliste: `12=1234567` gjelder kasserer 12 i alle butikker, `12@1005=1234567` bare i butikk 1005. Vanlig nummer i et filter treffer fortsatt alle butikker.
+- **Flere butikker (S17):** kasserer-ID og kassenummer er lokale per butikk. Med mer enn én butikk i listen får de sammensatt id (`12@1005`, vist som «12 (1005)»). Profil, rabatt, medlem, tempo, avstemming, diagrammer, filtre, omfang og Fokus regner da per person og per kasse. Butikksnittet er snittet i samme butikk (egen rad per butikk i profilen). Med én butikk er alt som før. Ansattliste: `12=1234567` gjelder kasserer 12 i alle butikker, `12@1005=1234567` bare i butikk 1005. Vanlig nummer i et filter treffer fortsatt alle butikker.
 
 ## Kontroll-fanen
 
@@ -140,7 +132,7 @@ Versjon 3.21.0 legger til: **Tempo** (serier av bonger med høyst N sekunder mel
 - **Kassererprofil:** returandel, snittbeløp, pantelapper per salg og korrigeringer (negative varelinjer utenom pant) per kasserer mot butikksnittet. Rødt = minst 1,5× snittet (innstilling).
 - **Mønstre:** kontant tilbake uten salg flere ganger på samme kasse. Dette er kontroller på tvers av bonger; «Mulige duplikater» i Filter-fanen er noe annet (samme beløp, kasse og minutt).
 - **Pantelapp-sjekk:** pantebalanse (salg mot utbetalt) per dag og butikk. Gjentatte pantebeløp ligger under «Pantelapp innløst flere ganger».
-- **Sekvens:** hull i bongnummer per kasse (kun pålitelig når CW-listen ikke er filtrert på type, kasse eller tid) og transaksjoner før åpning (standard 07:00) og etter stengetid (standard 23:00), med returer for seg («Retur utenfor åpningstid»).
+- **Sekvens:** transaksjoner før åpning (standard 07:00) og etter stengetid (standard 23:00), med returer for seg («Retur utenfor åpningstid»).
 - **Dagsavstemming:** forventet kontant (kontant − kontant tilbake fra salg) mot telt kontant i kassaoppgjør, per kasse og dag, med bank/kort og sendt bank til info.
 - **Oppfølging:** notat og status (sjekket / til oppfølging) per bong, oppfølgingsliste, filter og CSV-eksport. Radene får en prikk.
 - **Sammenlign bonger:** velg to bonger, trykk «Sammenlign» nederst. Linjer som ikke finnes på den andre markeres.
@@ -168,19 +160,19 @@ Mer → Eksport → **Lag revisjonsrapport…** (også som knapp i Sjekk først 
 - `rapport.html`: forside (referanse, utarbeidet av, tidspunkt, omfang), sammendrag, omfang og datagrunnlag, **dekningsgrad og begrensninger**, metode med alle terskler og poeng (endrede verdier er merket), funn per test, rangerte flaggede bonger med forklaring og notater/status, bevisbilder, kontrollsummer og forbehold. Kan skrives ut til PDF fra nettleseren.
 - `bevis/`: PNG av de høyest rangerte bongene (standard 30, 0 = ingen, maks 100). Bevisbildene har topptekst med butikk, kasse, kasserer, bongnr og tid, men aldri medlemsnummer.
 - `data/kvitteringer.csv`: alle kvitteringer i datagrunnlaget (også de tester på tvers av bonger brukte utenfor omfanget, merket «I omfang»). `data/innhold.json`: skannet bonginnhold. `data/funn.csv` og `data/flaggede_bonger.csv`.
-- `innstillinger.json`: terskler, poeng, egne regler, varegrupper, butikknavn og kampanjesvar slik de var i analysen. Kan leses inn under Mer → Innstillinger → Importer for å gjenta analysen.
+- `innstillinger.json`: terskler, poeng, egne regler, varegrupper og butikknavn slik de var i analysen. Kan leses inn under Mer → Innstillinger → Importer for å gjenta analysen.
 - `KONTROLLSUM.txt`: SHA-256 for alle filer, i formatet `sha256sum -c KONTROLLSUM.txt` forstår. Kontrollsummen for datasettet er SHA-256 av `data/kvitteringer.csv`, og for innholdet SHA-256 av `data/innhold.json` (sortert på bong-ID, uten skannetidspunkt), så den kan kontrolleres uavhengig av pluginen.
 
 Rapporten viser det som gjaldt da analysen ble kjørt (omfang, bonger, skanninnhold, terskler), også om listen eller innstillingene er endret etterpå; en merknad forteller om dette. Kontrollsummen for selve ZIP-filen vises i panelet og lagres i en logg («Tidligere rapporter», bare i denne nettleseren), for å kunne noteres i saken. Kontrollsummer viser at eksporten ikke er endret, ikke at dataene i Lindbak er riktige. Funn er indikasjoner, ikke bevis.
 
 ## Innstillinger og hjelp
 
-- **Mer → Innstillinger** (eller ⚙ øverst) samler alle terskler, avviksgrenser og poeng, gruppert per test: Avvik per bong, Mønstre, Falsk retur, Salg etter kassaoppgjør, Slettede bonger, Kassadifferanse over tid, Tallanalyse, Rabatt, Pant, Åpningstider, Kassererprofil og Egne regler. Hver gruppe viser forklaring, enhet, hvor mange verdier som er endret, og «Standard for denne gruppen».
+- **Mer → Innstillinger** (eller ⚙ øverst) samler alle terskler, avviksgrenser og poeng, gruppert per test: Avvik per bong og kontant tilbake, Falsk retur, Salg etter kassaoppgjør, Bongnummer og tid, Tallanalyse, Rabatt med årsakskode, Medlemsnummer, Pris per vare, Hendelsesord, Pantelapper, Slettede og makulerte varelinjer, Spør pris, Kort, Manuell kvittering, Tempo, Overvåkede varer, Retur av vare uten kjøp, Retur mot kvittering, Topptekst og bunn, Pant, Åpningstid, Kassererprofil og Egne regler. Hver gruppe viser forklaring, enhet, hvor mange verdier som er endret, og «Standard for denne gruppen».
 - Tester som kan slås av har en «På»-bryter (avskrudd = tom verdi = testen kjøres ikke). Endrede verdier merkes med gul kant. Alt lagres med en gang.
 - Terskler gjelder fra neste analyse (Sjekk først og Innstillinger viser en melding og en knapp for å kjøre på nytt). Poeng gjelder med en gang.
-- **Generelt:** egne butikknavn, tastaturflyt, tilbakestilling av plassering, **Eksporter** og **Importer** innstillinger (JSON med terskler, poeng, egne regler, varegrupper, butikknavn og kampanjesvar) og «Alt til standard».
+- **Generelt:** egne butikknavn, tastaturflyt, tilbakestilling av plassering, **Eksporter** og **Importer** innstillinger (JSON med terskler, poeng, egne regler, varegrupper og butikknavn) og «Alt til standard».
 - «Juster» ved siden av hver forklaring i «Hvorfor flagget?» åpner riktig innstillingsgruppe.
-- **?** øverst: kort veiledning, tegnforklaring (rød kant, gul stripe, risikonivå, «Ny», lenker, rødt tall, overstrøket årsak, kampanjespørsmål, panelstørrelse) og snarveier. En ikke-blokkerende melding vises første gang.
+- **?** øverst: kort veiledning, tegnforklaring (rød kant, gul stripe, risikonivå, «Ny», lenker, rødt tall, overstrøket årsak, panelstørrelse) og snarveier. En ikke-blokkerende melding vises første gang.
 - Slettinger og tilbakestillinger bekreftes i panelet, ikke med nettleserdialoger.
 - Piltaster (← → Home End) bytter fane når en fane har fokus. Kortene i Detaljer kan foldes sammen, og valget huskes.
 
@@ -223,22 +215,21 @@ Fem faner: **Hent** (søk i hele journalen via CW), **Filtrer** (butikk som søk
 
 ```
 node test/logic.test.js
-node test/linjer.test.js                              # pantelapper, slettede linjer, spesialbetaling, rabatt, spør pris, kort, manuell kvittering
+node test/linjer.test.js                              # pantelapper, slettede linjer, hendelsesord, rabatt med årsakskode, spør pris, kort, manuell kvittering
 NODE_PATH=<global node_modules> node test/smoke.js   # Playwright, fiktivt grid
 NODE_PATH=<global node_modules> node test/audit.js   # revisjonstester og omfang, eget datasett
 NODE_PATH=<global node_modules> node test/settings.js # innstillinger, hjelp, bekreftelser, import/eksport, piltaster
 node test/report.test.js                              # SHA-256, kontrollsummer og rapportbygger (uten nettleser)
 node test/noapi.test.js                               # ingen fetch/XHR/API-kall i kildekoden
-NODE_PATH=<global node_modules> node test/medlem.js    # medlemsnr, pris, kjøpeutbytte, hendelsesord og diagnostikk
+NODE_PATH=<global node_modules> node test/medlem.js    # medlemsnr, pris, hendelsesord og diagnostikk
 NODE_PATH=<global node_modules> node test/tid.js       # klokkeslett: liste mot bong, UTC, forskyvning
 NODE_PATH=<global node_modules> node test/skann.js     # feil bong i visningsfeltet avvises
-NODE_PATH=<global node_modules> node test/regnskap.js  # Totalt, betaling, MVA, referanser, omskanning, CSV
+NODE_PATH=<global node_modules> node test/regnskap.js  # fjernede regnskapskontroller gir ingen funn, omskanning, CSV
 NODE_PATH=<global node_modules> node test/rapport.js  # lager rapport i panelet, pakker ut ZIP og verifiserer alle kontrollsummer
 node test/docs.test.js                               # dekning av innstillinger, vekter, faner og kort i brukerveiledningen
-NODE_PATH=<global node_modules> node test/kampanje.js   # mulig sentral kampanje: notat, spørsmål, Ja/Nei/Angre, husket svar
 NODE_PATH=<global node_modules> node test/avdeling.js  # butikknummer = nivå + avdeling: gruppert liste, søk, valg av nivå, navn
 NODE_PATH=<global node_modules> node test/butikk.js    # butikknavn fra BUTIKK-kolonnen, redigering, filter samlet under Filtrer
-NODE_PATH=<global node_modules> node test/linjer.js    # samme funn i panelet: kort, søk på spesialbetaling og rabatt-%
+NODE_PATH=<global node_modules> node test/linjer.js    # samme funn i panelet: kort, hendelsesord (egen liste), søk og rabatt-%
 node test/innhold.test.js                              # tempo, overvåkede varer, retur uten kjøp, topptekst/bunn (v7), betalingsmåter, fulltekstsøk
 node test/kasserer.test.js                             # kasserer-ID og kassenummer er lokale per butikk (flere butikker i datagrunnlaget)
 NODE_PATH=<global node_modules> node test/innhold.js    # samme i panelet: skanning av topptekst/bunn, funn, kort, Diagnostikk, søk og betalingsfilter
