@@ -9,7 +9,7 @@ Dato 2026-10-16. Status: **forslag. Ingen filer i repoet er endret, ingen kode s
 - Fire strukturelle hull, i prioritert rekkefølge: (1) ingen persistent historikk, (2) ingen felles statistikkmotor (ca. 10 separate «kasserer ved ≥ antall»-terskler, ingen volum-, time- eller kassejustering, ingen median/MAD, p-verdi eller FDR-kontroll), (3) kassaoppgjør brukes ikke som ankerpunkt (avstemming er visning, ikke funn; valør og pose leses men brukes ikke), (4) dekning og sekvensmodell antas, ikke testes.
 - Verifisert feil (kjørt mot uttrukket kopi): `tempoChecks` tror alltid at listen har sekunder. `parseCellDT` fyller inn `:00`, så `secOK` blir sann selv når CW bare viser minutter. Fallbacken «bonger i samme minutt» aktiveres aldri. Detaljer i S1.
 - 54 nye eller vesentlig forbedrede kontroller i kapittel 3. Rangering av de 15 mest verdifulle i kapittel 4. Arkitektur i 7, faseplan i 8.
-- **Runde 2 (kapittel 12):** 25 flere kontroller og en ny verifisert defekt (S17): kasserer-ID brukes uten butikk som nøkkel, og «butikksnittet» i profilen er snittet over alle innlastede butikker. Totalt 79 kontroller.
+- **Runde 2 (kapittel 12):** 25 flere kontroller og en ny verifisert defekt (S17): kasserer-ID brukes uten butikk som nøkkel, og «butikksnittet» i profilen er snittet over alle innlastede butikker. Eier har bekreftet at kasserer-ID er butikklokal, så analyse av flere butikker samtidig blander ulike personer. Totalt 79 kontroller.
 - Ingenting er testet mot ekte CW-data. Alle presisjonsvurderinger er kvalitative. Formater som README selv markerer «ikke bekreftet» er behandlet som ubekreftet.
 
 ## 1. Grunnlag
@@ -228,11 +228,11 @@ Presisjon er kvalitativ. «Feilkilder» angir hva som gir falske positive. Alle 
 |---|---|---|---|---|---|---|---|---|---|
 | KAS-01 | Hendelseskonsentrasjon (EB + test + FDR) | Kasserer med unormal rate av retur, 0-kr, kontantutbetaling, rabatt uten årsak, makulering, manuell lapp, hull-nærhet m.m. | G, K | For hendelse e: forventet E_c = Σ_h n_c,h · μ_h (μ_h = butikkens rate time h uten kasserer c, strata på kasse/kanal). Observert k_c. p = Poisson/binomial-hale. EB-rate (k + m·μ)/(n + m) (samme idé som dagens `profShrink`). Benjamini–Hochberg over kasserer × hendelse. Funn krever FDR < q, k ≥ k_min og effekt ≥ f·μ. Erstatter ca. 10 enkelttester. | n per time (G). Hendelsesflagg per bong (K for K-hendelser). | Middels–høy. Feilkilder: små n, felles hendelser (kampanje, kø), spesialkasse (stratifiser). | Middels | P1 | A |
 | KAS-02 | Kassererradar (robust z) | Store forskjeller mellom kasserere i samme butikk | G, K | ca. 12 metrikker per kasserer (returandel, snittbeløp, linjer/bong, 0-kr, kontantandel, medlemsandel, rabattandel, kontant-tilbake-andel, bonger/time, makulerte linjer, manuell lapp, korreksjoner). Modifisert z = 0,6745·(x − median)/MAD blant jevnaldrende (samme butikk og kanal); |z| ≥ 3,5 etter EB-krymping; MAD=0 → IQR. Vis percentil og Wilson-intervall. Flere samtidige avvik samles på én rad, ikke poeng per metrikk. | ≥5 jevnaldrende | Middels. Avhenger av vaktmiks og kasse-type. | Middels | P1 | A |
-| KAS-03 | Kasserer samtidig på flere kasser/butikker | Delt innlogging, utlånt ID, feilregistrert kasserer | G | Per kasserer, sortert på tid: (a) to butikker innen T min (T ≈ 5–10), (b) samme butikk, kasse A→B→A innen få minutter ≥ k ganger (interleaving), (c) overlappende intervaller når varighet er kjent (KAS-05). Rapporter dager og andel av kassererens bonger. | Kun grid | (a) høy, men forutsetter kjedeunik kasserer-ID (se S17 i 12.1), (b) middels (avløsning, flytting mellom kasser), krever gjentak. | Lav | P1 | A |
+| KAS-03 | Kasserer samtidig på flere kasser (samme butikk) | Delt innlogging, utlånt ID, feilregistrert kasserer | G | Per kasserer, sortert på tid: (a) ~~to butikker innen T min~~ (utgår, S17), (b) samme butikk, kasse A→B→A innen få minutter ≥ k ganger (interleaving), (c) overlappende intervaller når varighet er kjent (KAS-05). Rapporter dager og andel av kassererens bonger. | Kun grid | (a) **utgår**: kasserer-ID er butikklokal (S17), samme ID i to butikker er to personer. (b) middels (avløsning, flytting mellom kasser), krever gjentak. | Lav | P1 | A |
 | KAS-04 | Medlemsandel og -mangfold per kasserer | Bonusmisbruk, tastet medlemsnr, kasserer som «samler» på få nummer | G | attach = medlemsbonger/bonger. Mangfold = distinkte nr / medlemsbonger. HHI = Σp_i². Entropi. Test mot jevnaldrende (KAS-02), time-justert. Flagg lavt mangfold + høy attach. | Kun grid | Middels. Stamkunder, ansattkasse, kampanjeperioder (stratifiser). | Lav | P1 | A |
 | KAS-05 | Tempo med riktig oppløsning, og varighet | Unormalt raske bonger, pre-tastede salg | G, K | (1) Retting av S1: bruk rådata med sekunder når de finnes og minuttet stemmer med cellen; ellers marker `sec=false` og bruk minuttfallback. (2) Varighet = endDateTime − topptekst-tid (hvis tiden er start). (3) Linjer per minutt per kasserer, robust z mot jevnaldrende. | Bekreftet tidssemantikk | Middels. | Lav–middels | P2 | C |
 | KAS-06 | Kassererens tidsprofil | Atypiske tidspunkt per kasserer/kasse | G | Normalisert histogram time × ukedag for kasserer p mot referanse q (butikk, senere egen historikk). Jensen–Shannon-avstand + permutasjonstest. Flagg når over egen p95 og over jevnaldrende. | Peers nå, egen historikk krever lager | Lav–middels. Vaktskifter og ferie. | Middels | P2 | B |
-| KAS-07 | Ny/sjelden kasserer-ID | Test-ID, delt ID | G | ID ikke sett i baseline, eller få bonger og uvanlig beløpsandel. Kontekst, ikke poeng. | Historikk | Lav (nyansatte). | Lav | P3 | B |
+| KAS-07 | Ny/sjelden kasserer-ID | Test-ID, delt ID | G | Per butikk: ID ikke sett i butikkens baseline, eller få bonger og uvanlig beløpsandel. Kontekst, ikke poeng. | Historikk | Lav (nyansatte). | Lav | P3 | B |
 | TID-01 | Endringspunkt (EWMA/CUSUM/PELT) | Systematiske endringer over tid | G, K | Daglig/ukentlig rate per kasserer og butikk. EWMA z_t = λx_t + (1−λ)z_t−1 med grenser μ ± L·σ·√(λ/(2−λ)). CUSUM S_t = max(0, S_t−1 + x_t − μ − k), alarm S_t > h. Nivåskifte med PELT (BIC-straff). Sesongjustert med TID-02. | Historikk ≥ 8 uker | Middels. Krever stabil baseline. | Middels | P2 | B |
 | TID-02 | Ukedag × time-baseline | Sesongjustering for alle rate-kontroller | G | Median per (butikk, ukedag, time) av bonger og hendelsesrater, krympet mot butikk. Brukes av KAS-01, KAS-06, TID-01, TID-04. | Historikk ≥ 4 uker | Middels. | Middels | P2 | B |
 | TID-03 | Periodesammenligning med test | Erstatter faste «+10 prosentpoeng» i A/B | G, K | To-proporsjons-z eller Fisher per kasserer og metrikk, BH. Vis konfidensintervall. Dagens `comparePeriods` bruker faste terskler uten utvalgsfeil. | Kun grid | Middels–høy. | Lav | P2 | A |
@@ -325,7 +325,7 @@ Rangering er et skjønn (økonomisk betydning, hull mot dagens dekning, gjennomf
 | 3 | OPP-03 | Identiske og retningsbundne differanser | Systematikk er mer informativt enn størrelse. Billig. | A |
 | 4 | OPP-02 | Differanse mot kontantvolum | Gjør kasser sammenlignbare. | A |
 | 5 | KAS-01 | Hendelseskonsentrasjon (EB + FDR) | Erstatter ca. 10 volumblinde terskler. Grunnmur for flere kontroller. | A |
-| 6 | KAS-03 | Kasserer samtidig på flere kasser/butikker | Ren griddata, sterk indikator på delt innlogging. | A |
+| 6 | KAS-03 | Kasserer samtidig på flere kasser (samme butikk) | Ren griddata, sterk indikator på delt innlogging. | A |
 | 7 | BET-01 | Kontantuttak mot kort | Direkte kontantstrøm, ikke dekket. | A |
 | 8 | SEK-01 | Hull-konsentrasjon per kasserer (med ENG-02) | Gjør dagens hulltest handlingsrettet og mer pålitelig. | A |
 | 9 | TID-04 | Åpningstid-envelope og helligdag | Deterministisk, ren griddata. | A |
@@ -363,7 +363,7 @@ Hvorfor ikke høyere: RET-01 (klassifisering) og ENG-01/02 er forutsetninger, ik
 ### 5.1 Felles oppskrift for rate-kontroller
 
 1. Definer hendelse e og mulighetsmengde n (bonger, salg, oppgjør, linjer).
-2. Stratifiser: butikk, kasse/kanal, time (TID-02). Bruk jevnaldrende uten kasserer c (leave-one-out).
+2. Stratifiser: butikk, kasse/kanal, time (TID-02). Bruk jevnaldrende **innen samme butikk** uten kasserer c (leave-one-out). Kasserer-ID er butikklokal (S17).
 3. Forventet E_c = Σ n_c,s · μ_s (indirekte standardisering). Observert k_c.
 4. EB-rate (k + m·μ)/(n + m). Prior-styrke m er dagens `profShrink`.
 5. p = eksakt Poisson- eller binomial-hale. Wilson-intervall for visning.
@@ -532,7 +532,7 @@ Innsats er relativ (S/M/L). Hver fase har en port: tester grønne, skyggemodus-r
 
 | Fase | Innhold | Avhengigheter | Akseptanse | Innsats |
 |---|---|---|---|---|
-| **F0 Avklaringer og hurtigrettinger** | Kjør Diagnostikk på ekte data og avklar punktene i vedlegg A. Rett S1 (sekunder), vurder F5. Rene funksjoner uten arkitekturendring: RET-02, RAB-02, RAB-03, RAB-07, BET-07, BET-08, OPP-03, OPP-06 (dublett), OPP-05 a/b, MED-01, KAS-03 (a), BET-01, TID-03. | Godkjenning | Hver med fixture og negativ kontroll. Alle eksisterende tester grønne. | M |
+| **F0 Avklaringer og hurtigrettinger** | Kjør Diagnostikk på ekte data og avklar punktene i vedlegg A. Rett S1 (sekunder), vurder F5. **Rett S17 først** (kasserer- og kassenøkkel per butikk, test med to butikker). Rene funksjoner uten arkitekturendring: RET-02, RAB-02, RAB-03, RAB-07, BET-07, BET-08, OPP-03, OPP-06 (dublett), OPP-05 a/b, MED-01, KAS-03 (b), BET-01, TID-03. | Godkjenning | Hver med fixture og negativ kontroll. Alle eksisterende tester grønne. | M |
 | **F1 Fundament** | IndexedDB v2 (`tx`, `base`, `price`, `findings`, `outcomes`, `runs`). ENG-01, ENG-02. Registry med migreringsshim som pakker inn de 27 eksisterende funksjonene uendret. Stabile funnnøkler. Utfallsregistrering og revisjonslogg. | F0 | Eksisterende funn og score identiske før og etter (regresjonstest). | L |
 | **F2 Statistikkmotor** | `stats.js`, `context.js`. KAS-01, KAS-02, KAS-04, OPP-01, OPP-02, OPP-04, SEK-01, RET-01, TID-04 (envelope fra innlastet periode). Skyggekjør KAS-01 mot de gamle «kasserer ved ≥ n»-testene. | F1 | Ny kontroll fanger minst det den erstatter, i skyggemodus. | L |
 | **F3 Historikk** | RAB-01, TID-02, TID-01, KAS-06, KAS-07, OPP-08, RET-04, stabil envelope. | F1 + minst 4–8 uker lagret historikk | Alarmrate målt på ren periode. | L |
@@ -585,7 +585,7 @@ Kombinasjonene bruker uavhengige signalfamilier. Score = noisy-OR over familier:
 | Ønske | Hvorfor ikke |
 |---|---|
 | Negativ margin | Kostpris finnes ikke i CW-grensesnittet. Kan bare gjøres med bruker-importert lokal fil (EAN → kost), som er en separat beslutning. |
-| Umulig reise mellom butikker | Butikkoordinater finnes ikke. Forenklet tidsregel finnes (30 min) og dekkes av KAS-03(a). |
+| Umulig reise mellom butikker | Butikkoordinater finnes ikke. Forenklet tidsregel for medlemsnr finnes (30 min, `memberChecks`). |
 | Vakt-/fraværskryss | HR-data finnes ikke. |
 | Fasit for pris og kampanje | Bare observert pris finnes. |
 | Full kontantstrøm | Vekselkasse, uttak, innskudd og bankmottak finnes ikke. Kun avstemming mot oppgjør. |
@@ -598,16 +598,23 @@ Kombinasjonene bruker uavhengige signalfamilier. Score = noisy-OR over familier:
 
 Samme kolonner som kapittel 3. Alt her er i tillegg til de 54. Totalt blir det 79.
 
-### 12.1 Ny defekt: kasserer-ID og «butikksnitt» (S17)
+### 12.1 Defekt S17: kasserer-ID er lokal per butikk (bekreftet)
 
-`profiles()`, `repeatAmount`, `discounts`, `tempoChecks`, `memberChecks` og `rankCashiers` bruker `cashierNumber` alene som nøkkel, uten butikk. «Butikksnittet» i profilen er snittet over **alle innlastede butikker**, ikke den enkelte butikken. Kjørt mot uttrukket kopi: kasserer 12 i butikk 1005 (40 % retur, 20 bonger) og kasserer 12 i butikk 2002 (0 %, 20 bonger) ble **én rad** (`12 n=40 ret=0,20`), og snittet ble regnet over 60 bonger i begge butikker. `repeatAmount` gruppert på samme måte.
+Bekreftet av eier: kasserer-ID er **butikklokal**. Samme nummer i to butikker er to ulike personer.
 
-Om kasserer-ID er kjedeunik eller butikklokal vet jeg ikke. Er den butikklokal, blandes ulike personer ved flerbutikk-omfang. Er den kjedeunik, er det riktig å se dem som én, men «butikksnitt» er da feil betegnelse.
+**Funn i koden.** `cashierNumber` brukes alene som nøkkel på ca. 40 steder i `logic.js`, og «butikksnittet» i profilen er snittet over alle innlastede butikker. Kjørt mot uttrukket kopi: kasserer 12 i butikk 1005 (40 % retur, 20 bonger) og kasserer 12 i butikk 2002 (0 %, 20 bonger) ble **én rad** (n=40, retur 20 %), og snittet ble regnet over 60 bonger i begge butikker.
 
-Konsekvens for forslagene:
-- Alle kasserer-nøkler bør være `butikk|kasserer`, med innstilling for «kasserer-ID er kjedeunik».
-- **ID-unikhetstest** (autodeteksjon): finnes samme ID i ≥2 butikker samme dag i overlappende tid, er IDen enten delt eller butikklokal. KAS-03(a) (to butikker samtidig) og KAS-07 gir bare mening hvis IDen er kjedeunik, så de slås av når testen sier at IDen er lokal.
-- Profil og KAS-01/02 regner jevnaldrende **innen butikk**, ikke over alle innlastede.
+**Gjelder også kasse.** Kassenummer slås sammen på tvers av butikker i: `patterns` (små returer før stenging, kontant tilbake uten salg), `sequence` (utenfor åpningstid), `reconcile` (dagsavstemming), `diffTrend` (kassadifferanse per kasse), `focusStats` og `chartData` (kasse × time). Allerede butikkbevisste er `tempoChecks`, `falseReturns`, `afterSettlement`, `deletedReceipts`, hull i `sequence` og `headerChecks`.
+
+**Når det slår inn.** Bare når omfanget har flere butikker. Analyse av én butikk om gangen er uberørt. Med flere butikker blir kasserer-ID-er fra ulike personer slått sammen i profil, `repeatAmount`, rabatt, tempo, medlem, kassererrangering og Sjekk først. `reconcile` slår to kasser sammen og kan gi falskt avvik eller skjule et ekte. `diffTrend` samler differanser fra to kasser i én rad.
+
+**Anbefaling.**
+- Sammensatt nøkkel `butikk|kasserer` og `butikk|kasse` overalt, via to hjelpefunksjoner (`cashierKey(it)`, `wsKey(it)`). Visning uendret for én butikk, «kasserer 12 (1005)» ved flere.
+- Jevnaldrende regnes alltid **innen butikk** (KAS-01/02/04). TID-05 sammenligner butikker.
+- **KAS-03(a) «to butikker samtidig» utgår.** Samme ID i to butikker samtidig er normalt. (b) og (c) beholdes innen butikk.
+- KAS-07 «ny/sjelden ID» gjelder per butikk. Kasserer-identitet på tvers av butikker finnes ikke, så kassererbaserte kjedeanalyser er ikke mulige.
+- ID-unikhetstesten utgår (avklart). Medlemsnummer antas kjedeglobalt (medlemstestene på tvers av butikker beholdes).
+- Rettelsen er mekanisk (ca. 40 + 7 steder) og trenger tester med to butikker som deler kasserer-ID og kassenummer. **Ikke gjort. Krever godkjenning.**
 
 ### 12.2 Nye kontroller
 
@@ -647,7 +654,7 @@ Tillegg til eksisterende forslag, uten egen ID: KAS-01 kan også estimeres som P
 |---|---|---|
 | 1 | STR-02 | Alle kontroller hviler på parseren. En stille formatendring gjør hele verktøyet misvisende. README nevner selv risikoen. |
 | 2 | OPP-10 | Det motsatte av dagens differansetester: fanger kasser som «alltid går opp». Billig, bare oppgjør. |
-| 3 | S17 / ID-unikhetstest | Retter en feil som kan blande personer og butikker. Påvirker KAS-01/02/03. |
+| 3 | S17 Kasserer- og kassenøkkel per butikk | Retter en bekreftet feil som blander personer og kasser ved flerbutikk-omfang. Forutsetning for KAS-01/02 og OPP-01. |
 | 4 | LIN-04 | Deterministisk etterlevelseskontroll på data som finnes (varer + tid). Bruker eksisterende varegruppe-mekanikk. |
 | 5 | RET-07 | Dekker prisendring via retur, som verken `falseReturns` eller `priceDeviation` ser. |
 | 6 | SEK-06 | Fanger bevisst tilpasning til godkjenningsgrenser. Testes mot butikk, så prispunkter ikke gir støy. |
@@ -678,7 +685,7 @@ Tillegg til eksisterende forslag, uten egen ID: KAS-01 kan også estimeres som P
 10. Hvilke verdier har `saleChannel` per kasse, og er mappingen stabil? (strata)
 11. Deler kasser samme nummerserie, og nullstilles den? (ENG-02 svarer selv)
 12. Butikkenes åpningstider og unntak. (TID-04)
-13. Er kasserer-ID kjedeunik eller butikklokal? Styrer nøkkelen `butikk|kasserer`, KAS-03(a), KAS-07 og alle jevnaldrende-sammenligninger. (S17)
+13. ~~Er kasserer-ID kjedeunik?~~ Avklart: butikklokal. Nøkkelen er `butikk|kasserer` (S17).
 14. Hvilke varer er regulert, og hvilket salgstidsvindu gjelder per butikk/kommune? Brukeren må levere listen. (LIN-04)
 15. Hvilke godkjenningsgrenser gjelder for retur, kontantutbetaling og rabatt? (SEK-06, SEK-05)
 16. Hva betyr feltene i oppgjørets Tilgodelapp-blokk (egne, fremmede, utlevert)? (OPP-12)
