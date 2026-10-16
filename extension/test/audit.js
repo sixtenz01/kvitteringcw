@@ -151,7 +151,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   await runAnalysis();
   const cmp = (await page.innerText('[data-sec=chk-cmp]')).replace(/\s+/g, ' ');
   assert.match(cmp, /Alle 5 3 40 % → 0 %/);
-  assert.match(cmp, /Kasserer D \(1005\) 0 1 .*risikoscore \+5/);
+  assert.match(cmp, /Kasserer D \(1005\) 0 1 0 % → 0 % 0,00 → 60,00 0 → 0 –/, 'differanse i ett oppgjør gir ikke lenger risikoscore');
   assert.match(cmp, /Kasserer A/);
   if (process.env.SHOT) { await page.setViewportSize({ width: 1100, height: 1500 }); await page.evaluate(() => { document.getElementById('kvr-panel').style.top = '10px'; }); await (await page.$('#kvr-panel')).screenshot({ path: process.env.SHOT.replace('.png', '-omfang.png') }); }
   await page.click('[data-sec=scope] label:has-text("Sammenlign med en annen periode") input');

@@ -146,8 +146,10 @@ assert.strictEqual(settle.valor['1000'], 1000);
 assert.strictEqual(settle.tilg.sum, 0);
 assert.strictEqual(L.parseAmount('+1 000.00'), 1000);
 const stRec = L.parseSettlement([['Kontant:', '500.00'], ['Sum', '500.00'], ['Differanse'], ['Sum', '-50.00']]);
-assert.deepStrictEqual(L.anomalies({ totalAmount: null }, stRec, cfg), ['Kassadifferanse (-50 kr)']);
-assert.deepStrictEqual(L.anomalies({ totalAmount: null }, stRec, Object.assign({}, cfg, { settleDiff: '100' })), []);
+// differanse i ett kassaoppgjør er ikke lenger et avvik per bong (gjentatte differanser følges i Kassadifferanse over tid)
+assert.deepStrictEqual(L.anomalies({ totalAmount: null }, stRec, cfg), []);
+assert.ok(!('settleDiff' in L.defaultAnom()) && !('settleDiff' in L.sanitizeAnom({ settleDiff: '1' })));
+assert.ok(!('Kassadifferanse' in L.RISK_WEIGHTS));
 
 // ---- dagsrapport
 const repItems = [
@@ -312,7 +314,7 @@ assert.strictEqual(L.riskScore(['Kontant tilbake uten salg', 'Kontant tilbake ut
 assert.strictEqual(L.riskScore(['Høy rabattprosent', 'Rabatt uten årsak', 'Rabatt uten treff på andre salg'], W), 4);
 assert.strictEqual(L.riskScore(['Linjer stemmer ikke med totalen', 'Betaling stemmer ikke med totalen', 'MVA stemmer ikke'], W), 4);
 assert.strictEqual(L.riskScore(['Avvikende pris på vare', 'Spør pris avviker fra dagens salg'], W), 3);
-assert.strictEqual(L.riskScore(['Kassadifferanse', 'Gjentatte kassadifferanser'], W), 5);
+assert.strictEqual(L.riskScore(['Gjentatte kassadifferanser'], W), 4);
 assert.strictEqual(L.riskScore(['Medlemsnr flere ganger samme dag', 'Medlemsnr brukt svært mye'], W), 4, 'ulike signaler summeres');
 assert.strictEqual(L.riskScore(['Retur uten salg', 'Kortkjøp refundert kontant'], W), 8, 'ulike familier summeres');
 assert.strictEqual(L.riskScore(['Kontant tilbake uten salg', 'Rabatt uten årsak', 'Linjer stemmer ikke med totalen'], W), 11, 'ulike familier summeres');
@@ -337,7 +339,6 @@ assert.deepStrictEqual(rkc[1].profile, ['høy returandel']);
 const ex = r => L.explainReason(r, { id: 'k-2', cfg: L.defaultAnom(), ctl: L.defaultControl(), rules: [{ name: 'Min', conds: [{ f: 'sum', op: '<=', v: '-200' }, { f: 'tid', op: '>=', v: '20:00' }] }], findings: [{ title: 'Samme beløp gjentatt', ids: ['k-2'], detail: 'Kasserer B 2026-10-02: -300 kr × 3' }] });
 assert.match(ex('Stor panteretur (300 kr)'), /300 kr\. Grensen er 300 kr/);
 assert.match(ex('Mange pantelapper (9)'), /9 pantelapper\. Grensen er 8/);
-assert.match(ex('Kassadifferanse (+1000 kr)'), /differanse \+1000 kr/);
 assert.match(ex('Regel: Min'), /Treffer din regel «Min»: Sum \(kr\) <= -200 OG Klokkeslett \(HH:MM\) >= 20:00/);
 assert.match(ex('Samme beløp gjentatt'), /Kasserer B .* × 3/);
 assert.match(ex('Bonger utenfor åpningstid'), /06:00–23:00/);
@@ -475,7 +476,7 @@ assert.strictEqual(L.numbers(rd.slice(0, 5), {}, C2).overall.enough, false);
 const pA = [], pB = [];
 for (let k = 0; k < 10; k++) { pA.push(mkI('pa-' + k, '2026-09-20', '10:0' + k, 1, 'A', 100)); pB.push(mkI('pb-' + k, '2026-10-01', '10:0' + k, 1, 'A', k < 4 ? -50 : 100)); }
 for (let k = 0; k < 10; k++) { pA.push(mkI('qa-' + k, '2026-09-20', '11:0' + k, 1, 'B', 80)); pB.push(mkI('qb-' + k, '2026-10-01', '11:0' + k, 1, 'B', 80)); }
-const cmpP = L.comparePeriods(pA, pB, {}, { 'pb-0': ['Stor panteretur (300 kr)'], 'pb-1': ['Kassadifferanse (-5 kr)'] }, W, C2);
+const cmpP = L.comparePeriods(pA, pB, {}, { 'pb-0': ['Stor panteretur (300 kr)'], 'pb-1': ['Kasserer bruker eget medlemsnr'] }, W, C2);
 const cA = cmpP.rows.find(r => r.id === 'A'), cB = cmpP.rows.find(r => r.id === 'B');
 assert.deepStrictEqual([cA.A.retShare, cA.B.retShare, Math.round(cA.dRet * 100)], [0, 0.4, 40]);
 assert.strictEqual(cA.flagged, true);

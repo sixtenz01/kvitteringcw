@@ -29,6 +29,19 @@ const mapOf = (pairs) => pairs.reduce((m, [it, s]) => (m[it.transactionId] = s, 
   assert.strictEqual(L.lappKind({ c: '399', n: 'PANTELAPP' }), 'mach');
   assert.strictEqual(L.lappKind({ c: '12', n: 'PANTELAPP' }), 'other');
   assert.strictEqual(L.lappKind({ c: '220', n: 'PANT' }), null);
+  // kodene kan velges i innstillingene (flere skilles med komma)
+  const CC = (o) => L.lappCodes(Object.assign(L.defaultControl(), o));
+  assert.deepStrictEqual([CC({}).manList, CC({}).machList], [['99'], ['399']]);
+  assert.strictEqual(L.lappKind({ c: '98', n: 'PANTELAPP' }, CC({ lappManualCodes: '99, 98' })), 'man');
+  assert.strictEqual(L.lappKind({ c: '99', n: 'PANTELAPP' }, CC({ lappManualCodes: '98' })), 'other', '99 er ikke lenger manuell');
+  assert.strictEqual(L.lappKind({ c: '400', n: 'PANTELAPP' }, CC({ lappMachineCodes: '399;400' })), 'mach');
+  assert.strictEqual(L.lappKind({ c: '098', n: 'PANTELAPP' }, CC({ lappManualCodes: '98' })), 'man', 'ledende nuller ignoreres');
+  assert.strictEqual(L.lappKind({ c: '99', n: 'PANTELAPP' }, CC({ lappManualCodes: '99', lappMachineCodes: '99' })), 'man', 'manuell går foran maskin');
+  assert.deepStrictEqual(CC({ lappManualCodes: 'abc, 12345, 7, 7, 99' }).manList, ['7', '99'], 'bare tall på 1–4 siffer, uten dubletter');
+  assert.deepStrictEqual(CC({ lappManualCodes: '' }).manList, [], 'tom liste = ingen manuelle koder');
+  assert.strictEqual(L.lappCodeText(['99']), 'kode 99');
+  assert.strictEqual(L.lappCodeText(['99', '98']), 'kodene 99, 98');
+  assert.strictEqual(L.lappCodeText([]), 'ingen kode');
   const s1 = sc([{ c: EAN, a: 150 }, { c: EAN, a: -150 }, { c: '399', n: 'PANTELAPP', a: -150 }, { c: '399', n: 'PANTELAPP', a: -20 }, { c: '399', n: 'PANTELAPP', a: 20 }], { retLines: 3, pay: { 'Kontant tilbake': 150 } });
   const cx = L.cancelled(s1);
   assert.deepStrictEqual([cx.itemLines, cx.itemSum, cx.pant.length, cx.pant[0].a, cx.pant[0].k], [1, 150, 1, 20, 1]);
@@ -364,6 +377,30 @@ const mapOf = (pairs) => pairs.reduce((m, [it, s]) => (m[it.transactionId] = s, 
   assert.deepStrictEqual(L.campAsk(bd, fs, 'b2').map((q) => q.length), [0, 0], 'andre bonger påvirkes ikke');
   assert.deepStrictEqual(L.campAsk([{ reason: 'Rabatt uten årsak', counts: true }, { reason: 'Rabatt uten treff på andre salg', counts: true }], fs, 'b1').map((q) => q.map((c) => c.key)), [['7311041012582', '7000000000017'], []], 'teller begge, første får spørsmålet');
   assert.deepStrictEqual(L.explainReason('Rabatt uten årsak', { id: 'b1', findings: [{ title: 'Rabatt uten årsak', ids: ['b1'], detail: 'Slutter på punktum.' }], cfg: L.defaultAnom() }), 'Slutter på punktum.');
+}
+
+// ---- pantelapp-koder velges i innstillingene
+{
+  const mk = (code, amt, cash) => { const it = bong({ cashierNumber: cash || 'A' }); return [it, sc([{ c: code, n: 'PANTELAPP', a: amt }], { retLines: 1, pay: { 'Kontant tilbake': -amt } })]; };
+  const set = [mk('98', -60), mk('99', -70), mk('400', -45)];
+  const its = set.map((x) => x[0]), map = mapOf(set);
+  // standard: bare kode 99 er manuell
+  let r = L.lappChecks(its, its, map, CT());
+  assert.deepStrictEqual([r.man.n, r.man.sum, r.mach.n, r.mach.sum], [1, 70, 0, 0]);
+  assert.match(r.findings.filter((x) => x.code === 'lappManual')[0].detail, /manuell pantelapp \(kode 99\), 70\.00 kr/);
+  // 98 og 99 manuelle, 400 fra pantemaskinen
+  const cfg = Object.assign(CT(), { lappManualCodes: '99, 98', lappMachineCodes: '399, 400' });
+  r = L.lappChecks(its, its, map, cfg);
+  assert.deepStrictEqual([r.man.n, r.man.sum, r.mach.n, r.mach.sum], [2, 130, 1, 45]);
+  const man = r.findings.filter((x) => x.code === 'lappManual');
+  assert.deepStrictEqual(man.map((x) => x.ids[0]).sort(), [its[0], its[1]].map((x) => x.transactionId).sort());
+  assert.match(man[0].detail, /manuell pantelapp \(kodene 99, 98\)/);
+  // ingen manuelle koder: ingenting regnes som manuelt
+  r = L.lappChecks(its, its, map, Object.assign(CT(), { lappManualCodes: '' }));
+  assert.deepStrictEqual([r.man.n, r.findings.filter((x) => x.code === 'lappManual').length], [0, 0]);
+  // innstillingene lagres og leses tilbake
+  assert.strictEqual(L.sanitizeControl({ lappManualCodes: '99, 98', lappMachineCodes: '399' }).lappManualCodes, '99, 98');
+  assert.strictEqual(L.sanitizeControl({}).lappMachineCodes, '399');
 }
 
 console.log('linjer: ok');

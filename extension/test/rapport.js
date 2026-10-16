@@ -108,7 +108,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   await runAnalysis();
   await page.click('[data-sec=chk-list] .kvr-ck:first-child button:text-is("Til oppfølging")');
   await page.click('[data-sec=chk-top] button:text-is("Lag revisjonsrapport…")');
-  assert.match(await page.innerText('.kvr-modal'), /Omfang: hele listen · 11 bonger · 9 flaggede/);
+  assert.match(await page.innerText('.kvr-modal'), /Omfang: hele listen · 11 bonger · 6 flaggede/);
   const r1 = await makeReport('TEST-1', 'Rev Isor', 3);
   assert.match(r1.name, /^revisjonsrapport_\d{8}_\d{4}\.zip$/);
   assert.strictEqual(r1.zipHash, sha(r1.buf), 'kontrollsummen i panelet er SHA-256 av ZIP-filen');
@@ -136,7 +136,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   const csv = await r1.zip.file('data/kvitteringer.csv').async('string');
   assert.ok(rep1.includes(sha(Buffer.from(csv, 'utf8'))), 'datasettets kontrollsum står i rapporten');
   assert.strictEqual(csv.trim().split('\r\n').length, 12, '11 kvitteringer og overskrift');
-  for (const t of ['TEST-1', 'Rev Isor', 'Omfang', 'hele listen', 'Dekningsgrad', 'Skannet innhold: 8 av 8 salg (100 %)', 'Stor panteretur fra', 'Falsk retur', 'Salg etter kassaoppgjør', 'Hull i bongnummer', '1005-1-104', 'Til oppfølging', 'href="bevis/01_', 'sha256sum -c KONTROLLSUM.txt', 'Kvitteringshenter 3.21.1'])
+  for (const t of ['TEST-1', 'Rev Isor', 'Omfang', 'hele listen', 'Dekningsgrad', 'Skannet innhold: 8 av 8 salg (100 %)', 'Stor panteretur fra', 'Falsk retur', 'Salg etter kassaoppgjør', 'Hull i bongnummer', '1005-1-104', 'Til oppfølging', 'href="bevis/01_', 'sha256sum -c KONTROLLSUM.txt', 'Kvitteringshenter 3.22.0'])
     assert.ok(rep1.includes(t), 'rapporten mangler «' + t + '»');
   for (const p of pngs) assert.ok(rep1.includes('href="' + p + '"'), p + ' er lenket');
   const exported = JSON.parse(await r1.zip.file('innstillinger.json').async('string'));
@@ -154,8 +154,8 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   // loggen i Eksport og versjon i hjelpen
   await go('Mer', 'Eksport');
   const logTxt = await page.innerText('[data-sec=auditrep]');
-  assert.ok(logTxt.includes('TEST-1') && logTxt.includes(r1.zipHash.slice(0, 12)) && logTxt.includes('9 av 11'));
-  assert.deepStrictEqual(await page.evaluate(() => JSON.parse(JSON.stringify(window.KvReport.VERSION))), '3.21.1');
+  assert.ok(logTxt.includes('TEST-1') && logTxt.includes(r1.zipHash.slice(0, 12)) && logTxt.includes("6 av 11"));
+  assert.deepStrictEqual(await page.evaluate(() => JSON.parse(JSON.stringify(window.KvReport.VERSION))), '3.22.0');
 
   // innstillinger endret etter analysen: rapporten viser verdiene som ble brukt
   await go('Mer', 'Innstillinger');

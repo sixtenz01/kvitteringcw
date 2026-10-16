@@ -1281,7 +1281,7 @@
       ui.settleList.appendChild(el('div', { class: 'kvr-hint', text: 'Ingen kassaoppgjør blant synlige kvitteringer. Velg «2 – Kassaoppgjør» under Filter → Type.' }));
       return;
     }
-    var thr = hasNumber(anomCfg.settleDiff) ? Number(anomCfg.settleDiff) : 1;
+    var thr = 1;
     var unscanned = list.filter(function (r) { return !scanMap[r.item.transactionId]; }).length;
     ui.settleNote.textContent = list.length + ' kassaoppgjør' + (unscanned ? ' · ' + unscanned + ' ikke skannet (bruk Skann innhold)' : '') + '.';
     list.forEach(function (r) {
@@ -1604,13 +1604,13 @@
   function renderLappCard(R) {
     var box = ui.ctlLapp, P = R.lapp;
     if (!P.scanned) { box.appendChild(hintEl('Ingen skannede salg i valgte butikker. Skann og kjør analysen på nytt.')); return; }
-    box.appendChild(hintEl(P.scanned + ' av ' + P.sales + ' salg er skannet. Pantemaskin (kode 399): ' + P.mach.n + ' pantelapper, ' + fmt(P.mach.sum) + ' kr. Manuelt innlagt (kode 99): ' + P.man.n + ' pantelapper, ' + fmt(P.man.sum) + ' kr. Slettet: ' + P.del + '. Gjenbrukt: ' + P.reuse + '.'));
+    box.appendChild(hintEl(P.scanned + ' av ' + P.sales + ' salg er skannet. Pantemaskin (' + L.lappCodeText(L.lappCodes(ctlCfg).machList) + '): ' + P.mach.n + ' pantelapper, ' + fmt(P.mach.sum) + ' kr. Manuelt innlagt (' + L.lappCodeText(L.lappCodes(ctlCfg).manList) + '): ' + P.man.n + ' pantelapper, ' + fmt(P.man.sum) + ' kr. Slettet: ' + P.del + '. Gjenbrukt: ' + P.reuse + '.'));
     var rows = P.rows.filter(function (r) { return r.bongs || r.del || r.reuse; }).map(function (r) {
       return [{ node: entLink('kasserer', r.id) }, r.bongs, r.mach.n + ' · ' + fmt(r.mach.sum), { t: r.man.n + ' · ' + fmt(r.man.sum), bad: r.flag }, { t: pct(r.share), bad: r.flag }, r.del, r.reuse];
     });
     if (rows.length) {
-      box.appendChild(tbl(['Kasserer', 'Bonger', 'Maskin 399', 'Manuell 99', 'Andel manuell', 'Slettet', 'Gjenbruk'], rows));
-      box.appendChild(hintEl('Maskin og manuell vises som antall · kr. Maskin = «399 PANTELAPP», lest fra pantemaskinen. Manuell = «99 PANTELAPP», lagt inn for hånd. Rødt = minst ' + (ctlCfg.lappManualN || '–') + ' bonger med manuell pantelapp og andel over butikkens (' + pct(P.storeShare) + ') × ' + ctlCfg.profFactor + '. Slettet = en pantelapp og en motlinje med samme beløp på samme bong. Gjenbruk = samme sum (minst ' + ctlCfg.pantMin + ' kr) på ulike bonger innen ' + (ctlCfg.lappReuseMin || '–') + ' min, eller samme lappnummer hvis bongen viser det. Flaskepant fra andre butikker gir noen tilfeldige treff.'));
+      box.appendChild(tbl(['Kasserer', 'Bonger', 'Maskin ' + L.lappCodes(ctlCfg).machList.join('/'), 'Manuell ' + L.lappCodes(ctlCfg).manList.join('/'), 'Andel manuell', 'Slettet', 'Gjenbruk'], rows));
+      box.appendChild(hintEl('Maskin og manuell vises som antall · kr. Maskin = pantelapp med ' + L.lappCodeText(L.lappCodes(ctlCfg).machList) + ', lest fra pantemaskinen. Manuell = pantelapp med ' + L.lappCodeText(L.lappCodes(ctlCfg).manList) + ', lagt inn for hånd. Rødt = minst ' + (ctlCfg.lappManualN || '–') + ' bonger med manuell pantelapp og andel over butikkens (' + pct(P.storeShare) + ') × ' + ctlCfg.profFactor + '. Slettet = en pantelapp og en motlinje med samme beløp på samme bong. Gjenbruk = samme sum (minst ' + ctlCfg.pantMin + ' kr) på ulike bonger innen ' + (ctlCfg.lappReuseMin || '–') + ' min, eller samme lappnummer hvis bongen viser det. Flaskepant fra andre butikker gir noen tilfeldige treff.'));
     } else box.appendChild(hintEl('Ingen pantelapper i omfanget.'));
   }
 

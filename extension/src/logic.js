@@ -818,13 +818,13 @@
 
   // ---- avvik -------------------------------------------------------------
   function defaultAnom() {
-    return { bigReturn: '300', manyLapper: '8', roundMin: '500', settleDiff: '1', cashNoSale: true };
+    return { bigReturn: '300', manyLapper: '8', roundMin: '500', cashNoSale: true };
   }
 
   function sanitizeAnom(raw) {
     var d = defaultAnom();
     if (!raw || typeof raw !== 'object') return d;
-    ['bigReturn', 'manyLapper', 'roundMin', 'settleDiff'].forEach(function (k) { if (k in raw) d[k] = String(raw[k]).slice(0, 200); });
+    ['bigReturn', 'manyLapper', 'roundMin'].forEach(function (k) { if (k in raw) d[k] = String(raw[k]).slice(0, 200); });
     if ('cashNoSale' in raw) d.cashNoSale = !!raw.cashNoSale;
     return d;
   }
@@ -839,10 +839,6 @@
       if (hasNum(cfg.bigReturn) && Math.abs(scan.ret) >= Number(cfg.bigReturn)) out.push('Stor panteretur (' + Math.abs(scan.ret) + ' kr)');
       if (hasNum(cfg.manyLapper) && scan.retLines >= Number(cfg.manyLapper)) out.push('Mange pantelapper (' + scan.retLines + ')');
       if (cfg.cashNoSale && netNp(scan) <= 0 && scan.retLines > 0 && (scan.pay['Kontant tilbake'] || 0) > 0) out.push('Kontant tilbake uten salg');
-      if (scan.settle && hasNum(cfg.settleDiff) && Math.abs(scan.settle.diff.sum || 0) >= Number(cfg.settleDiff) && Math.abs(scan.settle.diff.sum || 0) > 0) {
-        var d = scan.settle.diff.sum;
-        out.push('Kassadifferanse (' + (d > 0 ? '+' : '') + d + ' kr)');
-      }
     }
     (custom || []).forEach(function (r) { if (evalRule(r, item, scan, groups)) out.push('Regel: ' + r.name); });
     return out;
@@ -977,7 +973,8 @@
     ['digitMin', 'Siste siffer: minst antall bonger per kasserer', '50'], ['digitP', 'Siste siffer: p under (tom = av)', '0.001'],
     ['seqRegMin', 'Løpenummer: avvik fra naboene i minutter (tom = av)', '90'],
     ['corrRho', 'Retur og kassadiff.: ρ under − (tom = av)', '0.5'], ['corrDays', 'Retur og kassadiff.: minst antall dager', '8'],
-    ['lappManualMin', 'Manuell pantelapp (kode 99) fra kr (tom = av)', '50'], ['lappManualN', 'Manuell pantelapp: kasserer ved ≥ antall bonger (tom = av)', '5'],
+    ['lappManualCodes', 'Manuell pantelapp: koder (komma)', '99'], ['lappMachineCodes', 'Pantelapp fra pantemaskin: koder (komma)', '399'],
+    ['lappManualMin', 'Manuell pantelapp fra kr (tom = av)', '50'], ['lappManualN', 'Manuell pantelapp: kasserer ved ≥ antall bonger (tom = av)', '5'],
     ['lappDel', 'Pantelapp slettet på bong (tom = av)', '1'], ['lappReuseMin', 'Samme pantelapp-sum på flere bonger innen min (tom = av)', '60'],
     ['voidCashOn', 'Slettede varelinjer, pant og kontant tilbake (tom = av)', '1'], ['voidResaleMin', 'Makulert vare: nytt salg innen min (tom = av)', '120'],
     ['voidCashN', 'Makulerte varelinjer: kasserer ved ≥ antall (tom = av)', '5'],
@@ -1006,9 +1003,8 @@
       sf('bigReturn', 'anom', 'num', 'Stor panteretur fra', 'kr', 'Utbetalt panteretur på én bong.', true),
       sf('manyLapper', 'anom', 'num', 'Mange pantelapper fra', 'stk', 'Antall pantelapper på én bong.', true),
       sf('roundMin', 'anom', 'num', 'Rundt beløp fra', 'kr', 'Totalen er et helt hundre-beløp på minst dette.', true),
-      sf('settleDiff', 'anom', 'num', 'Kassadifferanse fra', 'kr', 'Differanse i ett kassaoppgjør.', true),
       sf('cashNoSale', 'anom', 'flag', 'Kontant tilbake uten salg', '', 'Bongen har bare pantelapper og kontant tilbake.')
-    ], weights: ['Stor panteretur', 'Mange pantelapper', 'Kontant tilbake uten salg', 'Rundt beløp', 'Kassadifferanse'] },
+    ], weights: ['Stor panteretur', 'Mange pantelapper', 'Kontant tilbake uten salg', 'Rundt beløp'] },
     { id: 'patterns', title: 'Mønstre på tvers av bonger', text: 'Gjentakelser som er vanlige ved misbruk.', fields: [
       sf('smallReturnN', 'ctl', 'num', 'Små returer før stenging: flagg ved', 'stk', 'Antall små returer på samme kasse rett før stenging.', true),
       sf('smallReturn', 'ctl', 'num', 'Liten retur er opptil', 'kr'),
@@ -1089,8 +1085,10 @@
       sf('vatRates', 'ctl', 'text', 'Gyldige MVA-satser (%, komma)', '', 'Standard for Norge: 0, 12, 15 og 25.'),
       sf('refDup', 'ctl', 'flag', 'Samme betalingsreferanse på flere bonger', '', 'TransId gjelder alle bonger; Referanse gjelder bare samme kasse og dag.')
     ], weights: ['Linjer stemmer ikke med totalen', 'Betaling stemmer ikke med totalen', 'MVA stemmer ikke', 'Ugyldig MVA-sats', 'Samme betalingsreferanse på flere bonger'] },
-    { id: 'lapp', title: 'Pantelapper: manuell, slettet og gjenbrukt', text: 'Pantelapp lagt inn manuelt (kode 99) mot pantelapp fra pantemaskinen (kode 399), slettede pantelapper og samme pantelapp innløst flere ganger. Krever skanning.', fields: [
-      sf('lappManualMin', 'ctl', 'num', 'Manuell pantelapp fra', 'kr', 'Summen av manuelle pantelapper (kode 99) på én bong.', true),
+    { id: 'lapp', title: 'Pantelapper: manuell, slettet og gjenbrukt', text: 'Pantelapp lagt inn manuelt mot pantelapp fra pantemaskinen (kodene velger du selv, standard 99 og 399), slettede pantelapper og samme pantelapp innløst flere ganger. Krever skanning.', fields: [
+      sf('lappManualCodes', 'ctl', 'text', 'Manuell pantelapp: koder', '', 'Varenummeret foran «PANTELAPP» på bongen som regnes som manuelt innlagt. Flere koder skilles med komma, for eksempel 99, 98.'),
+      sf('lappMachineCodes', 'ctl', 'text', 'Pantelapp fra pantemaskin: koder', '', 'Varenummer som regnes som pantelapp fra pantemaskinen. Andre koder på pantelapper telles som «annen».'),
+      sf('lappManualMin', 'ctl', 'num', 'Manuell pantelapp fra', 'kr', 'Summen av manuelle pantelapper (kodene ovenfor) på én bong.', true),
       sf('lappManualN', 'ctl', 'num', 'Manuell pantelapp: marker kasserer ved', 'bonger', 'Må også ligge over butikkens andel med «Avviker fra snittet» ganger.', true),
       sf('lappDel', 'ctl', 'flag', 'Pantelapp slettet', '', 'En pantelapp og en motlinje med samme beløp på samme bong.'),
       sf('lappReuseMin', 'ctl', 'num', 'Samme pantelapp innløst flere ganger innen', 'min', 'Samme sum (minst «Pantebeløp er minst») på ulike bonger. Viser bongen et lappnummer, brukes det i stedet, uten tidsgrense.', true)
@@ -1436,7 +1434,7 @@
 
   // ---- risikoscore og forklaring --------------------------------------------------
   var RISK_WEIGHTS = {
-    'Stor panteretur': 3, 'Mange pantelapper': 3, 'Kontant tilbake uten salg': 4, 'Rundt beløp': 1, 'Kassadifferanse': 5,
+    'Stor panteretur': 3, 'Mange pantelapper': 3, 'Kontant tilbake uten salg': 4, 'Rundt beløp': 1,
     'Små returer før stenging': 4, 'Kontant tilbake uten salg flere ganger': 5, 'Samme beløp gjentatt': 3,
     'Bonger utenfor åpningstid': 2, 'Regel': 3,
     'Retur uten salg': 3, 'Kortkjøp refundert kontant': 5, 'Salg og retur av samme beløp': 4, 'Salg etter kassaoppgjør': 4,
@@ -1478,7 +1476,6 @@
     rabatt: ['Rabatt uten årsak', 'Rabatt med overvåket årsak', 'Høy rabattprosent', 'Rabatt uten treff på andre salg'],
     regnskap: ['Linjer stemmer ikke med totalen', 'Betaling stemmer ikke med totalen', 'MVA stemmer ikke', 'Ugyldig MVA-sats'],
     pris: ['Avvikende pris på vare', 'Spør pris avviker fra dagens salg'],
-    differanse: ['Kassadifferanse', 'Gjentatte kassadifferanser'],
     retvare: ['Retur av vare uten kjøp på kortet', 'Retur av vare uten kjøp av medlemmet', 'Retur av vare uten salg samme dag']
   };
   var FAMILY_OF = {};
@@ -1555,7 +1552,6 @@
       case 'Mange pantelapper': return 'Bongen har ' + v + ' pantelapper. Grensen er ' + cfg.manyLapper + '.';
       case 'Kontant tilbake uten salg': return 'Bongen har bare pantelapper og kontant tilbake, ingen andre varer.';
       case 'Rundt beløp': return 'Totalen er et helt hundre-beløp på minst ' + cfg.roundMin + ' kr.';
-      case 'Kassadifferanse': return 'Kassaoppgjøret viser differanse ' + v + '. Grensen er ' + cfg.settleDiff + ' kr.';
       default: break;
     }
     if (/^Regel: /.test(b)) {
@@ -2436,10 +2432,30 @@
   function wordList(txt) { return String(txt || '').split(/[,;\n]+/).map(function (t) { return t.trim().toLowerCase(); }).filter(Boolean); }
   function inDay(d, n) { return d ? Date.parse(d + 'T00:00:00Z') / 86400000 + (n || 0) : null; }
 
-  // «99 PANTELAPP» legges inn manuelt, «399 PANTELAPP» kommer fra pantemaskinen.
-  function lappKind(l) {
+  // Standard: «99 PANTELAPP» legges inn manuelt, «399 PANTELAPP» kommer fra pantemaskinen. Kodene kan velges i innstillingene
+  // (flere skilles med komma). Står en kode i begge lister, regnes den som manuell.
+  function lappCodes(cfg) {
+    var parse = function (txt) {
+      var set = {}, list = [];
+      String(txt === undefined || txt === null ? '' : txt).split(/[,;\s]+/).forEach(function (t) {
+        t = t.replace(/^0+(?=\d)/, '');
+        if (/^\d{1,4}$/.test(t) && !set[t]) { set[t] = true; list.push(t); }
+      });
+      return { set: set, list: list };
+    };
+    var man = parse(cfg && cfg.lappManualCodes !== undefined ? cfg.lappManualCodes : '99'), mach = parse(cfg && cfg.lappMachineCodes !== undefined ? cfg.lappMachineCodes : '399');
+    return { man: man.set, mach: mach.set, manList: man.list, machList: mach.list };
+  }
+
+  function lappCodeText(list) {
+    return !list || !list.length ? 'ingen kode' : list.length === 1 ? 'kode ' + list[0] : 'kodene ' + list.join(', ');
+  }
+
+  function lappKind(l, codes) {
     if (!/PANTELAPP/i.test(l.n) || !isPantText(l)) return null;
-    return String(l.c) === '99' ? 'man' : String(l.c) === '399' ? 'mach' : 'other';
+    codes = codes || lappCodes(null);
+    var c = String(l.c).replace(/^0+(?=\d)/, '');
+    return codes.man[c] ? 'man' : codes.mach[c] ? 'mach' : 'other';
   }
 
   // Slettede linjer: en linje og en motlinje med samme kode og motsatt beløp på samme bong.
@@ -2468,7 +2484,7 @@
   function lappChecks(items, pop, scanMap, cfg) {
     var res = { findings: [], rows: [], mach: { n: 0, sum: 0 }, man: { n: 0, sum: 0 }, del: 0, reuse: 0, scanned: 0, sales: 0, coverage: 1 };
     var manMin = cnum(cfg.lappManualMin, null), manN = cnum(cfg.lappManualN, null), delOn = hasNum(cfg.lappDel), reuseMin = cnum(cfg.lappReuseMin, null);
-    var pmin = cnum(cfg.pantMin, 20), f = cnum(cfg.profFactor, 1.5);
+    var pmin = cnum(cfg.pantMin, 20), f = cnum(cfg.profFactor, 1.5), codes = lappCodes(cfg);
     var scope = {}, per = {}, stores = {}, lines = [];
     items.forEach(function (it) { scope[it.transactionId] = true; });
     pop.forEach(function (it) {
@@ -2479,7 +2495,7 @@
       res.scanned++;
       var man = [], mach = [], oth = [];
       sc.items.forEach(function (l) {
-        var k = lappKind(l);
+        var k = lappKind(l, codes);
         if (!k) return;
         if (l.a < 0) (k === 'man' ? man : k === 'mach' ? mach : oth).push(l);
         if (l.a < 0 && reuseMin !== null && -l.a >= pmin) lines.push({ it: it, kind: 'l', amt: -l.a, id: (/(\d{6,})/.exec(l.n) || [])[1] || '' });
@@ -2496,7 +2512,7 @@
       if (man.length) { c.manBongs++; sb.man++; }
       if (manMin !== null && man.length && sum(man) >= manMin) {
         res.findings.push({ kind: 'Pantelapp', code: 'lappManual', title: 'Manuell pantelapp', flag: true,
-          detail: whereText(it) + ': ' + man.length + ' manuell pantelapp (kode 99), ' + money(sum(man)) + ' kr' + (mach.length ? ' (og ' + mach.length + ' fra pantemaskin, kode 399)' : ''),
+          detail: whereText(it) + ': ' + man.length + ' manuell pantelapp (' + lappCodeText(codes.manList) + '), ' + money(sum(man)) + ' kr' + (mach.length ? ' (og ' + mach.length + ' fra pantemaskin, ' + lappCodeText(codes.machList) + ')' : ''),
           ids: [it.transactionId] });
       }
       var cx = cancelled(sc).pant.filter(function (p) { return /PANTELAPP/i.test(p.n); });
@@ -3461,6 +3477,8 @@
     cancelled: cancelled,
     netNp: netNp,
     lappKind: lappKind,
+    lappCodes: lappCodes,
+    lappCodeText: lappCodeText,
     discRate: discRate,
     campaigns: campaigns,
     campKey: campKey,

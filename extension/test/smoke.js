@@ -247,8 +247,8 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   assert.match(await page.innerText('[data-sec=anom] .kvr-list'), /Stor panteretur \(256 kr\)/);
   assert.match(await page.innerText('[data-sec=anom] .kvr-list'), /Kontant tilbake uten salg/);
   await page.click('text=Kun avvik');
-  assert.deepStrictEqual(await vis(), ['t-1', 't-2']);
-  assert.match(await page.innerText('[data-sec=anom] .kvr-list'), /Kassadifferanse \(\+1000 kr\)/);
+  assert.deepStrictEqual(await vis(), ['t-1']);
+  assert.doesNotMatch(await page.innerText('[data-sec=anom] .kvr-list'), /Kassadifferanse/, 'differanse i ett kassaoppgjør er ikke lenger et avvik per bong');
   await wipe();
 
   // CW-søk
@@ -408,7 +408,9 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   const newRow = await page.innerText('[data-sec=chk-list] .kvr-ck:has(.kvr-new)');
   assert.match(newRow, /10-01 14:00/); assert.match(newRow, /Regel: Ny regel 2/);
   assert.strictEqual(await page.$$eval('[data-sec=chk-list] .kvr-new', n => n.length), 1);
-  await page.click('[data-sec=chk-list] .kvr-ck:has(.kvr-new) .kvr-ck-h');
+  // den øverste raden er åpen fra før; åpne bare hvis den er lukket
+  const newHead = page.locator('[data-sec=chk-list] .kvr-ck:has(.kvr-new) .kvr-ck-h');
+  if ((await newHead.getAttribute('aria-expanded')) !== 'true') await newHead.click();
   assert.match(await page.innerText('[data-sec=chk-list] .kvr-ck:has(.kvr-new)'), /Treffer din regel «Ny regel 2»: Sum \(kr\) = 50/);
   await page.click('[data-sec=chk-list] .kvr-ck:has(.kvr-new) button:text-is("Til oppfølging")');
   assert.match(await page.innerText('[data-sec=chk-list] .kvr-ck:has(.kvr-new)'), /Til oppfølging/);

@@ -111,6 +111,23 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   assert.strictEqual(await input('bong', 'Poeng: Stor panteretur').inputValue(), '3');
   assert.match(await page.innerText('.kvr-stats'), /«Avvik per bong» er satt tilbake til standard/);
 
+  // Avvik per bong har ikke lenger kassadifferanse per oppgjør
+  assert.strictEqual(await page.locator('[data-sec=set-bong] input[aria-label="Kassadifferanse fra"]').count(), 0);
+  assert.strictEqual(await page.locator('[data-sec=set-bong] input[aria-label="Poeng: Kassadifferanse"]').count(), 0);
+  // pantelapp-koder kan velges
+  await group('lapp');
+  assert.strictEqual(await input('lapp', 'Manuell pantelapp: koder').inputValue(), '99');
+  assert.strictEqual(await input('lapp', 'Pantelapp fra pantemaskin: koder').inputValue(), '399');
+  await input('lapp', 'Manuell pantelapp: koder').fill('99, 98');
+  await input('lapp', 'Manuell pantelapp: koder').press('Tab');
+  assert.strictEqual(await badge('lapp'), '1 endret');
+  await page.waitForTimeout(300);
+  assert.strictEqual((await idbGet('kv', 'kvr.ctl.v1')).lappManualCodes, '99, 98');
+  await input('lapp', 'Manuell pantelapp: koder').fill('');
+  await input('lapp', 'Manuell pantelapp: koder').press('Tab');
+  assert.strictEqual(await input('lapp', 'Manuell pantelapp: koder').inputValue(), '99', 'tomt felt gir standard');
+  assert.strictEqual(await badge('lapp'), '');
+
   // terskler gjelder fra neste analyse: melding i Sjekk først
   await go('Skann');
   await go('Analyse', 'Sjekk først');
