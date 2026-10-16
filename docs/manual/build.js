@@ -209,4 +209,4 @@ if (require.main === module) {
   fs.writeFileSync(out, html);
   console.log('skrev ' + out + ' (' + (html.length / 1048576).toFixed(1) + ' MB)');
 }
-module.exports = { page, pdfPage, settingsPage, settingsEntries, IMG, LEGENDS };
+module.exports = { page, pdfPage, settingsPage, settingsEntries, SCOPE_OF, IMG, LEGENDS };

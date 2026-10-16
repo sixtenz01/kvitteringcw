@@ -78,6 +78,16 @@ L.DISC_REASONS.forEach((r, i) => has(r));
   assert.ok(st.includes('Slik setter du innstillinger') && st.includes('Standard for denne gruppen'));
 }
 
+// ---- arket «Hva plukker ut en kvittering?» har vilkår for alle tester og poengene fra innstillingene
+{
+  const ark = require('../../docs/manual/ark.js');
+  Object.keys(L.RISK_WEIGHTS).forEach((w) => assert.ok(ark.SHORT[w], 'arket mangler vilkår for ' + w));
+  Object.keys(ark.SHORT).forEach((w) => assert.ok(w in L.RISK_WEIGHTS, 'arket har vilkår for ukjent test ' + w));
+  const ah = ark.html(7).replace(/<style>[\s\S]*?<\/style>/g, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+  L.SETTING_GROUPS.filter((g) => g.weights.length).forEach((g) => assert.ok(ah.includes(g.title), 'arket mangler ' + g.title));
+  assert.ok(ah.includes('Hva plukker ut en kvittering?') && ah.includes('Høy fra 8') && ah.includes('Lav 0–3'));
+}
+
 // ---- lenker og bilder er hele
 const ids = {};
 html.replace(/\sid="([^"]+)"/g, (m, id) => { ids[id] = true; return m; });
