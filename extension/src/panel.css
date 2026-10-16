@@ -79,8 +79,8 @@
 #kvr-panel .kvr-primary,.kvr-dlg .kvr-btn.kvr-primary{background:var(--kv-accent);border-color:var(--kv-accent);color:var(--kv-accent-fg)}
 #kvr-panel .kvr-primary:hover:not(:disabled),.kvr-dlg .kvr-btn.kvr-primary:hover:not(:disabled){background:var(--kv-accent-hover);border-color:var(--kv-accent-hover)}
 #kvr-panel .kvr-sm,.kvr-dlg .kvr-sm{padding:2px 9px;min-height:var(--kv-ctl-sm);flex:0 0 auto}
-#kvr-panel .kvr-foot{display:flex;gap:6px;padding:8px 12px;border-top:1px solid var(--kv-line);background:#fff}
-#kvr-panel .kvr-foot .kvr-btn{flex:1;padding:6px 6px}
+#kvr-panel .kvr-foot{display:flex;flex-wrap:wrap;gap:6px;padding:8px 12px;border-top:1px solid var(--kv-line);background:#fff}
+#kvr-panel .kvr-foot .kvr-btn{flex:1 1 0;min-width:64px;padding:6px 6px}
 
 /* lister og tabeller */
 #kvr-panel .kvr-table{width:100%;border-collapse:collapse;font-size:12px}

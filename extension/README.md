@@ -101,6 +101,10 @@ Versjon 3.21.0 legger til: **Tempo** (serier av bonger med høyst N sekunder mel
 - **Manuell kvittering / til gode-lapp:** ordliste; flagges når en annen bong i butikken har samme beløp innen 3 dager.
 - Ikke bekreftet i ekte data: hvordan slettede linjer, spør pris, kortlinje og manuell kvittering står på bongen. Testene bruker motlinjer, ord og maskerte kortnumre; Diagnostikk samler det som ikke kjennes igjen.
 
+## Versjon 3.25.0: PDF av valgte kvitteringer
+
+- **PDF-knapp** i bunnlinjen (og *PDF: valgte (samlet)* under Mer → Eksport): huk av bongene i listen (eller *Velg alle*) og trykk PDF. Bildene av kvitteringene (samme tegning som PNG, lagret som JPEG) samles i én A4-PDF som lastes ned. *PDF-oppsett*: flere bonger per side (kompakt) eller én per side; *PNG-format* og topptekstvalgene gjelder også PDF. PDF-filen bygges i nettleseren uten bibliotek (`KvReport.pdf` i `report.js`), uten kall ut av nettleseren. Bonger som ikke lar seg tegne telles som feilet og kan tas på nytt.
+
 ## Versjon 3.24.0: færre kontroller, rabatt kun med årsakskode, egne hendelsesord
 
 - **Fjernet:** *Kassadifferanse over tid* (gjentatte differanser og retur mot kassadifferanse; kassaoppgjør og dagsavstemming består), *Hull i bongnummer*, *Mulig sentral kampanje* (notat, spørsmål, kampanjedag, `kvr.camp.v1`), *Kjøpeutbytte*, *Bongen går opp, MVA og betalingsreferanse* (linjer mot Totalt, betaling mot Totalt, MVA og samme betalingsreferanse), og *Spesialbetaling*. Skannefeltene lagres fortsatt (Totalt, MVA, referanse, Kjøpeutbytte, kuponger), og referansen brukes av Retur mot kvittering. Eldre innstillingsfiler leses uten feil; ukjente verdier ignoreres. Egne regler som brukte *rabattuten*, *kuponger* eller *kupong* skrus av i stedet for å bli bredere.

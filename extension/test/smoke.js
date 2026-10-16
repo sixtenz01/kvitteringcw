@@ -516,6 +516,28 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   assert.ok(dimA4.h >= 1123 * 2, 'a4-høyde');
   await page.waitForFunction(() => /Ferdig\. 4 PNG/.test(document.getElementById('kvr-panel').innerText));
 
+  // PDF: de valgte kvitteringene samlet i én fil (t-5 feiler fortsatt)
+  await page.selectOption('.kvr-f:has-text("PNG-format") select', 'bong');
+  assert.ok(await page.isVisible('.kvr-foot button:has-text("PDF (5)")'), 'PDF-knapp i bunnlinjen med antall valgte');
+  const pdfOf = async (sel) => {
+    const [pf] = await Promise.all([page.waitForEvent('download', { timeout: 60000 }), page.click(sel)]);
+    assert.match(pf.suggestedFilename(), /^kvitteringer_\d{4}-\d{2}-\d{2}\.pdf$/);
+    const raw = fs.readFileSync(await pf.path()), t = raw.toString('latin1');
+    if (process.env.PDFOUT) fs.writeFileSync(process.env.PDFOUT.replace('.pdf', (sel.indexOf('samlet') !== -1 ? '-single' : '-multi') + '.pdf'), raw);
+    assert.strictEqual(t.slice(0, 8), '%PDF-1.4');
+    assert.ok(/startxref\n\d+\n%%EOF\n$/.test(t));
+    assert.strictEqual((t.match(/\/DCTDecode/g) || []).length, 4, 'fire bilder (t-5 feilet)');
+    assert.ok(t.includes('/MediaBox [0 0 595.28 841.89]'), 'A4');
+    return Number(/\/Count (\d+)/.exec(t)[1]);
+  };
+  const multi = await pdfOf('.kvr-foot button:has-text("PDF")');
+  await page.waitForFunction(() => /Ferdig\. PDF med 4 kvitteringer på \d+ side/.test(document.getElementById('kvr-panel').innerText));
+  assert.ok(multi >= 1 && multi <= 4, 'flere bonger per side: ' + multi);
+  await page.selectOption('.kvr-f:has-text("PDF-oppsett") select', 'single');
+  assert.strictEqual(await pdfOf('button:text-is("PDF: valgte (samlet)")'), 4, 'én bong per side');
+  await page.waitForFunction(() => /Ferdig\. PDF med 4 kvitteringer på 4 sider/.test(document.getElementById('kvr-panel').innerText));
+  await page.selectOption('.kvr-f:has-text("PDF-oppsett") select', 'multi');
+
   // lagring: kun IndexedDB, aldri localStorage; overlever omlasting
   await load();
   assert.deepStrictEqual(await page.evaluate(() => Object.keys(localStorage).filter(k => k.indexOf('kvr') === 0)), []);

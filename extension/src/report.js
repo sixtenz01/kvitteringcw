@@ -2,7 +2,7 @@
   'use strict';
 
   var L = typeof module !== 'undefined' && module.exports ? require('./logic.js') : root.KvLogic;
-  var VERSION = '3.24.0';
+  var VERSION = '3.25.0';
 
   // ---- SHA-256 (ren JS, så rapporten ikke avhenger av crypto.subtle) -------------------
   var K256 = [
@@ -362,7 +362,80 @@
     return { files: files, hashes: h, coverage: cov, limitations: lim };
   }
 
-  var api = { logHash: logHash, logAppend: logAppend, logVerify: logVerify, logTrim: logTrim, VERSION: VERSION, sha256: sha256, sha256Bytes: sha256Bytes, utf8: utf8, stable: stable, fmtNum: fmtNum, receiptsCsv: receiptsCsv, contentJson: contentJson, settingsTable: settingsTable, coverageOf: coverageOf, limitations: limitations, build: build };
+  // ---- PDF av JPEG-bilder (A4), uten bibliotek ------------------------------------------------
+  // images: [{ jpeg: Uint8Array, scale }] der scale er tegnefaktoren bildet ble laget med (bredde i px / bredde på bongen).
+  // opt: { multi: flere bilder per side (hyller), title }. Hvert bilde vises i 0,55 pt per CSS-px og krympes bare om det ikke får plass.
+  function jpegSize(b) {
+    if (!b || b.length < 4 || b[0] !== 0xFF || b[1] !== 0xD8) throw new Error('ikke JPEG');
+    var i = 2;
+    while (i + 9 < b.length) {
+      if (b[i] !== 0xFF) { i++; continue; }
+      var m = b[i + 1];
+      if (m === 0xFF) { i++; continue; }
+      if (m === 0xD8 || m === 0x01 || (m >= 0xD0 && m <= 0xD7)) { i += 2; continue; }
+      var len = (b[i + 2] << 8) | b[i + 3];
+      if ((m >= 0xC0 && m <= 0xCF) && m !== 0xC4 && m !== 0xC8 && m !== 0xCC) return { h: (b[i + 5] << 8) | b[i + 6], w: (b[i + 7] << 8) | b[i + 8] };
+      i += 2 + len;
+    }
+    throw new Error('fant ikke bildestørrelse');
+  }
+
+  function pdf(images, opt) {
+    opt = opt || {};
+    var PW = 595.28, PH = 841.89, M = 28.35, GAP = 14, KS = 0.55, aw = PW - 2 * M, ah = PH - 2 * M;
+    var pages = [], cur = null;
+    var newPage = function () { cur = { items: [], x: M, y: M, rowH: 0 }; pages.push(cur); };
+    images.forEach(function (im, idx) {
+      var sz = jpegSize(im.jpeg), dw = sz.w / (im.scale || 1) * KS, dh = dw * sz.h / sz.w;
+      var s = Math.min(1, aw / dw, ah / dh);
+      dw *= s; dh *= s;
+      if (!cur) newPage();
+      var x, y;
+      if (!opt.multi) {
+        if (cur.items.length) newPage();
+        x = (PW - dw) / 2; y = M;
+      } else {
+        if (cur.items.length && cur.x + dw > PW - M + 0.01) { cur.x = M; cur.y += cur.rowH + GAP; cur.rowH = 0; }
+        if (cur.items.length && cur.y + dh > PH - M + 0.01) newPage();
+        x = cur.x; y = cur.y;
+        cur.x += dw + GAP; cur.rowH = Math.max(cur.rowH, dh);
+      }
+      cur.items.push({ i: idx, x: x, y: y, w: dw, h: dh });
+    });
+    var chunks = [], len = 0, offs = [];
+    var latin = function (s) { var b = new Uint8Array(s.length); for (var k = 0; k < s.length; k++) b[k] = s.charCodeAt(k) & 255; return b; };
+    var put = function (x) { var b = typeof x === 'string' ? latin(x) : x; chunks.push(b); len += b.length; };
+    var obj = function (n, parts) { offs[n] = len; put(n + ' 0 obj\n'); parts.forEach(put); put('\nendobj\n'); };
+    var f2 = function (n) { return n.toFixed(2); };
+    var imgBase = 4, pageBase = imgBase + images.length, total = pageBase + pages.length * 2;
+    var kids = pages.map(function (pg, k) { return (pageBase + 2 * k) + ' 0 R'; }).join(' ');
+    var title = String(opt.title || 'Kvitteringer').replace(/[^\x20-\x7E]/g, '').replace(/[()\\]/g, '');
+    var d = new Date(), z = function (n) { return (n < 10 ? '0' : '') + n; };
+    put('%PDF-1.4\n%\xE2\xE3\xCF\xD3\n');
+    obj(1, ['<< /Type /Catalog /Pages 2 0 R >>']);
+    obj(2, ['<< /Type /Pages /Kids [' + kids + '] /Count ' + pages.length + ' >>']);
+    obj(3, ['<< /Title (' + title + ') /Producer (Kvitteringshenter ' + VERSION + ') /CreationDate (D:' + d.getFullYear() + z(d.getMonth() + 1) + z(d.getDate()) + z(d.getHours()) + z(d.getMinutes()) + z(d.getSeconds()) + ') >>']);
+    images.forEach(function (im, idx) {
+      var sz = jpegSize(im.jpeg);
+      obj(imgBase + idx, ['<< /Type /XObject /Subtype /Image /Width ' + sz.w + ' /Height ' + sz.h + ' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ' + im.jpeg.length + ' >>\nstream\n', im.jpeg, '\nendstream']);
+    });
+    pages.forEach(function (pg, k) {
+      var pn = pageBase + 2 * k, cn = pn + 1;
+      var xo = pg.items.map(function (it) { return '/Im' + it.i + ' ' + (imgBase + it.i) + ' 0 R'; }).join(' ');
+      var content = pg.items.map(function (it) { return 'q ' + f2(it.w) + ' 0 0 ' + f2(it.h) + ' ' + f2(it.x) + ' ' + f2(PH - it.y - it.h) + ' cm /Im' + it.i + ' Do Q\n'; }).join('');
+      obj(pn, ['<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ' + PW + ' ' + PH + '] /Resources << /XObject << ' + xo + ' >> >> /Contents ' + cn + ' 0 R >>']);
+      obj(cn, ['<< /Length ' + content.length + ' >>\nstream\n' + content + 'endstream']);
+    });
+    var xref = len;
+    var x = 'xref\n0 ' + total + '\n0000000000 65535 f \n';
+    for (var n = 1; n < total; n++) x += String(offs[n]).padStart(10, '0') + ' 00000 n \n';
+    put(x + 'trailer\n<< /Size ' + total + ' /Root 1 0 R /Info 3 0 R >>\nstartxref\n' + xref + '\n%%EOF\n');
+    var out = new Uint8Array(len), at = 0;
+    chunks.forEach(function (c) { out.set(c, at); at += c.length; });
+    return { bytes: out, pages: pages.length };
+  }
+
+  var api = { pdf: pdf, jpegSize: jpegSize, logHash: logHash, logAppend: logAppend, logVerify: logVerify, logTrim: logTrim, VERSION: VERSION, sha256: sha256, sha256Bytes: sha256Bytes, utf8: utf8, stable: stable, fmtNum: fmtNum, receiptsCsv: receiptsCsv, contentJson: contentJson, settingsTable: settingsTable, coverageOf: coverageOf, limitations: limitations, build: build };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.KvReport = api;
 })(typeof window !== 'undefined' ? window : globalThis);

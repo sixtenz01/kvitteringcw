@@ -7,7 +7,7 @@
   var K = {
     saved: 'kvr.saved.v1', collapsed: 'kvr.collapsed.v1', scan: 'kvr.scan.v2', pos: 'kvr.pos.v1',
     size: 'kvr.size.v1', sec: 'kvr.sec.v1', rules: 'kvr.rules.v1', anom: 'kvr.anom.v1',
-    stores: 'kvr.stores.v1', tab: 'kvr.tab.v1', layout: 'kvr.layout.v1', arules: 'kvr.arules.v1', notes: 'kvr.notes.v1', tasks: 'kvr.tasks.v1', ctl: 'kvr.ctl.v1', keynav: 'kvr.keynav.v1', tshift: 'kvr.tshift.v1', nlog: 'kvr.nlog.v1', wide: 'kvr.wide.v1', sub: 'kvr.sub.v1', weights: 'kvr.weights.v1', lastrun: 'kvr.lastrun.v1', scope: 'kvr.scope.v1', help: 'kvr.help.v1', sub2: 'kvr.sub2.v1', reports: 'kvr.reports.v1', repopts: 'kvr.repopts.v1'
+    stores: 'kvr.stores.v1', tab: 'kvr.tab.v1', layout: 'kvr.layout.v1', pdf: 'kvr.pdf.v1', arules: 'kvr.arules.v1', notes: 'kvr.notes.v1', tasks: 'kvr.tasks.v1', ctl: 'kvr.ctl.v1', keynav: 'kvr.keynav.v1', tshift: 'kvr.tshift.v1', nlog: 'kvr.nlog.v1', wide: 'kvr.wide.v1', sub: 'kvr.sub.v1', weights: 'kvr.weights.v1', lastrun: 'kvr.lastrun.v1', scope: 'kvr.scope.v1', help: 'kvr.help.v1', sub2: 'kvr.sub2.v1', reports: 'kvr.reports.v1', repopts: 'kvr.repopts.v1'
   };
   var sayTimer = null;
   var failedRecs = [];
@@ -910,9 +910,11 @@
     ui.pantLine.style.display = sm.count ? '' : 'none';
     renderScanState();
     ui.footPng.disabled = sm.count === 0 || scanning;
+    ui.footPdf.disabled = sm.count === 0 || scanning;
     ui.footCmp.style.display = sm.count === 2 ? '' : 'none';
     ui.footCsv.textContent = sm.count ? 'CSV (' + sm.count + ')' : 'CSV';
     ui.footPng.textContent = sm.count ? 'PNG (' + sm.count + ')' : 'PNG';
+    ui.footPdf.textContent = sm.count ? 'PDF (' + sm.count + ')' : 'PDF';
   }
 
 
@@ -1141,7 +1143,7 @@
     return '<div class="kvr-h"><strong>' + esc(sLabel(it.storeNumber)) + '</strong>' + lines.map(esc).join('<br>') + '</div>';
   }
 
-  function htmlToPng(full, W, scale) {
+  function htmlToPng(full, W, scale, mime) {
     return new Promise(function (resolve, reject) {
       var f = document.createElement('iframe');
       f.setAttribute('sandbox', 'allow-same-origin');
@@ -1154,7 +1156,7 @@
             var h = b.scrollHeight || 800;
             f.style.height = (h + 40) + 'px';
             window.html2canvas(b, { scale: scale, logging: false, allowTaint: true, useCORS: false, backgroundColor: '#ffffff', width: W, height: h, windowWidth: W, windowHeight: h })
-              .then(function (c) { f.remove(); c.toBlob(function (bl) { if (bl) resolve(bl); else reject(new Error('toBlob')); }, 'image/png'); })
+              .then(function (c) { f.remove(); c.toBlob(function (bl) { if (bl) resolve(bl); else reject(new Error('toBlob')); }, mime || 'image/png', mime === 'image/jpeg' ? 0.92 : undefined); })
               .catch(fail);
           } catch (e) { fail(e); }
         }, 300);
@@ -1171,7 +1173,7 @@
     return rows && d ? d.body.innerHTML : null;
   }
 
-  // Tegner én kvittering som PNG. o: { layout, header, member }
+  // Tegner én kvittering som PNG (eller JPEG til PDF). o: { layout, header, member, mime }
   async function renderPngFor(rec, o) {
     var html = await receiptHtml(rec);
     if (!html) throw new Error('ingen kvittering');
@@ -1179,29 +1181,40 @@
     var lay = PNG_LAYOUTS[o.layout] || PNG_LAYOUTS.bong;
     var full = '<!DOCTYPE html><html><head><meta charset="UTF-8"><style>' + PNG_CSS + '</style></head><body><div class="kvr-page' + lay.cls + '"><div class="kvr-sheet" style="width:' + lay.sheet + 'px">' +
       (o.header ? pngHeader(rec.item, o.member) : '') + clean + '</div></div></body></html>';
-    return htmlToPng(full, lay.w, lay.scale);
+    return htmlToPng(full, lay.w, lay.scale, o.mime);
   }
 
-  async function exportPng(list) {
+  // Tegner de valgte kvitteringene som bilder og laster ned dem som ZIP med PNG (kind «png») eller samlet i én PDF (kind «pdf»).
+  async function exportPng(list, kind) {
+    var pdfOut = kind === 'pdf';
     if (scanning) return;
-    if (!window.html2canvas || !window.JSZip) { say('Biblioteker (html2canvas/JSZip) er ikke lastet.'); return; }
+    if (!window.html2canvas || (!pdfOut && !window.JSZip)) { say('Biblioteker (html2canvas/JSZip) er ikke lastet.'); return; }
     if (!list.length) { say('Velg kvitteringer først.'); return; }
     scanning = true; cancelScan = false;
     ui.scanBtn.disabled = true; ui.anomBtn.disabled = true; ui.stopBtn.disabled = false; ui.stopTop.style.display = ''; ui.retryBtn.disabled = true; if (ui.retryBtn2) ui.retryBtn2.disabled = true;
     var prev = grid.select();
     var prevTr = prev && prev[0];
-    var files = [], failed = [], t0 = Date.now();
+    var files = [], failed = [], t0 = Date.now(), lay = PNG_LAYOUTS[ui.pngLayout.value] || PNG_LAYOUTS.bong;
     for (var i = 0; i < list.length && !cancelScan; i++) {
-      progress(i, list.length, t0, 'PNG', failed.length);
+      progress(i, list.length, t0, pdfOut ? 'PDF' : 'PNG', failed.length);
       try {
-        var blob = await renderPngFor(list[i], { layout: ui.pngLayout.value, header: ui.pngHeaderOn.checked, member: ui.pngMember.checked });
+        var blob = await renderPngFor(list[i], { layout: ui.pngLayout.value, header: ui.pngHeaderOn.checked, member: ui.pngMember.checked, mime: pdfOut ? 'image/jpeg' : 'image/png' });
         var it = list[i].item;
         files.push({ name: it.endDateTime.replace(/[^0-9]/g, '') + '_' + String(it.bongnr).replace(/[^A-Za-z0-9_-]/g, '-') + '.png', blob: blob });
       } catch (e) { failed.push(list[i]); }
     }
     if (prevTr) grid.select(prevTr); else if (typeof grid.clearSelection === 'function') grid.clearSelection();
     setProgress(0);
-    if (files.length === 1) download(files[0].blob, files[0].name);
+    var pages = 0;
+    if (pdfOut) {
+      if (files.length) {
+        var imgs = [];
+        for (var k = 0; k < files.length; k++) imgs.push({ jpeg: new Uint8Array(await files[k].blob.arrayBuffer()), scale: lay.scale });
+        var built = window.KvReport.pdf(imgs, { multi: ui.pdfMode.value === 'multi', title: 'Kvitteringer ' + new Date().toISOString().slice(0, 10) });
+        pages = built.pages;
+        download(new Blob([built.bytes], { type: 'application/pdf' }), 'kvitteringer_' + new Date().toISOString().slice(0, 10) + '.pdf');
+      }
+    } else if (files.length === 1) download(files[0].blob, files[0].name);
     else if (files.length > 1) {
       var zip = new window.JSZip();
       files.forEach(function (f) { zip.file(f.name, f.blob); });
@@ -1209,11 +1222,11 @@
       download(zb, 'kvitteringer_' + new Date().toISOString().slice(0, 10) + '.zip');
     }
     failedRecs = failed;
-    lastRetry = failed.length ? function () { return exportPng(failedRecs.slice()); } : null;
+    lastRetry = failed.length ? function () { return exportPng(failedRecs.slice(), kind); } : null;
     scanning = false;
     ui.scanBtn.disabled = false; ui.anomBtn.disabled = false; ui.stopBtn.disabled = true;
     syncRetry();
-    say((cancelScan ? 'Stoppet. ' : 'Ferdig. ') + files.length + ' PNG' + (failed.length ? ', feilet ' + failed.length : '') + '.');
+    say((cancelScan ? 'Stoppet. ' : 'Ferdig. ') + (pdfOut ? 'PDF med ' + files.length + ' kvitteringer på ' + pages + (pages === 1 ? ' side' : ' sider') : files.length + ' PNG') + (failed.length ? ', feilet ' + failed.length : '') + '.');
   }
 
   function selectedRecs() {
@@ -3723,10 +3736,13 @@
     ui.pngLayout = el('select', {}, [el('option', { value: 'bong', text: 'Bong (smal, som papirkvittering)' }), el('option', { value: 'a4', text: 'A4-ark med bongen i midten' })]);
     ui.pngLayout.value = store(K.layout) || 'bong';
     ui.pngLayout.addEventListener('change', function () { store(K.layout, ui.pngLayout.value); });
+    ui.pdfMode = el('select', {}, [el('option', { value: 'multi', text: 'Flere bonger per side (kompakt)' }), el('option', { value: 'single', text: 'Én bong per side' })]);
+    ui.pdfMode.value = store(K.pdf) || 'multi';
+    ui.pdfMode.addEventListener('change', function () { store(K.pdf, ui.pdfMode.value); });
     var secExport = section('export', 'Eksport', [
       el('div', { class: 'kvr-row' }, [btn('CSV: synlige', function () { exportCsv(false); }), btn('CSV: valgte', function () { exportCsv(true); })]),
-      el('div', { class: 'kvr-row' }, [btn('PNG: valgte (ZIP)', function () { exportPng(selectedRecs()); }), ui.retryBtn2 = btn('Prøv feilede på nytt', function () { if (lastRetry) lastRetry(); })]),
-      field('PNG-format', ui.pngLayout), pH.node, pM.node,
+      el('div', { class: 'kvr-row' }, [btn('PNG: valgte (ZIP)', function () { exportPng(selectedRecs()); }), btn('PDF: valgte (samlet)', function () { exportPng(selectedRecs(), 'pdf'); }), ui.retryBtn2 = btn('Prøv feilede på nytt', function () { if (lastRetry) lastRetry(); })]),
+      field('PNG-format (gjelder også PDF)', ui.pngLayout), field('PDF-oppsett', ui.pdfMode), pH.node, pM.node,
       el('div', { class: 'kvr-hint', text: 'Semikolon-separert, åpnes direkte i Excel. Varegrupper og pant tas med for skannede kvitteringer.' })
     ], false);
 
@@ -3917,6 +3933,8 @@
 
     ui.footPng = btn('PNG', function () { exportPng(selectedRecs()); }, 'kvr-primary');
     ui.footPng.title = 'Last ned valgte kvitteringer som PNG (ZIP ved flere)';
+    ui.footPdf = btn('PDF', function () { exportPng(selectedRecs(), 'pdf'); }, 'kvr-primary');
+    ui.footPdf.title = 'Samle de valgte kvitteringene som bilder i én PDF';
     ui.footCmp = btn('Sammenlign', compareSelected);
     ui.footCmp.style.display = 'none';
     ui.footCmp.title = 'Sammenlign de to valgte bongene side om side';
@@ -3930,7 +3948,8 @@
       btn('Fjern valg', function () { selected = {}; apply(); }),
       ui.footCmp,
       ui.footCsv,
-      ui.footPng
+      ui.footPng,
+      ui.footPdf
     ]);
 
     panel.appendChild(head);
