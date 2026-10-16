@@ -56,18 +56,21 @@ try {
   assert.strictEqual(p.byStore[1005].retShare, 0.2);
   assert.strictEqual(L.cashierId(data[0]), '12');
 
-  // ---- samme beløp gjentatt: to bonger i hver butikk er ikke tre
-  const rep = [].concat(many(2, { cashierNumber: '12', totalAmount: 77 }), many(2, { storeNumber: 2002, cashierNumber: '12', totalAmount: 77 }));
-  const repCfg = Object.assign(CT(), { repeatN: '3', repeatMin: '50' });
+  // ---- kontant tilbake uten salg: tre i hver butikk er ikke seks på én kasse
+  const cn = (store) => bong({ storeNumber: store, workstationNumber: 1, cashierNumber: '12' });
+  const cnItems = [cn(1005), cn(1005), cn(1005), cn(2002), cn(2002), cn(2002)];
+  const cnScan = {};
+  cnItems.forEach((it) => { cnScan[it.transactionId] = { v: 5, items: [{ c: '399', n: 'PANTELAPP', a: -50 }], pay: { 'Kontant tilbake': 50 }, np: 0, neg: 0, sale: 0, ret: -50, saleLines: 0, retLines: 1, coupons: [] }; });
+  const cnCfg = Object.assign(CT(), { cashNoSaleN: '4' });
   L.setMultiStore(true);
-  assert.strictEqual(L.patterns(rep, {}, repCfg).filter((f) => f.code === 'repeatAmount').length, 0);
+  assert.strictEqual(L.patterns(cnItems, cnScan, cnCfg).filter((f) => f.code === 'cashNoSale').length, 0);
   L.setMultiStore(false);
-  assert.strictEqual(L.patterns(rep, {}, repCfg).filter((f) => f.code === 'repeatAmount').length, 1, 'uten skille per butikk slås de sammen (gammel oppførsel)');
+  assert.strictEqual(L.patterns(cnItems, cnScan, cnCfg).filter((f) => f.code === 'cashNoSale').length, 1, 'uten skille per butikk slås de sammen (gammel oppførsel)');
   L.setMultiStore(true);
-  const rep3 = many(3, { storeNumber: 2002, cashierNumber: '12', totalAmount: 77 });
-  const f3 = L.patterns(rep3, {}, repCfg).filter((f) => f.code === 'repeatAmount');
-  assert.strictEqual(f3.length, 1);
-  assert.match(f3[0].detail, /Kasserer 12 \(2002\) 2026-10-05: 77 kr × 3/);
+  const f3 = L.patterns(cnItems, cnScan, Object.assign(CT(), { cashNoSaleN: '3' })).filter((f) => f.code === 'cashNoSale');
+  assert.strictEqual(f3.length, 2);
+  assert.match(f3[0].detail, /Kasse 1 \(1005\): 3 ganger, totalt 150 kr/);
+  assert.match(f3[1].detail, /Kasse 1 \(2002\): 3 ganger, totalt 150 kr/);
 
   // ---- avstemming: samme kassenummer i to butikker er to kasser
   const settle = (store, kontant) => ({ transactionId: 'S-' + store, endDateTime: '2026-10-05 22:00', storeNumber: store, workstationNumber: 1, cashierNumber: '12', totalAmount: null, receiptType: 2 });

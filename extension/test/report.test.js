@@ -106,7 +106,7 @@ assert.ok(html.includes('2 store hull i bongnummer') && html.includes('Benford: 
 assert.ok(html.includes('begrenset til de 1 høyest rangerte av 2') && html.includes('Bevis-PNG mangler for 1 bonger'));
 assert.ok(html.includes('<div class="chg">Eller minus totalt over: <b>60 kr</b></div>'), 'endret terskel er markert');
 assert.ok(html.includes('<div class="chg">Stor panteretur: <b>7</b></div>'), 'endret poeng er markert');
-assert.ok(html.includes('<div>Stengetid: <b>22:00</b></div>'), 'klokkeslett uten enhet');
+assert.ok(html.includes('<div>Stenger (bonger etter dette flagges): <b>23:00</b></div>'), 'klokkeslett uten enhet');
 assert.ok(html.includes('<div>Rundt beløp fra: <b>500 kr</b></div>') && html.split('<b><span class="off">av</span></b>').length === 4, 'ansattlisten, overvåkede varer og retur uten kort/medlem samme dag er av i standardoppsettet');
 assert.ok(html.includes('Kasse 1: salg 10:00 og retur 10:20, begge 100 kr'));
 assert.ok(html.includes('(kassererfunn, gir poeng på kassereren)'));

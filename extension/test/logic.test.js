@@ -231,15 +231,12 @@ const mscan = { 'c-1': cn, 'c-2': cn, 'c-3': cn, 'c-4': rcpt([['7000 VARE', '', 
 const ci = ['c-1', 'c-2', 'c-3', 'c-4'].map((id, i) => mkI(id, '2026-10-02', '09:0' + i, 7, 'Z', -50));
 const pat = L.patterns(mi.concat(ci), mscan, C);
 const byCode = c => pat.filter(x => x.code === c);
-assert.strictEqual(byCode('smallReturns').length, 1);
-assert.deepStrictEqual(byCode('smallReturns')[0].ids, ['m-1', 'm-2', 'm-3']);
+// «Små returer før stenging» og «Samme beløp gjentatt» er fjernet
+assert.deepStrictEqual(pat.map(x => x.code).filter(c => c !== 'cashNoSale'), []);
+assert.ok(!('smallReturnN' in C) && !('repeatN' in C) && !('closeTime' in C));
 assert.strictEqual(byCode('cashNoSale').length, 1);
 assert.strictEqual(byCode('cashNoSale')[0].ids.length, 3);
 assert.match(byCode('cashNoSale')[0].detail, /Kasse 7: 3 ganger, totalt 150 kr/);
-assert.deepStrictEqual(byCode('repeatAmount').map(x => x.detail).sort(), ['Kasserer Y 2026-10-02: 199 kr × 3', 'Kasserer Z 2026-10-02: -50 kr × 4']);
-assert.strictEqual(L.patterns(mi, {}, Object.assign({}, C, { repeatN: '2' })).filter(x => x.code === 'repeatAmount').length, 1);
-assert.strictEqual(L.patterns(mi, {}, Object.assign({}, C, { smallReturnN: '' })).filter(x => x.code === 'smallReturns').length, 0, 'tom verdi = av');
-assert.strictEqual(L.patterns(mi, {}, Object.assign({}, C, { closeTime: '00:00', closeWindow: '60' })).filter(x => x.code === 'smallReturns').length, 0);
 
 // pantcheck
 const pci = [mkI('p-1', '2026-10-02', '10:00', 1, 'A', -150, 1), mkI('p-2', '2026-10-02', '11:00', 1, 'A', -150, 1), mkI('p-3', '2026-10-02', '12:00', 1, 'A', 30, 1), mkI('p-4', '2026-10-02', '12:10', 2, 'A', -150, 1)];
@@ -261,6 +258,20 @@ assert.strictEqual(sq.skippedGaps, 1, 'hull over maks hoppes over');
 const hrs = sq.findings.filter(f => f.code === 'hours');
 assert.strictEqual(hrs.length, 1);
 assert.strictEqual(hrs[0].ids.length, 2);
+assert.strictEqual(hrs[0].title, 'Transaksjoner utenfor åpningstid');
+assert.match(hrs[0].detail, /åpent 07:00–23:00/);
+assert.ok(!/hvorav/.test(hrs[0].detail), 'ingen returer blant bongene utenfor åpningstid');
+// returer før åpning og etter stengetid får eget funn
+const ri2 = [mkI('o-1', '2026-10-03', '06:30', 1, 'A', -80), mkI('o-2', '2026-10-03', '06:50', 1, 'A', 120), mkI('o-3', '2026-10-03', '23:20', 1, 'B', -45),
+  mkI('o-4', '2026-10-03', '07:00', 1, 'A', -10), mkI('o-5', '2026-10-03', '23:00', 1, 'A', -10), mkI('o-6', '2026-10-03', '12:00', 1, 'A', -300)];
+const oq = L.sequence(ri2, C, { 'o-2': rcpt([['399 PANTELAPP', '', '-20.00'], ['Kontant tilbake:', '', '20.00']]) });
+const oh = oq.findings.filter(f => f.code === 'hours'), orr = oq.findings.filter(f => f.code === 'hoursReturn');
+assert.deepStrictEqual(oh.map(f => f.ids), [['o-1', 'o-2', 'o-3']], '07:00 og 23:00 er innenfor');
+assert.match(oh[0].detail, /3 bonger \(06:30–23:20, åpent 07:00–23:00\), hvorav 3 returer/);
+assert.deepStrictEqual(orr.map(f => f.ids), [['o-1', 'o-2', 'o-3']], 'negativ sum eller pantelapper regnes som retur');
+assert.match(orr[0].detail, /Retur utenfor åpningstid|3 returer \(06:30–23:20, åpent 07:00–23:00\), til sammen 245\.00 kr/);
+assert.strictEqual(orr[0].title, 'Retur utenfor åpningstid');
+assert.strictEqual(L.riskScore(['Transaksjoner utenfor åpningstid', 'Retur utenfor åpningstid'], L.RISK_WEIGHTS), 4, 'samme forhold teller bare høyeste');
 assert.strictEqual(L.sequence(si, Object.assign({}, C, { openFrom: '', openTo: '' })).findings.filter(f => f.code === 'hours').length, 0);
 
 // avstemming
@@ -290,7 +301,8 @@ const nctx = { notes: { 'a-1': { status: 'oppfolging', note: 'sjekk' }, 'a-2': {
 assert.deepStrictEqual(ids(F({ note: 'any' }), nctx), ['a-1', 'a-2', 'a-3']);
 assert.deepStrictEqual(ids(F({ note: 'oppfolging' }), nctx), ['a-1']);
 assert.deepStrictEqual(ids(F({ note: 'sjekket' }), nctx), ['a-2']);
-assert.strictEqual(L.sanitizeControl({ closeTime: '21:30', bogus: 1 }).closeTime, '21:30');
+assert.strictEqual(L.sanitizeControl({ openFrom: '06:30', bogus: 1 }).openFrom, '06:30');
+assert.strictEqual(L.defaultControl().openFrom, '07:00');
 assert.strictEqual(L.mins('07:05'), 425);
 
 // ---- fokus
@@ -330,18 +342,19 @@ assert.strictEqual(L.riskScore(['Stor panteretur (1 kr)'], Object.assign({}, W, 
 assert.strictEqual(L.sanitizeWeights({ 'Rundt beløp': 'abc' })['Rundt beløp'], 1);
 assert.deepStrictEqual([L.riskLevel(9), L.riskLevel(8), L.riskLevel(4), L.riskLevel(3.9)], ['høy', 'høy', 'middels', 'lav']);
 const rkItems = [mkI('k-1', '2026-10-02', '10:00', 1, 'A', 100), mkI('k-2', '2026-10-02', '11:00', 1, 'B', -300), mkI('k-3', '2026-10-02', '12:00', 2, 'B', 500), mkI('k-4', '2026-10-02', '13:00', 1, 'A', 50)];
-const rkAnom = { 'k-1': ['Rundt beløp'], 'k-2': ['Stor panteretur (300 kr)', 'Kontant tilbake uten salg'], 'k-3': ['Rundt beløp', 'Samme beløp gjentatt'] };
+const rkAnom = { 'k-1': ['Rundt beløp'], 'k-2': ['Stor panteretur (300 kr)', 'Kontant tilbake uten salg'], 'k-3': ['Rundt beløp', 'Kontant tilbake uten salg flere ganger'] };
 const rkr = L.rankReceipts(rkItems, rkAnom, W);
-assert.deepStrictEqual(rkr.map(r => [r.id, r.score]), [['k-3', 4], ['k-2', 4], ['k-1', 1]], 'k-2: pant og kontant tilbake er samme familie, høyeste (4) teller');
+assert.deepStrictEqual(rkr.map(r => [r.id, r.score]), [['k-3', 6], ['k-2', 4], ['k-1', 1]], 'k-2: pant og kontant tilbake er samme familie, høyeste (4) teller');
 const rkc = L.rankCashiers(rkItems, rkAnom, W, { rows: [{ id: 'A', flags: { retShare: true, avg: false } }, { id: 'C', flags: {} }] });
-assert.deepStrictEqual(rkc.map(c => [c.id, c.score, c.flagged]), [['B', 8, 2], ['A', 3, 1]]);
+assert.deepStrictEqual(rkc.map(c => [c.id, c.score, c.flagged]), [['B', 10, 2], ['A', 3, 1]]);
 assert.deepStrictEqual(rkc[1].profile, ['høy returandel']);
-const ex = r => L.explainReason(r, { id: 'k-2', cfg: L.defaultAnom(), ctl: L.defaultControl(), rules: [{ name: 'Min', conds: [{ f: 'sum', op: '<=', v: '-200' }, { f: 'tid', op: '>=', v: '20:00' }] }], findings: [{ title: 'Samme beløp gjentatt', ids: ['k-2'], detail: 'Kasserer B 2026-10-02: -300 kr × 3' }] });
+const ex = r => L.explainReason(r, { id: 'k-2', cfg: L.defaultAnom(), ctl: L.defaultControl(), rules: [{ name: 'Min', conds: [{ f: 'sum', op: '<=', v: '-200' }, { f: 'tid', op: '>=', v: '20:00' }] }], findings: [{ title: 'Kontant tilbake uten salg flere ganger', ids: ['k-2'], detail: 'Kasse 1: 3 ganger, totalt 300 kr' }] });
 assert.match(ex('Stor panteretur (300 kr)'), /300 kr\. Grensen er 300 kr/);
 assert.match(ex('Mange pantelapper (9)'), /9 pantelapper\. Grensen er 8/);
 assert.match(ex('Regel: Min'), /Treffer din regel «Min»: Sum \(kr\) <= -200 OG Klokkeslett \(HH:MM\) >= 20:00/);
-assert.match(ex('Samme beløp gjentatt'), /Kasserer B .* × 3/);
-assert.match(ex('Bonger utenfor åpningstid'), /06:00–23:00/);
+assert.match(ex('Kontant tilbake uten salg flere ganger'), /Kasse 1: 3 ganger/);
+assert.match(ex('Transaksjoner utenfor åpningstid'), /07:00–23:00/);
+assert.match(ex('Retur utenfor åpningstid'), /^Returen er tatt utenfor åpningstid \(07:00–23:00\)/);
 assert.strictEqual(ex('Noe annet'), 'Noe annet');
 
 // ---- diagramdata

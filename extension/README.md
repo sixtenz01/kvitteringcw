@@ -117,6 +117,12 @@ Versjon 3.21.0 legger til: **Tempo** (serier av bonger med høyst N sekunder mel
 - **Manuell kvittering / til gode-lapp:** ordliste; flagges når en annen bong i butikken har samme beløp innen 3 dager.
 - Ikke bekreftet i ekte data: hvordan slettede linjer, spør pris, kortlinje, manuell kvittering og spesialbetaling står på bongen. Testene bruker motlinjer, ord og maskerte kortnumre; Diagnostikk samler det som ikke kjennes igjen.
 
+## Versjon 3.23.0: retur mot kvittering, åpningstid og færre mønstre
+
+- **Retur mot kvittering** (Innstillinger → Retur mot kvittering): retur på enkeltvarer mot kvitteringen de ble kjøpt på, aldri mer enn kjøpt antall og beløp og aldri flere ganger enn kjøpt. Kjøp og retur knyttes sammen med betalingsreferansen (`TransId`, eller `Referanse` på samme kasse og dag), og hver vare føres kronologisk uansett hvem som tar returen (`returnLedger` i `logic.js`). Funn: *Retur over kjøpt antall*, *Vare returnert flere ganger*, *Retur til høyere pris enn kjøpt*, *Vare ikke på kvitteringen*. Retur uten kjent kvittering kryss-sjekkes mot kort og medlem over tid (*Retur over kjøpt antall på kortet/for medlemmet*, standard 30 dager, krever 80 % skannede salg og lastet tidsrom). Treffene summeres per kasserer (*Mange returer mot kvittering med avvik*) og vises i Analyse → Detaljer → Pris, kjøpeutbytte og hendelser. Retur vurderes bare når kjøpet er lastet og skannet; ellers står den som «uten kjent kvittering». Ett kjøp og returer mot det med samme referanse regnes ikke lenger som dublett i «Samme betalingsreferanse på flere bonger».
+- **Åpningstid:** «Små returer før stenging» er erstattet av *Transaksjoner utenfor åpningstid* (før 07:00 og etter 23:00, standard) og *Retur utenfor åpningstid*. Bonger med negativ sum eller pantelapper regnes som retur. Åpner er nå 07:00 som standard (var 06:00). Stengetid, liten retur og tidsrom før stenging er fjernet.
+- **Fjernet:** «Samme beløp gjentatt» (`repeatN`, `repeatMin`). Eldre lagrede innstillinger med disse verdiene leses uten feil, og verdiene ignoreres.
+
 ## Versjon 3.22.0: pantelapp-koder og Kassadifferanse per oppgjør fjernet
 
 - **Pantelapp-koder kan velges** (Innstillinger → Pantelapper): *Manuell pantelapp: koder* (standard 99) og *Pantelapp fra pantemaskin: koder* (standard 399). Flere koder skilles med komma. Gjelder testene og kortet «Pantelapper: manuell og maskin». Står en kode i begge lister, regnes den som manuell.
@@ -132,9 +138,9 @@ Versjon 3.21.0 legger til: **Tempo** (serier av bonger med høyst N sekunder mel
 - **Arbeidsoppgaver:** lagre filter + datovalg (i går, i dag, siste 7 dager, forrige uke) + skanning + kontroller + sammendrag som én knapp. «Morgenkontroll (i går)» er innebygd: henter gårsdagen fra CW, skanner, kjører alle kontroller og viser et sammendrag som kan kopieres som tekst. Lagrede filtre (Filter-fanen) setter bare filter.
 - **Kjør alle kontroller:** kjører først avviksjekken per kvittering (Avvik-fanen) og deretter kontrollene under. Funn som flagger bonger legges i samme avviksliste («Kun avvik»). Tom terskel slår av en sjekk.
 - **Kassererprofil:** returandel, snittbeløp, pantelapper per salg og korrigeringer (negative varelinjer utenom pant) per kasserer mot butikksnittet. Rødt = minst 1,5× snittet (innstilling).
-- **Mønstre:** små returer rett før stenging, kontant tilbake uten salg flere ganger på samme kasse, samme beløp gjentatt (per kasserer og dag). Dette er kontroller på tvers av bonger; «Mulige duplikater» i Filter-fanen er noe annet (samme beløp, kasse og minutt).
+- **Mønstre:** kontant tilbake uten salg flere ganger på samme kasse. Dette er kontroller på tvers av bonger; «Mulige duplikater» i Filter-fanen er noe annet (samme beløp, kasse og minutt).
 - **Pantelapp-sjekk:** pantebalanse (salg mot utbetalt) per dag og butikk. Gjentatte pantebeløp ligger under «Pantelapp innløst flere ganger».
-- **Sekvens:** hull i bongnummer per kasse (kun pålitelig når CW-listen ikke er filtrert på type, kasse eller tid) og bonger utenfor åpningstid.
+- **Sekvens:** hull i bongnummer per kasse (kun pålitelig når CW-listen ikke er filtrert på type, kasse eller tid) og transaksjoner før åpning (standard 07:00) og etter stengetid (standard 23:00), med returer for seg («Retur utenfor åpningstid»).
 - **Dagsavstemming:** forventet kontant (kontant − kontant tilbake fra salg) mot telt kontant i kassaoppgjør, per kasse og dag, med bank/kort og sendt bank til info.
 - **Oppfølging:** notat og status (sjekket / til oppfølging) per bong, oppfølgingsliste, filter og CSV-eksport. Radene får en prikk.
 - **Sammenlign bonger:** velg to bonger, trykk «Sammenlign» nederst. Linjer som ikke finnes på den andre markeres.

@@ -308,7 +308,8 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   await page.click('button:text-is("Kjør alle kontroller (synlige)")');
   await page.waitForFunction(() => /Kontroller ferdig/.test(document.getElementById('kvr-panel').innerText), null, { timeout: 30000 });
   assert.match(await page.innerText('[data-sec=profile]'), /Butikksnitt/);
-  assert.match(await page.innerText('[data-sec=findings]'), /Bonger utenfor åpningstid/);
+  assert.match(await page.innerText('[data-sec=findings]'), /Transaksjoner utenfor åpningstid/);
+  assert.match(await page.innerText('[data-sec=findings]'), /Retur utenfor åpningstid/, 'retur-bongen kl. 00:22 er også en retur utenfor åpningstid');
   await unfold('recon');
   assert.match(await page.innerText('[data-sec=recon]'), /Forventet/);
   assert.match(await page.innerText('[data-sec=ctlsum]'), /\d+ funn · \d+ flaggede bonger/);

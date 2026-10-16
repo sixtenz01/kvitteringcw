@@ -944,12 +944,9 @@
   function inWs(list, it) { return !list || !list.length || list.some(function (v) { return isWs(it, v); }); }
 
   var CONTROL_FIELDS = [
-    ['closeTime', 'Stengetid (HH:MM)', '22:00'], ['closeWindow', 'Minutter før stenging', '60'],
-    ['smallReturn', 'Liten retur ≤ kr', '100'], ['smallReturnN', 'Små returer ≥ antall', '3'],
-    ['cashNoSaleN', 'Kontant tilbake uten salg ≥ antall', '3'], ['repeatN', 'Samme beløp ≥ antall', '3'],
-    ['repeatMin', 'Gjentatt beløp ≥ kr', '50'],
+    ['cashNoSaleN', 'Kontant tilbake uten salg ≥ antall', '3'],
     ['pantMin', 'Pantebeløp ≥ kr', '20'], ['pantRatio', 'Panteretur > salg ×', '1'],
-    ['openFrom', 'Åpner (HH:MM)', '06:00'], ['openTo', 'Stenger (HH:MM)', '23:00'],
+    ['openFrom', 'Åpner (HH:MM)', '07:00'], ['openTo', 'Stenger (HH:MM)', '23:00'],
     ['maxGap', 'Maks hull i bongnr', '50'], ['profFactor', 'Avvik fra snitt ×', '1.5'],
     ['profMin', 'Minst antall for profil', '5'], ['profShrink', 'Krymping mot butikksnitt (antall bonger, tom = av)', '10'], ['reconTol', 'Avstemt toleranse kr', '1'],
     ['falseRet', 'Falsk retur-test (tom = av)', '1'], ['saleReturnMin', 'Salg og retur av samme beløp innen min', '60'],
@@ -990,6 +987,8 @@
     ['watchItems', 'Overvåkede varer: EAN eller del av navn (komma, tom = av)', ''], ['watchRet', 'Overvåket vare i retur (tom = av)', '1'],
     ['watchDel', 'Overvåket vare slettet (tom = av)', '1'], ['watchN', 'Overvåkede varer: kasserer ved ≥ antall bonger (tom = av)', '10'],
     ['retEanDays', 'Retur av vare uten kjøp på kort eller medlem innen dager (tom = av)', '7'], ['retEanDay', 'Retur uten kort og medlem: ingen salg av varen samme dag (tom = av)', ''],
+    ['retKv', 'Retur mot kvittering (tom = av)', '1'], ['retKvTol', 'Retur mot kvittering: beløpstoleranse kr', '0.50'],
+    ['retKvIdent', 'Retur mot kort/medlem over tid: se tilbake dager (tom = av)', '30'], ['retKvCashN', 'Retur mot kvittering: kasserer ved ≥ antall bonger (tom = av)', '3'],
     ['hdrOn', 'Topptekst mot listen (tom = av)', '1'], ['authDup', 'Samme autorisasjonskode på flere bonger (tom = av)', '1']
   ];
 
@@ -1006,14 +1005,8 @@
       sf('cashNoSale', 'anom', 'flag', 'Kontant tilbake uten salg', '', 'Bongen har bare pantelapper og kontant tilbake.')
     ], weights: ['Stor panteretur', 'Mange pantelapper', 'Kontant tilbake uten salg', 'Rundt beløp'] },
     { id: 'patterns', title: 'Mønstre på tvers av bonger', text: 'Gjentakelser som er vanlige ved misbruk.', fields: [
-      sf('smallReturnN', 'ctl', 'num', 'Små returer før stenging: flagg ved', 'stk', 'Antall små returer på samme kasse rett før stenging.', true),
-      sf('smallReturn', 'ctl', 'num', 'Liten retur er opptil', 'kr'),
-      sf('closeTime', 'ctl', 'time', 'Stengetid', 'HH:MM'),
-      sf('closeWindow', 'ctl', 'num', 'Tidsrom før stenging', 'min'),
-      sf('cashNoSaleN', 'ctl', 'num', 'Kontant tilbake uten salg: flagg ved', 'stk', 'Gjentatt samme dag på samme kasse.', true),
-      sf('repeatN', 'ctl', 'num', 'Samme beløp gjentatt: flagg ved', 'stk', 'Samme bongsum flere ganger på samme kasse.', true),
-      sf('repeatMin', 'ctl', 'num', 'Gjentatt beløp er minst', 'kr')
-    ], weights: ['Små returer før stenging', 'Kontant tilbake uten salg flere ganger', 'Samme beløp gjentatt'] },
+      sf('cashNoSaleN', 'ctl', 'num', 'Kontant tilbake uten salg: flagg ved', 'stk', 'Gjentatt samme dag på samme kasse.', true)
+    ], weights: ['Kontant tilbake uten salg flere ganger'] },
     { id: 'falseRet', title: 'Falsk retur', text: 'Retur uten salg, kortkjøp refundert kontant og salg og retur av samme beløp.', fields: [
       sf('falseRet', 'ctl', 'flag', 'Test på', '', 'Retur uten salg krever at minst 80 % av salgene er skannet.'),
       sf('saleReturnMin', 'ctl', 'num', 'Salg og retur av samme beløp innen', 'min')
@@ -1131,6 +1124,12 @@
       sf('retEanDays', 'ctl', 'num', 'Se tilbake', 'dager', 'Minst så mange dager må være lastet, ellers vurderes ikke returen.', true),
       sf('retEanDay', 'ctl', 'flag', 'Uten kort og medlem: ingen salg samme dag', '', 'Svak indikasjon: kunden kan ha kjøpt varen en annen dag.')
     ], weights: ['Retur av vare uten kjøp på kortet', 'Retur av vare uten kjøp av medlemmet', 'Retur av vare uten salg samme dag'] },
+    { id: 'retkv', title: 'Retur mot kvittering', text: 'Retur på enkeltvarer mot kvitteringen de ble kjøpt på: aldri mer enn kjøpt, aldri flere ganger enn kjøpt antall. Følges over tid, også på tvers av kasserere, og summeres per kasserer. Kvitteringer knyttes sammen med betalingsreferansen (TransId/Referanse), og kort og medlem kryss-sjekkes over tid. Krever skanning.', fields: [
+      sf('retKv', 'ctl', 'flag', 'Test på (retur mot kvittering via referanse)', '', 'Kjøp og retur med samme betalingsreferanse regnes som samme kvittering. Hver vare kan til sammen returneres opptil kjøpt antall og beløp. Retur der kjøpet ikke er lastet, vurderes ikke.'),
+      sf('retKvTol', 'ctl', 'num', 'Beløpstoleranse', 'kr', 'Retur av en vare kan ha så mye høyere beløp enn betalt (etter rabatt) uten å flagges.'),
+      sf('retKvIdent', 'ctl', 'num', 'Kryss-sjekk kort og medlem over tid: se tilbake', 'dager', 'Samme kort eller medlem har til sammen returnert mer av en vare enn kjøpt innen så mange dager. Gjelder retur som ikke kan knyttes til en kvittering via referanse. Krever at minst 80 % av salgene er skannet og at tidsrommet er lastet.', true),
+      sf('retKvCashN', 'ctl', 'num', 'Marker kasserer ved', 'bonger', 'Antall returbonger med avvik over tid. Må også ligge over butikkens andel med «Avviker fra snittet» ganger.', true)
+    ], weights: ['Vare returnert flere ganger', 'Retur over kjøpt antall', 'Retur til høyere pris enn kjøpt', 'Vare ikke på kvitteringen', 'Retur over kjøpt antall på kortet', 'Retur over kjøpt antall for medlemmet', 'Mange returer mot kvittering med avvik'] },
     { id: 'hdr', title: 'Topptekst og bunn', text: 'Bongens topptekst (kasserer, kasse, medlem) mot CW-listen, og autorisasjonskoden fra kortterminalen. Krever skanning på nytt (versjon 7). Formatet er ikke bekreftet i ekte data; se Diagnostikk.', fields: [
       sf('hdrOn', 'ctl', 'flag', 'Topptekst mot listen', '', 'Gjelder bare felt der minst 90 % stemmer fra før (minst 10 bonger).'),
       sf('authDup', 'ctl', 'flag', 'Samme autorisasjonskode på flere bonger', '', 'Samme butikk, terminal og kode.')
@@ -1139,10 +1138,10 @@
       sf('pantMin', 'ctl', 'num', 'Pantebeløp er minst', 'kr'),
       sf('pantRatio', 'ctl', 'num', 'Panteretur over pantesalg ×', '', 'Rødt i balansen når utbetalt retur er over dette tallet ganger pantesalget.', true)
     ], weights: [] },
-    { id: 'hours', title: 'Åpningstider', text: 'Brukes til bonger utenfor åpningstid og til å avgjøre hvilken dag et kassaoppgjør hører til.', fields: [
-      sf('openFrom', 'ctl', 'time', 'Åpner', 'HH:MM'),
-      sf('openTo', 'ctl', 'time', 'Stenger', 'HH:MM')
-    ], weights: ['Bonger utenfor åpningstid'] },
+    { id: 'hours', title: 'Transaksjoner før åpning og etter stengetid, og returer', text: 'Bonger tatt før åpning (standard 07:00) eller etter stengetid (standard 23:00), og returer som er tatt utenfor åpningstid. Tidene brukes også til å avgjøre hvilken dag et kassaoppgjør hører til.', fields: [
+      sf('openFrom', 'ctl', 'time', 'Åpner (bonger før dette flagges)', 'HH:MM'),
+      sf('openTo', 'ctl', 'time', 'Stenger (bonger etter dette flagges)', 'HH:MM')
+    ], weights: ['Transaksjoner utenfor åpningstid', 'Retur utenfor åpningstid'] },
     { id: 'profile', title: 'Kassererprofil og avstemming', text: 'Sammenligning mot butikksnittet og toleranse i dagsavstemmingen.', fields: [
       sf('profFactor', 'ctl', 'num', 'Avviker fra snittet fra', '×'),
       sf('profMin', 'ctl', 'num', 'Minst antall bonger for profil', 'stk'),
@@ -1239,31 +1238,10 @@
 
   function groupInto(map, key, it) { (map[key] = map[key] || []).push(it); }
 
-  // Mønstre: små returer før stenging, kontant tilbake uten salg flere ganger, samme beløp gjentatt.
+  // Mønstre: kontant tilbake uten salg flere ganger på samme kasse.
   function patterns(items, scanMap, cfg) {
     var out = [];
     var scanOf = function (it) { return scanMap && scanMap[it.transactionId]; };
-    var close = mins(cfg.closeTime);
-    if (close === 0) close = 1440;
-    if (close !== null && hasNum(cfg.smallReturnN)) {
-      var win = cnum(cfg.closeWindow, 60), small = cnum(cfg.smallReturn, 100), g = {};
-      items.forEach(function (it) {
-        if (!isSale(it)) return;
-        var sc = scanOf(it);
-        if (!(it.totalAmount < 0 || (sc && sc.retLines > 0))) return;
-        if (Math.abs(it.totalAmount) > small) return;
-        var m = timeOf(it);
-        if (m === null || m < close - win || m > close) return;
-        groupInto(g, dayOf(it) + '|' + wsId(it), it);
-      });
-      Object.keys(g).forEach(function (k) {
-        if (g[k].length < Number(cfg.smallReturnN)) return;
-        var p = k.split('|');
-        out.push({ kind: 'Mønster', code: 'smallReturns', title: 'Små returer før stenging', flag: true,
-          detail: 'Kasse ' + idLabel(p[1]) + ' ' + p[0] + ': ' + g[k].length + ' returer ≤ ' + small + ' kr de siste ' + win + ' min før ' + cfg.closeTime,
-          ids: g[k].map(function (x) { return x.transactionId; }) });
-      });
-    }
     if (hasNum(cfg.cashNoSaleN)) {
       var g2 = {};
       items.forEach(function (it) {
@@ -1277,20 +1255,6 @@
         out.push({ kind: 'Mønster', code: 'cashNoSale', title: 'Kontant tilbake uten salg flere ganger', flag: true,
           detail: 'Kasse ' + idLabel(k) + ': ' + g2[k].length + ' ganger, totalt ' + sum + ' kr',
           ids: g2[k].map(function (x) { return x.transactionId; }) });
-      });
-    }
-    if (hasNum(cfg.repeatN)) {
-      var g3 = {}, min = cnum(cfg.repeatMin, 50);
-      items.forEach(function (it) {
-        if (!isSale(it) || Math.abs(it.totalAmount) < min) return;
-        groupInto(g3, dayOf(it) + '|' + cashierId(it) + '|' + it.totalAmount, it);
-      });
-      Object.keys(g3).forEach(function (k) {
-        if (g3[k].length < Number(cfg.repeatN)) return;
-        var p = k.split('|');
-        out.push({ kind: 'Mønster', code: 'repeatAmount', title: 'Samme beløp gjentatt', flag: true,
-          detail: 'Kasserer ' + idLabel(p[1]) + ' ' + p[0] + ': ' + p[2] + ' kr × ' + g3[k].length,
-          ids: g3[k].map(function (x) { return x.transactionId; }) });
       });
     }
     return out;
@@ -1318,7 +1282,7 @@
   }
 
   // Sekvens: hull i bongnummer per kasse, og bonger utenfor åpningstid.
-  function sequence(items, cfg) {
+  function sequence(items, cfg, scanMap) {
     var findings = [], byK = {}, skipped = 0;
     var maxGap = cnum(cfg.maxGap, 50);
     items.forEach(function (it) {
@@ -1342,18 +1306,29 @@
     });
     var from = mins(cfg.openFrom), to = mins(cfg.openTo);
     if (from !== null && to !== null) {
-      var g = {};
+      var g = {}, gr = {};
       items.forEach(function (it) {
         if (!isSale(it)) return;
         var m = timeOf(it);
-        if (m !== null && (m < from || m > to)) groupInto(g, dayOf(it) + '|' + wsId(it), it);
+        if (m === null || !(m < from || m > to)) return;
+        var key = dayOf(it) + '|' + wsId(it), sc = scanMap && scanMap[it.transactionId];
+        groupInto(g, key, it);
+        // retur: negativ sum, eller pantelapper på bongen
+        if (it.totalAmount < 0 || (sc && sc.retLines > 0)) groupInto(gr, key, it);
       });
+      var timesOf = function (arr) { var t = arr.map(function (x) { return parseDT(x.endDateTime).time; }).sort(); return t[0] + (t.length > 1 ? '–' + t[t.length - 1] : ''); };
       Object.keys(g).forEach(function (k) {
-        var p = k.split('|');
-        var times = g[k].map(function (x) { return parseDT(x.endDateTime).time; }).sort();
-        findings.push({ kind: 'Sekvens', code: 'hours', title: 'Bonger utenfor åpningstid', flag: true,
-          detail: 'Kasse ' + idLabel(p[1]) + ' ' + p[0] + ': ' + g[k].length + ' bonger (' + times[0] + (times.length > 1 ? '–' + times[times.length - 1] : '') + ', åpent ' + cfg.openFrom + '–' + cfg.openTo + ')',
+        var p = k.split('|'), rets = gr[k] || [];
+        findings.push({ kind: 'Sekvens', code: 'hours', title: 'Transaksjoner utenfor åpningstid', flag: true,
+          detail: 'Kasse ' + idLabel(p[1]) + ' ' + p[0] + ': ' + g[k].length + ' bonger (' + timesOf(g[k]) + ', åpent ' + cfg.openFrom + '–' + cfg.openTo + ')' +
+            (rets.length ? ', hvorav ' + rets.length + (rets.length === 1 ? ' retur' : ' returer') : ''),
           ids: g[k].map(function (x) { return x.transactionId; }) });
+      });
+      Object.keys(gr).forEach(function (k) {
+        var p = k.split('|'), sum = round2(gr[k].reduce(function (a, x) { return a + Math.abs(x.totalAmount); }, 0));
+        findings.push({ kind: 'Sekvens', code: 'hoursReturn', title: 'Retur utenfor åpningstid', flag: true,
+          detail: 'Kasse ' + idLabel(p[1]) + ' ' + p[0] + ': ' + gr[k].length + (gr[k].length === 1 ? ' retur' : ' returer') + ' (' + timesOf(gr[k]) + ', åpent ' + cfg.openFrom + '–' + cfg.openTo + '), til sammen ' + money(sum) + ' kr',
+          ids: gr[k].map(function (x) { return x.transactionId; }) });
       });
     }
     return { findings: findings, skippedGaps: skipped };
@@ -1435,8 +1410,8 @@
   // ---- risikoscore og forklaring --------------------------------------------------
   var RISK_WEIGHTS = {
     'Stor panteretur': 3, 'Mange pantelapper': 3, 'Kontant tilbake uten salg': 4, 'Rundt beløp': 1,
-    'Små returer før stenging': 4, 'Kontant tilbake uten salg flere ganger': 5, 'Samme beløp gjentatt': 3,
-    'Bonger utenfor åpningstid': 2, 'Regel': 3,
+    'Kontant tilbake uten salg flere ganger': 5,
+    'Transaksjoner utenfor åpningstid': 2, 'Retur utenfor åpningstid': 4, 'Regel': 3,
     'Retur uten salg': 3, 'Kortkjøp refundert kontant': 5, 'Salg og retur av samme beløp': 4, 'Salg etter kassaoppgjør': 4,
     'Hull i bongnummer': 3, 'Bongnummer og tid stemmer ikke': 4, 'Dobbelt bongnummer': 3, 'Gjentatte kassadifferanser': 4,
     'Avvikende sifferfordeling': 2, 'Mange runde beløp': 2, 'Rabatt uten årsak': 3, 'Mange rabatter uten årsak': 2, 'Rabatt med overvåket årsak': 3, 'Mange rabatter med overvåket årsak': 3,
@@ -1451,6 +1426,8 @@
     'Spør pris avviker fra dagens salg': 3, 'Mange spør pris': 2, 'Gjentatte returer på samme kort': 4, 'Manuell kvittering matcher annen bong': 4,
     'Bonger i rask rekkefølge': 2, 'Mange 0-kr-bonger': 2, 'Overvåket vare i retur': 3, 'Overvåket vare slettet': 3, 'Mange overvåkede varer hos kasserer': 2,
     'Retur av vare uten kjøp på kortet': 4, 'Retur av vare uten kjøp av medlemmet': 3, 'Retur av vare uten salg samme dag': 1,
+    'Vare returnert flere ganger': 5, 'Retur over kjøpt antall': 5, 'Retur til høyere pris enn kjøpt': 4, 'Vare ikke på kvitteringen': 4,
+    'Retur over kjøpt antall på kortet': 4, 'Retur over kjøpt antall for medlemmet': 3, 'Mange returer mot kvittering med avvik': 3,
     'Topptekst stemmer ikke med listen': 3, 'Samme autorisasjonskode på flere bonger': 3
   };
 
@@ -1476,7 +1453,8 @@
     rabatt: ['Rabatt uten årsak', 'Rabatt med overvåket årsak', 'Høy rabattprosent', 'Rabatt uten treff på andre salg'],
     regnskap: ['Linjer stemmer ikke med totalen', 'Betaling stemmer ikke med totalen', 'MVA stemmer ikke', 'Ugyldig MVA-sats'],
     pris: ['Avvikende pris på vare', 'Spør pris avviker fra dagens salg'],
-    retvare: ['Retur av vare uten kjøp på kortet', 'Retur av vare uten kjøp av medlemmet', 'Retur av vare uten salg samme dag']
+    apningstid: ['Transaksjoner utenfor åpningstid', 'Retur utenfor åpningstid'],
+    retvare: ['Retur av vare uten kjøp på kortet', 'Retur av vare uten kjøp av medlemmet', 'Retur av vare uten salg samme dag', 'Vare returnert flere ganger', 'Retur over kjøpt antall', 'Retur til høyere pris enn kjøpt', 'Vare ikke på kvitteringen', 'Retur over kjøpt antall på kortet', 'Retur over kjøpt antall for medlemmet']
   };
   var FAMILY_OF = {};
   Object.keys(FAMILIES).forEach(function (f) { FAMILIES[f].forEach(function (t) { FAMILY_OF[t] = f; }); });
@@ -1561,7 +1539,7 @@
     }
     var f = (ctx.findings || []).filter(function (x) { return x.title === b && x.ids.indexOf(ctx.id) !== -1; })[0];
     if (f) return /[.!?]$/.test(f.detail) ? f.detail : f.detail + '.';
-    if (b === 'Bonger utenfor åpningstid') return 'Bongen er tatt utenfor åpningstid' + (ctx.ctl ? ' (' + ctx.ctl.openFrom + '–' + ctx.ctl.openTo + ')' : '') + '.';
+    if (b === 'Transaksjoner utenfor åpningstid' || b === 'Retur utenfor åpningstid') return (b === 'Retur utenfor åpningstid' ? 'Returen' : 'Bongen') + ' er tatt utenfor åpningstid' + (ctx.ctl ? ' (' + ctx.ctl.openFrom + '–' + ctx.ctl.openTo + ')' : '') + '.';
     return String(reason);
   }
 
@@ -2917,6 +2895,11 @@
         g.list.forEach(function (it) { uniq[it.transactionId] = it; });
         var l = Object.keys(uniq).map(function (i) { return uniq[i]; });
         if (l.length < 2) return;
+        // ett kjøp og returer mot det er forventet når Retur mot kvittering er på (de følges der)
+        if (hasNum(cfg.retKv)) {
+          var posN = l.filter(function (it) { return it.totalAmount > 0; }).length, negN = l.filter(function (it) { return it.totalAmount < 0; }).length;
+          if (posN === 1 && negN >= 1 && posN + negN === l.length) return;
+        }
         res.refs.dup++;
         res.findings.push({ kind: 'Regnskap', code: 'refDup', title: 'Samme betalingsreferanse på flere bonger', flag: true,
           detail: 'Referanse ' + g.ref.slice(2) + ' (' + (g.ref.charAt(0) === 'T' ? 'TransId' : 'Referanse') + ') på ' + l.length + ' bonger: ' + l.map(function (it) { return 'kasse ' + wsOf(it) + ' ' + parseDT(it.endDateTime).time; }).join(', '),
@@ -3158,6 +3141,197 @@
         (why.basis === 'dag' ? ' er solgt ingen steder i butikken samme dag før returen' : ' er ikke kjøpt ' + (why.basis === 'kort' ? 'med samme kort' : 'av samme medlem') + ' siste ' + days + ' dager, selv om ' + (why.basis === 'kort' ? 'kortet' : 'medlemmet') + ' har ' + why.sales.length + ' andre kjøp i perioden');
       res.findings.push({ kind: 'Retur av vare', code: 'retEan', title: why.t, flag: true, detail: d, ids: [it.transactionId].concat(other) });
       res.rows.push({ id: it.transactionId, cashier: String(cashierId(it)), when: dayOf(it) + ' ' + parseDT(it.endDateTime).time, basis: why.basis, n: lines.length, amt: round2(lines.reduce(function (a, l) { return a + Math.abs(l.a); }, 0)) });
+    });
+    return res;
+  }
+
+  // ---- retur mot kvittering: aldri mer enn kjøpt, aldri flere ganger enn kjøpt antall ---------------------
+  function round3(n) { return Math.round(n * 1000) / 1000; }
+  var RK_EPS = 0.0005;
+
+  // Netto antall og beløp per vare på én bong. Slettede linjer og motlinjer går i null, pant utelates.
+  function netLines(sc) {
+    var out = {};
+    ((sc && sc.items) || []).forEach(function (l) {
+      if (isPantText(l) || !l.a) return;
+      var q = typeof l.q === 'number' && l.q > 0 ? l.q : 1;
+      var e = out[l.c] || (out[l.c] = { c: l.c, n: l.n, q: 0, a: 0 });
+      e.q = round3(e.q + (l.a < 0 ? -q : q));
+      e.a = round2(e.a + l.a);
+    });
+    Object.keys(out).forEach(function (c) { if (Math.abs(out[c].q) < RK_EPS && Math.abs(out[c].a) < 0.005) delete out[c]; });
+    return out;
+  }
+
+  function qtyText(q) { return String(round3(q)).replace('.', ','); }
+
+  // Kjøp og retur knyttes til samme kvittering via betalingsreferansen (TransId gjelder alle bonger, Referanse samme kasse og dag).
+  // For hver vare føres kjøpt og returnert antall og beløp i tidsrekkefølge. Retur utover kjøpt er avvik, uansett kasserer.
+  // Retur som ikke kan knyttes til en kvittering, kryss-sjekkes mot kort og medlem over tid. Summeres per kasserer.
+  function returnLedger(items, pop, scanMap, cfg) {
+    var res = { on: hasNum(cfg.retKv), identOn: false, findings: [], rows: [], returns: 0, linked: 0, unlinked: 0, bad: 0, badRef: 0, badIdent: 0, families: 0, identChecked: 0,
+      short: 0, scanned: 0, sales: 0, coverage: 1, applicable: false };
+    var identDays = cnum(cfg.retKvIdent, null), tol = cnum(cfg.retKvTol, 0.5), cashN = cnum(cfg.retKvCashN, null), fac = cnum(cfg.profFactor, 1.5), minN = cnum(cfg.profMin, 5);
+    res.identOn = identDays !== null;
+    if (!res.on && !res.identOn) return res;
+    var scope = {};
+    items.forEach(function (it) { scope[it.transactionId] = true; });
+
+    // bong-oversikt: netto varer per bong
+    var info = {}, order = [], earliest = null;
+    pop.forEach(function (it) {
+      if (it.receiptType !== 1 || typeof it.totalAmount !== 'number') return;
+      var ts = tsMin(it);
+      if (ts === null) return;
+      res.sales++;
+      if (earliest === null || ts < earliest) earliest = ts;
+      var sc = scanMap && scanMap[it.transactionId];
+      if (!hasV5(sc) || !sc.items) return;
+      res.scanned++;
+      var net = netLines(sc), buys = [], rets = [];
+      Object.keys(net).forEach(function (c) { (net[c].q > RK_EPS ? buys : net[c].q < -RK_EPS ? rets : []).push(net[c]); });
+      info[it.transactionId] = { it: it, sc: sc, ts: ts, net: net, buys: buys, rets: rets };
+      order.push(it.transactionId);
+    });
+    res.coverage = res.sales ? res.scanned / res.sales : 1;
+    res.applicable = res.coverage >= 0.8;
+    var viol = {};  // returbong → { title → [linjer] }
+    var addViol = function (id, title, text, extra) {
+      var v = viol[id] || (viol[id] = { titles: {}, order: [], extra: {} });
+      if (!v.titles[title]) { v.titles[title] = []; v.order.push(title); }
+      v.titles[title].push(text);
+      if (extra) v.extra[title] = extra;
+    };
+    var linked = {}, label = function (i) { return (i.it.bongnr || i.it.transactionId) + ' (' + dayOf(i.it) + ' ' + parseDT(i.it.endDateTime).time + ', kasserer ' + i.it.cashierNumber + ')'; };
+
+    // 1. kvitteringsfamilier via betalingsreferanse
+    if (res.on) {
+      var fam = {};
+      order.forEach(function (id) {
+        var i = info[id];
+        (i.sc.rf || []).forEach(function (x) {
+          if (x.slice(2).length < 4) return;
+          var key = x.charAt(0) === 'T' ? x : x + '|' + i.it.storeNumber + '|' + i.it.workstationNumber + '|' + dayOf(i.it);
+          var g = fam[key] || (fam[key] = {});
+          g[id] = i;
+        });
+      });
+      Object.keys(fam).forEach(function (k) {
+        var mem = Object.keys(fam[k]).map(function (id) { return fam[k][id]; });
+        if (mem.length < 2) return;
+        var buyers = mem.filter(function (m) { return m.buys.length; });
+        if (!buyers.length || !mem.some(function (m) { return m.rets.length; })) return;
+        res.families++;
+        mem.sort(function (a, b) { return a.ts - b.ts || (a.it.transactionId < b.it.transactionId ? -1 : 1); });
+        var led = {};
+        mem.forEach(function (m) {
+          var isBuy = m.buys.length > 0;
+          m.buys.forEach(function (e) {
+            var x = led[e.c] || (led[e.c] = { n: e.n, bq: 0, ba: 0, rq: 0, ra: 0 });
+            x.bq = round3(x.bq + e.q); x.ba = round2(x.ba + e.a);
+          });
+          m.rets.forEach(function (e) {
+            linked[m.it.transactionId] = true;
+            var x = led[e.c], need = -e.q, amt = round2(-e.a), why = null;
+            if (!x) { x = led[e.c] = { n: e.n, bq: 0, ba: 0, rq: 0, ra: 0 }; }
+            if (x.bq < RK_EPS) why = 'Vare ikke på kvitteringen';
+            else if (x.rq + need > x.bq + RK_EPS) why = x.rq >= x.bq - RK_EPS ? 'Vare returnert flere ganger' : 'Retur over kjøpt antall';
+            else if (x.ra + amt > x.ba + tol) why = 'Retur til høyere pris enn kjøpt';
+            if (why) {
+              var txt = '«' + e.n + '» (' + e.c + '): retur ' + qtyText(need) + ' stk, ' + money(amt) + ' kr; ' +
+                (why === 'Vare ikke på kvitteringen' ? 'varen står ikke på kvitteringen' : 'kjøpt ' + qtyText(x.bq) + ' stk, ' + money(x.ba) + ' kr, allerede returnert ' + qtyText(x.rq) + ' stk, ' + money(x.ra) + ' kr');
+              addViol(m.it.transactionId, why, txt, 'kvittering ' + buyers.map(label).join(', '));
+              res.badRef++;
+            }
+            x.rq = round3(x.rq + need); x.ra = round2(x.ra + amt);
+          });
+          if (isBuy) linked[m.it.transactionId] = linked[m.it.transactionId] || false;
+        });
+      });
+    }
+
+    // 2. kort og medlem over tid, for retur som ikke er knyttet til en kvittering via referanse
+    if (res.identOn && res.applicable) {
+      var win = identDays * 1440, ev = {};
+      var keysOf = function (i) {
+        var ks = [], mk = memberKey(i.it);
+        (i.sc.cd || []).forEach(function (c) { ks.push({ k: 'k|' + cardKeyOf(c), basis: 'kortet' }); });
+        if (mk) ks.push({ k: 'm|' + mk, basis: 'medlemmet' });
+        return ks;
+      };
+      order.forEach(function (id) {
+        var i = info[id];
+        keysOf(i).forEach(function (kb) { (ev[kb.k] = ev[kb.k] || []).push(i); });
+      });
+      order.forEach(function (id) {
+        var i = info[id];
+        if (!i.rets.length || linked[id] || !scope[id]) return;
+        var kbs = keysOf(i);
+        if (!kbs.length) return;
+        var histOK = earliest !== null && earliest <= i.ts - win;
+        if (!histOK) { res.short++; return; }
+        res.identChecked++;
+        i.rets.forEach(function (e) {
+          var need = -e.q;
+          for (var b = 0; b < kbs.length; b++) {
+            var list = ev[kbs[b].k] || [], bought = 0, back = 0, boughtA = 0, backA = 0, n = 0;
+            list.forEach(function (o) {
+              if (o.it.transactionId === id || o.ts > i.ts || o.ts < i.ts - win) return;
+              var ne = o.net[e.c];
+              if (!ne) return;
+              n++;
+              if (ne.q > RK_EPS) { bought += ne.q; boughtA += ne.a; } else if (ne.q < -RK_EPS) { back += -ne.q; backA += -ne.a; }
+            });
+            if (bought < RK_EPS) continue;     // aldri kjøpt: dekkes av «Retur av vare uten kjøp»
+            if (back + need > bought + RK_EPS) {
+              var basis = kbs[b].basis, title = basis === 'kortet' ? 'Retur over kjøpt antall på kortet' : 'Retur over kjøpt antall for medlemmet';
+              addViol(id, title, '«' + e.n + '» (' + e.c + '): retur ' + qtyText(need) + ' stk, ' + money(-e.a) + ' kr; ' + basis + ' har kjøpt ' + qtyText(bought) + ' stk og allerede returnert ' + qtyText(back) + ' stk siste ' + identDays + ' dager', null);
+              res.badIdent++;
+            }
+            break;
+          }
+        });
+      });
+    }
+
+    // funn per returbong
+    var perBong = {};
+    Object.keys(viol).forEach(function (id) {
+      var i = info[id];
+      if (!i || !scope[id]) return;
+      perBong[id] = true;
+      var v = viol[id];
+      v.order.forEach(function (title) {
+        res.findings.push({ kind: 'Retur mot kvittering', code: 'retKv', title: title, flag: true,
+          detail: whereText(i.it) + ': ' + v.titles[title].slice(0, 3).join('; ') + (v.titles[title].length > 3 ? ' og ' + (v.titles[title].length - 3) + ' til' : '') + (v.extra[title] ? ' – ' + v.extra[title] : '') + '.',
+          ids: [id] });
+      });
+    });
+    res.bad = Object.keys(perBong).length;
+
+    // per kasserer, over tid
+    var per = {}, stores = {};
+    order.forEach(function (id) {
+      var i = info[id];
+      if (!i.rets.length || !scope[id]) return;
+      res.returns++;
+      var isLinked = !!linked[id];
+      if (isLinked) res.linked++; else res.unlinked++;
+      var cid = cashierId(i.it), c = per[cid] || (per[cid] = { id: String(cid), store: i.it.storeNumber, returns: 0, linked: 0, bad: 0, days: {}, share: 0, flag: false });
+      var st = stores[i.it.storeNumber] || (stores[i.it.storeNumber] = { n: 0, bad: 0 });
+      c.returns++; st.n++;
+      if (isLinked) c.linked++;
+      if (perBong[id]) { c.bad++; st.bad++; c.days[dayOf(i.it)] = true; }
+    });
+    res.rows = Object.keys(per).sort(numCmp).map(function (id) {
+      var c = per[id], st = stores[c.store] || { n: 0, bad: 0 }, rate = st.n ? st.bad / st.n : 0;
+      c.share = c.returns ? c.bad / c.returns : 0;
+      c.dayN = Object.keys(c.days).length;
+      c.flag = cashN !== null && c.bad >= cashN && c.returns >= minN && (rate === 0 || c.share >= rate * fac);
+      if (c.flag) res.findings.push({ kind: 'Retur mot kvittering', code: 'retKvCash', title: 'Mange returer mot kvittering med avvik', flag: false, cashier: id, ids: [],
+        detail: 'Kasserer ' + idLabel(id) + ': ' + c.bad + ' av ' + c.returns + ' returbonger (' + Math.round(c.share * 100) + ' %) har retur utover kjøpt eller flere ganger, fordelt på ' + c.dayN + (c.dayN === 1 ? ' dag' : ' dager') + ' (butikken ' + Math.round(rate * 100) + ' %; grense ' + cashN + ' bonger)' });
+      delete c.days;
+      return c;
     });
     return res;
   }
@@ -3476,6 +3650,8 @@
     manualReceipts: manualReceipts,
     cancelled: cancelled,
     netNp: netNp,
+    returnLedger: returnLedger,
+    netLines: netLines,
     lappKind: lappKind,
     lappCodes: lappCodes,
     lappCodeText: lappCodeText,

@@ -1415,7 +1415,7 @@
       profile: L.profiles(items, scanMap, ctlCfg),
       patterns: L.patterns(items, scanMap, ctlCfg),
       pant: L.pantCheck(items, scanMap, ctlCfg),
-      seq: L.sequence(items, ctlCfg),
+      seq: L.sequence(items, ctlCfg, scanMap),
       recon: L.reconcile(items, scanMap, ctlCfg),
       falseRet: L.falseReturns(items, pop, scanMap, ctlCfg),
       after: L.afterSettlement(items, pop, ctlCfg),
@@ -1438,15 +1438,16 @@
       tempo: L.tempoChecks(items, ctlCfg),
       watch: L.watchItems(items, pop, scanMap, ctlCfg),
       retEan: L.itemReturns(items, pop, scanMap, ctlCfg),
+      retKv: L.returnLedger(items, pop, scanMap, ctlCfg),
       hdr: L.headerChecks(items, pop, scanMap, ctlCfg)
     };
-    res.seq.findings = res.seq.findings.filter(function (f) { return f.code === 'hours'; });
+    res.seq.findings = res.seq.findings.filter(function (f) { return f.code === 'hours' || f.code === 'hoursReturn'; });
     res.seq.skippedGaps = res.deleted.skippedGaps;
     res.findings = res.patterns.concat(res.pant.findings, res.seq.findings, res.falseRet.findings, res.after,
       res.deleted.findings.filter(keep), res.diff.findings.filter(keep), res.numbers.findings.filter(keep), res.disc.findings,
       res.member.findings, res.price.findings, res.ku.findings, res.ev.findings, res.ledger.findings, res.corr.findings.filter(keep),
       res.lapp.findings.filter(keep), res.voids.findings.filter(keep), res.special.findings, res.ask.findings.filter(keep), res.card.findings.filter(keep), res.manual.findings.filter(keep),
-      res.tempo.findings.filter(keep), res.watch.findings.filter(keep), res.retEan.findings.filter(keep), res.hdr.findings.filter(keep));
+      res.tempo.findings.filter(keep), res.watch.findings.filter(keep), res.retEan.findings.filter(keep), res.retKv.findings.filter(keep), res.hdr.findings.filter(keep));
     res.cashierExtra = {};
     res.findings.forEach(function (f) {
       if (f.flag) f.ids.forEach(function (id) { if (scopeIds[id]) addFlag(id, f.title); });
@@ -1644,6 +1645,7 @@
     renderTempo(box, R.tempo);
     renderWatch(box, R.watch);
     renderRetEan(box, R.retEan);
+    renderRetKv(box, R.retKv);
     box.appendChild(hintEl('Kortdata krever ny skanning: bruk «Skann på nytt» under Bongregnskap og referanser. Ukjente linjer og ord finner du i Diagnostikk under Pris, kjøpeutbytte og hendelser.'));
   }
 
@@ -1680,6 +1682,18 @@
     box.appendChild(hintEl(E.returns + ' returer med ' + E.lines + ' vare-linjer vurdert. ' + E.flagged + ' uten kjøp av samme vare (kort ' + E.byCard + ', medlem ' + E.byMember + ', samme dag ' + E.byDay + '). ' + E.short + ' ikke vurdert fordi mindre enn ' + (ctlCfg.retEanDays || '–') + ' dager er lastet før returen, ' + E.unlinked + ' uten kjøp å sammenligne med.'));
     if (E.rows.length) box.appendChild(tbl(['Når', 'Kasserer', 'Grunnlag', 'Linjer', 'Beløp kr'], E.rows.slice(0, 12).map(function (r) { return [r.when, { node: entLink('kasserer', r.cashier) }, r.basis, r.n, fmt(r.amt)]; })));
     box.appendChild(hintEl('Kortet eller medlemmet har andre kjøp i perioden, men ikke denne varen (EAN). Kunden kan ha kjøpt varen før perioden, kontant eller i en annen butikk, så dette er en indikasjon, ikke bevis.'));
+  }
+
+  function renderRetKv(box, K) {
+    box.appendChild(el('b', { class: 'kvr-subh', text: 'Retur mot kvittering' }));
+    if (!K.on && !K.identOn) { box.appendChild(hintEl('Av: se Innstillinger → Retur mot kvittering.')); return; }
+    box.appendChild(hintEl(K.returns + ' returbonger i omfanget: ' + K.linked + ' knyttet til en kvittering via referanse (' + K.families + ' kvitteringer har både kjøp og retur), ' + K.unlinked + ' uten kjent kvittering. ' +
+      K.bad + ' returbonger har retur utover kjøpt antall eller beløp, eller samme vare flere ganger.' +
+      (K.identOn ? (K.applicable ? ' Kort og medlem er kryss-sjekket over ' + ctlCfg.retKvIdent + ' dager for ' + K.identChecked + ' av returene' + (K.short ? ' (' + K.short + ' ikke vurdert fordi for kort tid er lastet før returen)' : '') + '.' : ' Kort og medlem er ikke vurdert: bare ' + pct(K.coverage) + ' av salgene er skannet (krever minst 80 %).') : '')));
+    if (K.rows.length) box.appendChild(tbl(['Kasserer', 'Returbonger', 'Knyttet til kvittering', 'Med avvik', 'Andel', 'Dager med avvik'], K.rows.map(function (r) {
+      return [{ node: entLink('kasserer', r.id) }, r.returns, r.linked, { t: r.bad, bad: r.flag }, { t: pct(r.share), bad: r.flag }, r.dayN];
+    })));
+    box.appendChild(hintEl('Kjøp og retur knyttes til samme kvittering med betalingsreferansen (TransId, eller Referanse på samme kasse og dag). Hver vare kan til sammen returneres opptil kjøpt antall og beløp, uansett hvem som tar returen. Retur uten kjent kvittering kryss-sjekkes mot kort og medlem. Rødt = minst ' + (ctlCfg.retKvCashN || '–') + ' bonger med avvik og andel over butikkens × ' + ctlCfg.profFactor + '. Hvis returbongene ikke viser referansen til kjøpet, finnes ingen knytning, og kontrollen vurderer bare kort og medlem.'));
   }
 
   function renderAcctCard(R) {

@@ -106,10 +106,11 @@ function timeline(o) {
 }
 
 const tm = (h, m) => h * 60 + m;
-function tSmall() {
-  return fig(timeline({ id: 'tsmall', label: 'Tre små returer på kasse 2 mellom 21:22 og 21:51, i timen før stengetid kl 22:00', from: tm(20, 30), to: tm(22, 20), ticks: [tm(21, 0), tm(21, 30), tm(22, 0)], bands: [{ from: tm(21, 0), to: tm(22, 0), label: 'siste 60 min før stenging', cls: 'd-warnsoft' }],
-    marks: [{ m: tm(21, 22), label: 'retur −39,90', cls: 'd-baddot', row: 'down' }, { m: tm(21, 38), label: 'retur −31,90', cls: 'd-baddot', row: 'up' }, { m: tm(21, 51), label: 'retur −20,50', cls: 'd-baddot', row: 'down' }, { m: tm(22, 0), label: 'stenger 22:00', cls: 'd-dot', row: 'up', bold: true }] }),
-  'Tre returer på hver under 100 kr, alle i timen før stenging på samme kasse. Grensene styres av «Små returer før stenging»-innstillingene.');
+function tHours() {
+  return fig(timeline({ id: 'thours', label: 'Retur og salg før åpning kl 07:00 og retur etter stengetid kl 23:00 på kasse 3', from: tm(5, 0), to: tm(24, 0), ticks: [tm(6, 0), tm(9, 0), tm(12, 0), tm(15, 0), tm(18, 0), tm(21, 0)],
+    bands: [{ from: tm(5, 0), to: tm(7, 0), label: 'før åpning', cls: 'd-warnsoft' }, { from: tm(23, 0), to: tm(24, 0), label: 'etter stengetid', cls: 'd-warnsoft' }],
+    marks: [{ m: tm(6, 12), label: 'retur −80,00', cls: 'd-baddot', row: 'down' }, { m: tm(6, 48), label: 'salg 120,00', cls: 'd-dot', row: 'up' }, { m: tm(23, 20), label: 'retur −45,00', cls: 'd-baddot', row: 'down' }] }),
+  'Bonger før åpning og etter stengetid flagges som «Transaksjoner utenfor åpningstid». Returene blant dem, her to, får i tillegg «Retur utenfor åpningstid». Tidene styres av «Åpner» og «Stenger» i innstillingene.');
 }
 function tFalse() {
   return fig(timeline({ id: 'tfalse', label: 'Salg på 40 kr kl 10:05 og retur av samme beløp kl 10:25 på samme kasse, innen 60 minutter', from: tm(9, 45), to: tm(11, 30), ticks: [tm(10, 0), tm(10, 30), tm(11, 0)], bands: [{ from: tm(10, 5), to: tm(11, 5), label: 'innen 60 min', cls: 'd-warnsoft' }],
@@ -239,4 +240,4 @@ function storage() {
   }, 'storage'), 'Cachen er hardt begrenset og kan tømmes under Skann → Tøm cache. Panelets egne data deles ikke med Lindbak.');
 }
 
-module.exports = { flow, scan, scoring, scope, tSmall, tFalse, tFalse2, tAfter, tGap, tDiff, tBenford, tDisc, tPant, zip, settingsFlow, storage };
+module.exports = { flow, scan, scoring, scope, tHours, tFalse, tFalse2, tAfter, tGap, tDiff, tBenford, tDisc, tPant, zip, settingsFlow, storage };
