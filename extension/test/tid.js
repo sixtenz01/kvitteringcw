@@ -88,6 +88,8 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
     assert.match(d, /6 bonger sammenlignet: 0 har samme klokkeslett i listen og på bongen/);
     assert.match(d, /Typisk avvik \(bong minus liste\): 120 min/);
     assert.match(d, /Listen ligger konsekvent 120 min bak bongen/);
+    assert.match(d, /Kanal \(saleChannel\) og rådata for tid/);
+    assert.match(d, /Rådata for tid: \w+, \d+ ulike verdier på 6 rader/);
     await page.click('.kvr-dlg button:text-is("Flytt listetid +120 min")');
     assert.match(await analyse(), /Medlemsnr M1: butikk 1005 2026-10-02 22:04 og butikk 1010 22:20/);
     await go('Mer', 'Innstillinger');

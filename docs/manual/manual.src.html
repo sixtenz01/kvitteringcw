@@ -339,7 +339,7 @@
   <li><strong>Hendelsesord:</strong> tekstlinjer (ikke varenavn) med ord som annullert, makulert, parkert, på vent, manuell, spør pris, overstyr, prisendring eller kansell flagges. Ordene «manuell» og «spør pris» telles ikke her på bonger som allerede er flagget av «Spør pris» eller «Manuell kvittering».</li>
   <li><strong>Ukjente linjer:</strong> linjer pluginen ikke kjenner igjen samles opp, med tall byttet mot #.</li>
 </ul>
-<p>Åpne <strong>Diagnostikk</strong> fra kortet «Pris, kjøpeutbytte og hendelser» eller fra Innstillinger → Generelt. Der ser du først en sammenligning av klokkeslettet i listen og på bongen, så hendelsesord og ukjente linjer med antall og et eksempel på bongnummer. «Kopier som tekst» gir en liste du kan dele, slik at testene kan utvides med det Lindbak faktisk viser. Listen inneholder ingen varenavn eller beløp, men bongnummer.</p>
+<p>Åpne <strong>Diagnostikk</strong> fra kortet «Pris, kjøpeutbytte og hendelser» eller fra Innstillinger → Generelt. Der ser du først en sammenligning av klokkeslettet i listen og på bongen, så en kanaltabell (saleChannel) med antall bonger, typer, butikker, kasser, snittbeløp, medlemsandel og returer per kanal, med rådata for tid (type og ulike verdier), og til slutt hendelsesord og ukjente linjer med antall og et eksempel på bongnummer. Betydningen av kanalkodene er ikke bekreftet; tabellen inneholder ingen kasserer- eller medlemsnumre. «Kopier som tekst» gir en liste du kan dele, slik at testene kan utvides med det Lindbak faktisk viser. Listen inneholder ingen varenavn eller beløp, men bongnummer.</p>
 <h3>Pantelapper: manuell, maskin, slettet og gjenbrukt</h3>
 <p>Pantelappen har to koder: <code>99 PANTELAPP</code> er lagt inn manuelt av kassereren, og <code>399 PANTELAPP</code> kommer fra pantemaskinen. Kortet «Pantelapper: manuell og maskin» viser per kasserer hvor mange av hver, og beløpet.</p>
 <div class="tw"><table>
@@ -564,7 +564,7 @@
   <dt>Til gode-lapp / manuell kvittering</dt><dd>Kvittering skrevet for hånd eller en lapp som gir kunden tilgode. Sammenlignes med andre bonger i butikken.</dd>
   <dt>Kjøpeutbytte</dt><dd>Tabellen med Grunnlag, Kjøpeutbytte og MVA bonus på medlemsbonger.</dd>
   <dt>Hendelsesord</dt><dd>Ord på tekstlinjer som tyder på annullert, parkert, manuell pris eller spør pris.</dd>
-  <dt>Diagnostikk</dt><dd>Oversikt over linjer pluginen ikke kjenner igjen og hendelsesord, til å dele slik at testene kan utvides.</dd>
+  <dt>Diagnostikk</dt><dd>Oversikt over klokkeslett, kanaltabell, linjer pluginen ikke kjenner igjen og hendelsesord, til å dele slik at testene kan utvides.</dd>
   <dt>Omfang</dt><dd>Perioden, butikkene, kassererne og kassene du velger at analysen skal gjelde.</dd>
   <dt>Datagrunnlag</dt><dd>Alle innlastede bonger i valgte butikker. Tester som må se hele bildet bruker det.</dd>
   <dt>Terskel</dt><dd>Grensen en test bruker for å avgjøre om noe flagges.</dd>

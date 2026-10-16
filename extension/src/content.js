@@ -1749,8 +1749,19 @@
     markStale();
   }
 
+  function channelInfo() {
+    var CS = L.channelStats(recs.map(function (r) { return r.item; }));
+    var rawTxt = CS.raw.n ? 'Rådata for tid: ' + CS.raw.type + ', ' + CS.raw.distinct + ' ulike verdier på ' + CS.raw.n + ' rader, eksempel «' + CS.raw.sample + '».' : 'Ingen rådata for tid i listen.';
+    var head = ['Kanal', 'Bonger', 'Typer', 'Butikker', 'Kasserere', 'Kasser', 'Kassenr', 'Snitt kr', 'Medlem %', 'Returer'];
+    var rows = CS.rows.map(function (c) { return [c.k, c.n, c.types, c.stores, c.cashiers, c.ws, c.wsList, c.avg, c.member, c.ret]; });
+    return { CS: CS, rawTxt: rawTxt, head: head, rows: rows };
+  }
+
   function diagText(D) {
-    var out = ['Kvitteringshenter diagnostikk', 'Skannede bonger: ' + D.total + ' (ny skanning: ' + D.v4 + ')', 'Løpenummer i topptekst: ' + seqProof.ok + ' stemte, ' + seqProof.bad + ' avvek',  'Kjøpeutbytte-tabell: ' + D.ku.with + ' med, ' + D.ku.without + ' uten', 'Klokkeslett: ' + timeText(L.timeCheck(recs.map(function (r) { return r.item; }), scanMap)), '', 'Hendelsesord (ord, antall, tekst, eksempelbong):'];
+    var CI = channelInfo();
+    var out = ['Kvitteringshenter diagnostikk', 'Skannede bonger: ' + D.total + ' (ny skanning: ' + D.v4 + ')', 'Løpenummer i topptekst: ' + seqProof.ok + ' stemte, ' + seqProof.bad + ' avvek',  'Kjøpeutbytte-tabell: ' + D.ku.with + ' med, ' + D.ku.without + ' uten', 'Klokkeslett: ' + timeText(L.timeCheck(recs.map(function (r) { return r.item; }), scanMap)), '', 'Kanal (saleChannel) i listen; kolonner: ' + CI.head.join(' | ')];
+    CI.rows.forEach(function (r) { out.push('  ' + r.join(' | ')); });
+    out.push(CI.rawTxt, '', 'Hendelsesord (ord, antall, tekst, eksempelbong):');
     if (!D.ev.length) out.push('  ingen');
     D.ev.forEach(function (e) { out.push('  ' + e.k + '\t' + e.n + '\t' + e.t + '\t' + e.id); });
     out.push('', 'Ukjente linjer (tekst med tall som #, antall, eksempelbong):');
@@ -1769,6 +1780,10 @@
       body.appendChild(hintEl('Listen ligger konsekvent ' + Math.abs(TC.suggest) + ' min ' + (TC.suggest > 0 ? 'bak' : 'foran') + ' bongen. Det tyder på tidssone eller en fast forskyvning i dataene.'));
       body.appendChild(btn('Flytt listetid ' + (TC.suggest > 0 ? '+' : '') + TC.suggest + ' min', function () { setTimeShift(timeShift + TC.suggest); closeModal(); say('Listetid flyttet ' + (TC.suggest > 0 ? '+' : '') + TC.suggest + ' min. Kjør analysen på nytt.'); }, 'kvr-primary'));
     }
+    var CI = channelInfo();
+    body.appendChild(el('b', { class: 'kvr-subh', text: 'Kanal (saleChannel) og rådata for tid' }));
+    body.appendChild(CI.rows.length ? tbl(CI.head, CI.rows) : hintEl('Ingen rader i listen.'));
+    body.appendChild(hintEl(CI.rawTxt + ' Betydningen av kanalkodene er ikke bekreftet: tabellen viser bare antall og snitt, uten kasserer- eller medlemsnumre. «Kasser» er antall ulike kasser, «Kassenr» de første nummerne.'));
     body.appendChild(hintEl('Løpenummer i topptekst mot valgt rad: ' + seqProof.ok + ' stemte, ' + seqProof.bad + ' avvek' + (seqProof.ok >= 3 ? ' (kontrollen er aktiv: bonger med feil nummer avvises)' : ' (kontrollen aktiveres etter 3 treff)') + '.'));
     body.appendChild(hintEl(D.v4 ? D.v4 + ' av ' + D.total + ' skannede bonger har ny skanningsdata (eldre må skannes på nytt). Dette er linjer pluginen ikke kjenner igjen, og ord som tyder på annullert, parkert, manuell pris eller spør pris. Del listen for å få testene utvidet.' : 'Ingen skanninger med ny data ennå. Skann kvitteringer først (Skann → Skann innhold).'));
     if (D.v4) {

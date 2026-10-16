@@ -1001,4 +1001,13 @@ assert.strictEqual(L.storeNameFromCell('Coop Mega', 1005), 'Coop Mega');
 assert.strictEqual(L.storeNameFromCell('1006 Coop Mega', 1005), '', 'navn som hører til en annen butikk brukes ikke');
 assert.strictEqual(L.storeNameFromCell('', 1005) + L.storeNameFromCell(null, 1005) + L.storeNameFromCell('12', 1005), '');
 
+{
+  const mk = (id, ch, ws, tot, mem, raw, cash) => ({ transactionId: id, saleChannel: ch, workstationNumber: ws, totalAmount: tot, memberNumber: mem, rawDT: raw, cashierNumber: cash, storeNumber: 1005, receiptType: 1 });
+  const cs = L.channelStats([mk('a-1', 2, 3, 100, 5, '2026-10-02T10:00:00', '10'), mk('a-2', 2, 1, -50, null, '2026-10-02T10:00:00', '11'), mk('a-3', 3, 81, 20, 9, '2026-10-02T10:01:00', '0'), mk('a-4', undefined, 1, 10, null, undefined, '10')]);
+  assert.deepStrictEqual(cs.rows.map(r => [r.k, r.n, r.cashiers, r.ws, r.wsList, r.avg, r.member, r.ret]), [['2', 2, 2, 2, '1,3', 25, 50, 1], ['3', 1, 1, 1, '81', 20, 100, 0], ['?', 1, 1, 1, '1', 10, 0, 0]]);
+  assert.deepStrictEqual(cs.raw, { n: 3, distinct: 2, type: 'string', sample: '2026-10-02T10:00:00' });
+  assert.ok(cs.rows.every(r => typeof r.cashiers === 'number' && !('cashierNumber' in r)), 'bare antall kasserere, ingen kassernumre');
+  assert.deepStrictEqual(L.channelStats([]).rows, []);
+}
+
 console.log('logic: ok');

@@ -2828,6 +2828,29 @@
     return { total: d.total, v4: d.v4, unk: list(d.unk), ev: list(d.ev), ku: d.ku };
   }
 
+  // Kanaltabell (saleChannel) og rådata for tid. Kun summer og antall: ingen kasserer- eller medlemsnumre.
+  function channelStats(items) {
+    var ch = {}, raws = {}, rawType = '', rawSample = '', nRaw = 0;
+    (items || []).forEach(function (it) {
+      var k = it.saleChannel === undefined || it.saleChannel === null ? '?' : String(it.saleChannel);
+      var c = ch[k] || (ch[k] = { k: k, n: 0, cashiers: {}, stores: {}, ws: {}, types: {}, sum: 0, cnt: 0, mem: 0, ret: 0 });
+      c.n++; c.cashiers[it.cashierNumber] = 1; c.stores[it.storeNumber] = 1; c.ws[it.workstationNumber] = 1; c.types[it.receiptType] = 1;
+      if (it.receiptType === 1 && typeof it.totalAmount === 'number') { c.sum += it.totalAmount; c.cnt++; if (it.totalAmount < 0) c.ret++; }
+      if (it.memberNumber !== undefined && it.memberNumber !== null && it.memberNumber !== '') c.mem++;
+      if (it.rawDT !== undefined && it.rawDT !== null) {
+        nRaw++; raws[String(it.rawDT)] = 1;
+        if (!rawSample) { rawSample = String(it.rawDT); rawType = (it.rawDT instanceof Date) ? 'Date' : typeof it.rawDT; }
+      }
+    });
+    var num = function (o) { return Object.keys(o).map(Number).filter(function (x) { return isFinite(x); }).sort(function (a, b) { return a - b; }); };
+    var rows = Object.keys(ch).sort().map(function (k) {
+      var c = ch[k], w = num(c.ws);
+      return { k: k, n: c.n, cashiers: Object.keys(c.cashiers).length, stores: Object.keys(c.stores).length, ws: w.length, wsList: w.slice(0, 12).join(','),
+        types: num(c.types).join(','), avg: c.cnt ? round2(c.sum / c.cnt) : 0, member: c.n ? Math.round(100 * c.mem / c.n) : 0, ret: c.ret };
+    });
+    return { rows: rows, raw: { n: nRaw, distinct: Object.keys(raws).length, type: rawType, sample: rawSample } };
+  }
+
   // Periode mot periode.
   function periodStats(items, scanMap, anomMap, weights) {
     var s = { count: 0, sum: 0, ret: 0, pos: 0, posSum: 0, scanned: 0, lapper: 0, score: 0, anom: 0 };
@@ -2957,6 +2980,7 @@
     DEFAULT_SPECIAL: DEFAULT_SPECIAL,
     ledger: ledger,
     diagnostics: diagnostics,
+    channelStats: channelStats,
     median: median,
     SETTING_GROUPS: SETTING_GROUPS,
     groupForReason: groupForReason,
