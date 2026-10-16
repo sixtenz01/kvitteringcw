@@ -105,6 +105,8 @@ Ikke verifisert: om kvitteringen skriver årsaken som nummer eller tekst (begge 
 
 Alt bygger på skannet innhold og lager funn i samme avviksliste, med innstillinger og poeng per test. Skanning versjon 6 leser i tillegg kortlinjer (`cd`: kortleverandør, siste fire siffer, evt. utstedernr).
 
+Versjon 3.21.0 legger til: **Tempo** (serier av bonger med høyst N sekunder mellom på samme kasse; uten sekunder i listen telles bonger i samme minutt; kasserere med mange 0-kr-bonger), **Overvåkede varer** (EAN eller del av navn; retur, sletting og kassererandel), **Retur av vare uten kjøp** (EAN som kortet eller medlemmet ikke har kjøpt innen N dager, valgfritt samme dag), **Topptekst og bunn** (skanning versjon 7: kasserer, kasse og medlem i toppteksten mot listen, terminal-ID, autorisasjonskode og inngangsmåte; felt kontrolleres bare når minst 90 % av minst ti bonger stemmer fra før), **Betalingsmåter** (tabell i Diagnostikk mot CWs filterliste, og filter i Filtrer) og **Søk i bongen** (fulltekst over det skannede innholdet). Alt leser bare listen og visningsfeltet, ingen kall mot API.
+
 - **Ingen dobbelttelling (3.15.0):** tester som måler samme forhold teller bare det høyeste poenget per bong (`FAMILIES` i `logic.js`: pant og kontant tilbake, rabatt, regnskap, pris, kassadifferanse). Årsaker som ikke teller vises overstrøket i Sjekk først. «Samme pantebeløp utbetalt flere ganger» er slått sammen med «Pantelapp innløst flere ganger» (samme kasse samme dag, eller innen tidsrommet på tvers av kasser, og bongsum for bonger med flere pantelapper). Prisavviks-testen hopper over spør pris-linjer, og Hendelsesord utelater «manuell» og «spør pris» på bonger som allerede er flagget av de egne testene.
 - **Pantelapper:** `99 PANTELAPP` er manuell, `399 PANTELAPP` kommer fra pantemaskinen. Funn: manuell pantelapp over beløpsgrensen, kasserer med mange manuelle (andel mot butikken), pantelapp slettet (linje + motlinje med samme beløp), og samme pantelapp innløst flere ganger (lappnr hvis bongen viser det, ellers samme sum innen 60 min eller på samme kasse samme dag). Kortet «Pantelapper: manuell og maskin».
 - **Slettede linjer:** en linje og en motlinje (samme kode, motsatt beløp) regnes som slettet. «Kontant tilbake uten salg» bruker nå varelinjer etter sletting. Nytt funn når varelinjer er slettet og bare pant og kontant tilbake står igjen. Makulert vare (EAN) som ikke er solgt på ny i butikken innen 120 min (krever 80 % skannet).
@@ -221,6 +223,8 @@ NODE_PATH=<global node_modules> node test/kampanje.js   # mulig sentral kampanje
 NODE_PATH=<global node_modules> node test/avdeling.js  # butikknummer = nivå + avdeling: gruppert liste, søk, valg av nivå, navn
 NODE_PATH=<global node_modules> node test/butikk.js    # butikknavn fra BUTIKK-kolonnen, redigering, filter samlet under Filtrer
 NODE_PATH=<global node_modules> node test/linjer.js    # samme funn i panelet: kort, søk på spesialbetaling og rabatt-%
+node test/innhold.test.js                              # tempo, overvåkede varer, retur uten kjøp, topptekst/bunn (v7), betalingsmåter, fulltekstsøk
+NODE_PATH=<global node_modules> node test/innhold.js    # samme i panelet: skanning av topptekst/bunn, funn, kort, Diagnostikk, søk og betalingsfilter
 NODE_PATH=<global node_modules> node test/stor.js  # panelstørrelse: Vanlig/Stor/Full, dokking, kolonner, husking
 TOUR=<mappe> NODE_PATH=<global node_modules> node test/tour.js  # skjermbilder av alle faner (valgfritt)
 ```

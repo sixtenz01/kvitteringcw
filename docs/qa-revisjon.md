@@ -658,3 +658,18 @@ Oppdatering 3.19.0: svaret gjelder varen (EAN), uansett rabattprosent, slik at a
 | Ingen skjermbilder av kampanjespørsmålet | Demodata utvidet med en kampanje; to nye bilder |
 
 Kjent hull som ikke er endret: «Rabatt uten årsak» bruker bare trykt prosent på rabattlinjen. Linjer uten trykt prosent fanges av «Høy rabattprosent» og «Rabatt uten treff», som regner prosent fra beløpene.
+
+## 12. Nye kontroller og søk (versjon 3.21.0)
+
+Kartleggingen (gridet har bare de ti kjente feltene; `saleChannel` er det eneste ubrukte) viste at mer kunne bygges uten nye kilder. Alt leser bare listen og visningsfeltet.
+
+| Tiltak | Hvordan | Forbehold |
+|---|---|---|
+| Tempo: tid mellom bonger | Serier på samme kasse og dag (standard ≥ 4 bonger, høyst 25 s mellom); uten sekunder telles bonger i samme minutt (≥ 6); kasserer med ≥ 5 bonger på 0,00 kr | Køer, selvbetjening og åpning av skuff gir treff; tidsoppløsningen i ekte data er ikke bekreftet (Diagnostikk viser den) |
+| Overvåkede varer | Egen liste (EAN-start eller del av navn, av som standard); retur og sletting flagges, kassererandel mot butikken | Slettet = linje og motlinje med samme beløp |
+| Retur av vare uten kjøp | Returlinje (EAN) uten kjøp av samme vare på samme kort eller medlem de siste 7 dagene, når de har andre kjøp i perioden; valgfritt samme dag uten kort og medlem | Krever 80 % skannede salg og historikk som dekker tidsrommet; ellers «ikke vurdert». Kjøp før perioden, kontant eller i annen butikk gir falske treff |
+| Topptekst og bunn (skanning v7) | Tekst utenfor tabellene: kasserer, kasse og medlem mot listen; terminal-ID, autorisasjonskode, inngangsmåte; samme autorisasjonskode på flere bonger | Formatet er ikke sett i ekte data. Et felt kontrolleres bare når minst 90 % av minst ti bonger stemmer. Bare strukturerte verdier og tallbyttede ukjente linjer lagres |
+| Betalingsmåter | Tabell i Diagnostikk (bonger, sum, kasserere) mot navnene i CWs filter, og filter i Filtrer | Skrivemåten på bongen og i filteret kan avvike |
+| Søk i bongen | Fulltekst over linjer, betalinger, referanser, kort, kupong, ukjente linjer og topptekst/bunn; flere ord må alle treffe | Krever skanning |
+
+Funnet under testing: lagrede skanninger med versjon 7 ble forkastet ved omlasting fordi innlastingen bare godtok versjon 2–6. Rettet, og e2e-testen `innhold.js` sjekker at versjon 7 overlever omlasting.

@@ -291,6 +291,25 @@
     return d && d.body ? d : null;
   }
 
+  // Tekst utenfor tabellene: linjer før første tabell er topptekst, resten (mellom og etter tabeller) er bunn. Linjene deles på BR, NEWLINE, P og DIV.
+  function outsideText(doc) {
+    var lines = [], cur = '', tables = 0;
+    var brk = function () { var t = cur.replace(/\s+/g, ' ').trim(); if (t) lines.push({ t: t.slice(0, 200), after: tables }); cur = ''; };
+    var walk = function (n) {
+      if (n.nodeType === 3) { cur += n.nodeValue; return; }
+      if (n.nodeType !== 1) return;
+      var tag = n.tagName;
+      if (tag === 'STYLE' || tag === 'SCRIPT') return;
+      if (tag === 'TABLE') { brk(); tables++; return; }
+      var block = tag === 'BR' || tag === 'NEWLINE' || tag === 'P' || tag === 'DIV';
+      if (block) brk();
+      for (var c = n.firstChild; c; c = c.nextSibling) walk(c);
+      if (block) brk();
+    };
+    try { if (doc.body) walk(doc.body); brk(); } catch (e) { return { tl: [], bl: [] }; }
+    return { tl: lines.filter(function (x) { return !x.after; }).map(function (x) { return x.t; }).slice(0, 60), bl: lines.filter(function (x) { return x.after; }).map(function (x) { return x.t; }).slice(0, 60) };
+  }
+
   function rowsFrom(doc) {
     var rows = Array.prototype.map.call(doc.querySelectorAll('tr'), function (tr) {
       return Array.prototype.map.call(tr.children, function (c) { return c.textContent.replace(/\s+/g, ' ').trim(); });
@@ -298,6 +317,9 @@
     var head = doc.body ? doc.body.textContent : '';
     rows.hd = L.headerDT(head);
     rows.hs = L.headerSeq(head);
+    var out = outsideText(doc);
+    rows.tl = out.tl;
+    rows.bl = out.bl;
     return rows;
   }
 
@@ -838,6 +860,7 @@
   function renderScanState() {
     if (!ui.scanRow) return;
     syncSpecialOpts();
+    syncPayOpts();
     var base = recs.filter(function (r) { return r.base && (r.item.receiptType === 1 || r.item.receiptType === 2); });
     var none = base.filter(function (r) { return !scanMap[r.item.transactionId]; }).length;
     var old = base.filter(function (r) { var sc = scanMap[r.item.transactionId]; return sc && r.item.receiptType === 1 && !L.hasV4(sc); }).length;
@@ -847,7 +870,7 @@
     ui.scanTxt.textContent = 'Skannet ' + (base.length - none) + ' av ' + base.length + (old ? ' (' + old + ' eldre skanninger tas på nytt)' : '');
     ui.scanNow.style.display = missing > 0 ? '' : 'none';
     ui.scanNow.disabled = scanning;
-    var hide = filters.pant || filters.item || filters.special || filters.groups.length ? none : 0;
+    var hide = filters.pant || filters.item || filters.text || filters.pay || filters.special || filters.groups.length ? none : 0;
     if (filters.disc || filters.discFrom || filters.discTo) hide = none + noDisc;
     ui.scanWarn.style.display = hide > 0 ? '' : 'none';
     ui.scanWarnTxt.textContent = hide + ' kvitteringer ' + ((filters.disc || filters.discFrom || filters.discTo) && noDisc ? 'mangler skanning eller rabattdata' : 'er ikke skannet') + ' og skjules av dette filteret.';
@@ -897,6 +920,8 @@
     if (f.onlyAnom) add('Kun avvik', function () { f.onlyAnom = false; });
     if (f.bong) add('Bong: ' + f.bong, function () { f.bong = ''; });
     if (f.item) add('Vare: ' + f.item, function () { f.item = ''; });
+    if (f.text) add('Søk: ' + f.text, function () { f.text = ''; });
+    if (f.pay) add('Betaling: ' + f.pay, function () { f.pay = ''; });
     if (f.disc) add('Rabatt: ' + (({ any: 'har rabatt', noreason: 'uten årsak', reason: 'med årsak', coupon: 'har kupong' }[f.disc] || (f.disc.indexOf('r:') === 0 ? 'årsak ' + f.disc.slice(2) : f.disc))), function () { f.disc = ''; });
     if (f.discFrom || f.discTo) add('Rabatt % ' + rng(f.discFrom, f.discTo), function () { f.discFrom = ''; f.discTo = ''; });
     if (f.special) add('Spesial: ' + (f.special === '*' ? 'alle ord' : f.special), function () { f.special = ''; });
@@ -1394,14 +1419,19 @@
       special: L.specialChecks(items, scanMap, ctlCfg),
       ask: ask,
       card: L.cardChecks(items, pop, scanMap, ctlCfg),
-      manual: manual
+      manual: manual,
+      tempo: L.tempoChecks(items, ctlCfg),
+      watch: L.watchItems(items, pop, scanMap, ctlCfg),
+      retEan: L.itemReturns(items, pop, scanMap, ctlCfg),
+      hdr: L.headerChecks(items, pop, scanMap, ctlCfg)
     };
     res.seq.findings = res.seq.findings.filter(function (f) { return f.code === 'hours'; });
     res.seq.skippedGaps = res.deleted.skippedGaps;
     res.findings = res.patterns.concat(res.pant.findings, res.seq.findings, res.falseRet.findings, res.after,
       res.deleted.findings.filter(keep), res.diff.findings.filter(keep), res.numbers.findings.filter(keep), res.disc.findings,
       res.member.findings, res.price.findings, res.ku.findings, res.ev.findings, res.ledger.findings, res.corr.findings.filter(keep),
-      res.lapp.findings.filter(keep), res.voids.findings.filter(keep), res.special.findings, res.ask.findings.filter(keep), res.card.findings.filter(keep), res.manual.findings.filter(keep));
+      res.lapp.findings.filter(keep), res.voids.findings.filter(keep), res.special.findings, res.ask.findings.filter(keep), res.card.findings.filter(keep), res.manual.findings.filter(keep),
+      res.tempo.findings.filter(keep), res.watch.findings.filter(keep), res.retEan.findings.filter(keep), res.hdr.findings.filter(keep));
     res.cashierExtra = {};
     res.findings.forEach(function (f) {
       if (f.flag) f.ids.forEach(function (id) { if (scopeIds[id]) addFlag(id, f.title); });
@@ -1542,14 +1572,14 @@
   }
 
   function oldScans() {
-    return recs.filter(function (r) { var sc = scanMap[r.item.transactionId]; return r.base && r.item.receiptType === 1 && sc && !L.hasV6(sc); });
+    return recs.filter(function (r) { var sc = scanMap[r.item.transactionId]; return r.base && r.item.receiptType === 1 && sc && !L.hasV7(sc); });
   }
 
   function rescanOld() {
     var todo = oldScans();
     if (!todo.length || scanning) return;
     var sec = Math.round(todo.length * 1.1), est = sec >= 60 ? Math.round(sec / 60) + ' min' : sec + ' s';
-    confirmBox('Skann på nytt', todo.length + ' bonger har eldre skanning uten kortdata, Totalt, MVA og betalingsreferanse. Skanner dem på nytt (ca. ' + est + '). Hver bong åpnes i CWs visningsfelt, ett oppslag per bong.', 'Skann på nytt', function () {
+    confirmBox('Skann på nytt', todo.length + ' bonger har eldre skanning uten topptekst, bunn, kortdata, Totalt, MVA og betalingsreferanse. Skanner dem på nytt (ca. ' + est + '). Hver bong åpnes i CWs visningsfelt, ett oppslag per bong.', 'Skann på nytt', function () {
       scanList(todo).then(function () { apply(); });
     });
   }
@@ -1596,7 +1626,45 @@
     }
     box.appendChild(el('b', { class: 'kvr-subh', text: 'Manuell kvittering og til gode-lapp' }));
     box.appendChild(hintEl(M.words.length ? M.manual + ' bonger med ordene «' + M.words.join('», «') + '» blant ' + M.scanned + ' skannede; ' + M.findings.length + ' har samme beløp som en annen bong innen ' + ctlCfg.manualDays + ' dager. Ordene er ikke bekreftet i ekte data; se Diagnostikk.' : 'Av: ordlisten er tom under Innstillinger.'));
+    renderTempo(box, R.tempo);
+    renderWatch(box, R.watch);
+    renderRetEan(box, R.retEan);
     box.appendChild(hintEl('Kortdata krever ny skanning: bruk «Skann på nytt» under Bongregnskap og referanser. Ukjente linjer og ord finner du i Diagnostikk under Pris, kjøpeutbytte og hendelser.'));
+  }
+
+  function renderTempo(box, T) {
+    box.appendChild(el('b', { class: 'kvr-subh', text: 'Tempo: tid mellom bonger' }));
+    if (!T.sales) { box.appendChild(hintEl('Ingen salg med klokkeslett i omfanget.')); return; }
+    var how = T.secOK
+      ? 'Listen viser sekunder (' + pct(T.secShare) + ' av bongene). ' + (T.gapOn ? T.series + ' serier på ' + T.inSeries + ' bonger: minst ' + ctlCfg.paceN + ' bonger på samme kasse med høyst ' + ctlCfg.paceSec + ' s mellom.' : 'Serietesten er av.') + (T.minGap !== null ? ' Kortest tid mellom to bonger: ' + T.minGap + ' s.' : '')
+      : 'Listen viser bare hele minutter (' + pct(T.secShare) + ' har sekunder). ' + (T.gapOn ? T.series + ' minutter med minst ' + ctlCfg.paceMinuteN + ' bonger på samme kasse.' : 'Testen er av.');
+    box.appendChild(hintEl(T.sales + ' salg. ' + how + ' ' + T.zero + ' bonger har sum 0,00 kr.'));
+    if (T.rows.length) box.appendChild(tbl(['Kasserer', 'Serier', 'Bonger i serie', '0-kr-bonger'], T.rows.map(function (r) { return [{ node: entLink('kasserer', r.id) }, r.series, r.inSeries, { t: r.zero, bad: r.zeroFlag }]; })));
+    box.appendChild(hintEl('Raske serier kan være kø med få varer, selvbetjening eller opprydding etter en feil. Se bongene før du konkluderer. Rødt = minst ' + (ctlCfg.zeroN || '–') + ' bonger på 0,00 kr.'));
+  }
+
+  function renderWatch(box, W) {
+    box.appendChild(el('b', { class: 'kvr-subh', text: 'Overvåkede varer' }));
+    if (!W.terms.length) { box.appendChild(hintEl('Av: legg inn EAN eller del av navn under Innstillinger → Overvåkede varer (for eksempel tobakk, gavekort, energidrikk).')); return; }
+    box.appendChild(hintEl(W.bongs + ' av ' + W.scanned + ' skannede salg har varene: ' + W.terms.join(', ') + '.'));
+    var tr = Object.keys(W.byTerm).map(function (t) {
+      var b = W.byTerm[t];
+      return [{ node: btn(t, function () { filters.item = t; writeForm(); apply(); say('Viser kvitteringer med «' + t + '».'); }, 'kvr-ent') }, b.bongs, b.lines, fmt(b.sale), fmt(b.ret), fmt(b.del)];
+    });
+    if (tr.length) box.appendChild(tbl(['Treff', 'Bonger', 'Linjer', 'Salg kr', 'Retur kr', 'Slettet kr'], tr));
+    if (W.rows.length) box.appendChild(tbl(['Kasserer', 'Salg', 'Med vare', 'Andel', 'Butikk', 'Retur', 'Slettet'], W.rows.map(function (r) {
+      return [{ node: entLink('kasserer', r.id) }, r.sales, { t: r.n, bad: r.flag }, { t: pct(r.share), bad: r.flag }, pct(r.storeShare), r.ret, r.del];
+    })));
+    box.appendChild(hintEl('Siffer i listen matcher starten på EAN, tekst matcher del av varenavnet. Retur = negativ linje uten motlinje; slettet = linje og motlinje med samme beløp. Rødt = minst ' + (ctlCfg.watchN || '–') + ' bonger og over butikkens andel med ' + ctlCfg.profFactor + '×.'));
+  }
+
+  function renderRetEan(box, E) {
+    box.appendChild(el('b', { class: 'kvr-subh', text: 'Retur av vare uten kjøp' }));
+    if (!E.on) { box.appendChild(hintEl('Av: se Innstillinger → Retur av vare uten kjøp.')); return; }
+    if (!E.applicable) { box.appendChild(hintEl('Ikke vurdert: bare ' + pct(E.coverage) + ' av salgene er skannet (krever minst 80 %). Skann alle salgene og kjør analysen på nytt.')); return; }
+    box.appendChild(hintEl(E.returns + ' returer med ' + E.lines + ' vare-linjer vurdert. ' + E.flagged + ' uten kjøp av samme vare (kort ' + E.byCard + ', medlem ' + E.byMember + ', samme dag ' + E.byDay + '). ' + E.short + ' ikke vurdert fordi mindre enn ' + (ctlCfg.retEanDays || '–') + ' dager er lastet før returen, ' + E.unlinked + ' uten kjøp å sammenligne med.'));
+    if (E.rows.length) box.appendChild(tbl(['Når', 'Kasserer', 'Grunnlag', 'Linjer', 'Beløp kr'], E.rows.slice(0, 12).map(function (r) { return [r.when, { node: entLink('kasserer', r.cashier) }, r.basis, r.n, fmt(r.amt)]; })));
+    box.appendChild(hintEl('Kortet eller medlemmet har andre kjøp i perioden, men ikke denne varen (EAN). Kunden kan ha kjøpt varen før perioden, kontant eller i en annen butikk, så dette er en indikasjon, ikke bevis.'));
   }
 
   function renderAcctCard(R) {
@@ -1606,6 +1674,16 @@
     box.appendChild(hintEl(calText('Betaling mot Totalt', G.pay)));
     box.appendChild(hintEl(calText('MVA-tabell (' + G.vat.tables + ' tabeller)', G.vat) + ' Ugyldig sats flagges uansett.'));
     box.appendChild(hintEl(G.refs.n + ' betalingsreferanser lest, ' + G.refs.dup + ' brukt på flere bonger.'));
+    var H = R.hdr;
+    box.appendChild(el('b', { class: 'kvr-subh', text: 'Topptekst og bunn' }));
+    if (!H.scanned) box.appendChild(hintEl('Ingen salg med topptekst og bunn. Bruk «Skann på nytt» (versjon 7).'));
+    else {
+      box.appendChild(hintEl(H.withHdr + ' av ' + H.scanned + ' skannede salg har lest topptekst (' + Object.keys(H.fields).map(function (k) {
+        var f = H.fields[k];
+        return f.name + ': ' + (f.n ? f.ok + ' av ' + f.n + ' stemmer med listen (' + pct(f.rate) + ')' + (f.trusted ? '' : ', ikke kalibrert') : 'ingen lest');
+      }).join('; ') + '). ' + H.withFt + ' har tekst fra kortterminalen, ' + H.withAuth + ' med autorisasjonskode, ' + H.auth + ' koder brukt på flere bonger.'));
+      box.appendChild(hintEl('Feltet kontrolleres bare når minst 90 % av minst 10 bonger stemmer fra før. Formatet er ikke bekreftet i ekte data: se Diagnostikk for linjene som ikke gjenkjennes.'));
+    }
     var old = oldScans().length;
     if (old) box.appendChild(el('div', { class: 'kvr-row' }, [btn('Skann på nytt (' + old + ' eldre)', rescanOld)]));
   }
@@ -1749,6 +1827,30 @@
     markStale();
   }
 
+  // Betalingsmåter i CW-filteret (hvis kontrollen finnes på siden). Leser bare det som allerede er lastet.
+  function readCwPayMethods() {
+    var out = [], $ = jq();
+    try {
+      var node = document.querySelector('#paymentMethods, [id*="paymentMethods"], [ng-model*="paymentMethods"], [name*="paymentMethods"]');
+      if (!node) return out;
+      var add = function (t) { t = String(t === undefined || t === null ? '' : t).replace(/\s+/g, ' ').trim(); if (t && out.indexOf(t) === -1 && out.length < 60) out.push(t); };
+      if ($) ['kendoMultiSelect', 'kendoDropDownList', 'kendoComboBox'].forEach(function (w) {
+        var ins = $(node).data(w);
+        if (!ins || !ins.dataSource) return;
+        var tf = (ins.options && ins.options.dataTextField) || 'text', d = ins.dataSource.data();
+        for (var i = 0; i < d.length && i < 100; i++) add(d[i] && d[i].get ? d[i].get(tf) : d[i] && d[i][tf]);
+      });
+      if (node.options) Array.prototype.forEach.call(node.options, function (o) { add(o.text); });
+    } catch (e) { /* kontrollen kan ha en annen form */ }
+    return out;
+  }
+
+  function payInfo() {
+    var cw = readCwPayMethods(), P = L.payStats(recs.map(function (r) { return r.item; }), scanMap, cw);
+    return { P: P, head: ['Betalingsmåte', 'Bonger', 'Sum kr', 'Kasserere', 'I CW-listen'], rows: P.rows.map(function (r) { return [r.label, r.bongs, fmt(r.sum), r.cashiers, r.inCw]; }),
+      cwTxt: cw.length ? 'Betalingsmåter i CW-filteret: ' + cw.join(', ') + '.' : 'Fant ikke listen over betalingsmåter i CW-filteret (kontrollen «paymentMethods» er ikke lastet eller har en annen form).' };
+  }
+
   function channelInfo() {
     var CS = L.channelStats(recs.map(function (r) { return r.item; }));
     var rawTxt = CS.raw.n ? 'Rådata for tid: ' + CS.raw.type + ', ' + CS.raw.distinct + ' ulike verdier på ' + CS.raw.n + ' rader, eksempel «' + CS.raw.sample + '».' : 'Ingen rådata for tid i listen.';
@@ -1761,7 +1863,13 @@
     var CI = channelInfo();
     var out = ['Kvitteringshenter diagnostikk', 'Skannede bonger: ' + D.total + ' (ny skanning: ' + D.v4 + ')', 'Løpenummer i topptekst: ' + seqProof.ok + ' stemte, ' + seqProof.bad + ' avvek',  'Kjøpeutbytte-tabell: ' + D.ku.with + ' med, ' + D.ku.without + ' uten', 'Klokkeslett: ' + timeText(L.timeCheck(recs.map(function (r) { return r.item; }), scanMap)), '', 'Kanal (saleChannel) i listen; kolonner: ' + CI.head.join(' | ')];
     CI.rows.forEach(function (r) { out.push('  ' + r.join(' | ')); });
-    out.push(CI.rawTxt, '', 'Hendelsesord (ord, antall, tekst, eksempelbong):');
+    var PI = payInfo();
+    out.push(CI.rawTxt, '', 'Betalingsmåter; kolonner: ' + PI.head.join(' | '));
+    PI.rows.forEach(function (r) { out.push('  ' + r.join(' | ')); });
+    out.push(PI.cwTxt, '', 'Topptekst og bunn (versjon 7): ' + D.v7 + ' bonger, topptekst lest på ' + D.hdr + ', terminal ' + D.ft.term + ', autorisasjon ' + D.ft.auth + ', inngangsmåter: ' + (Object.keys(D.ft.modes).map(function (m) { return m + ' ' + D.ft.modes[m]; }).join(', ') || 'ingen'), 'Ukjente linjer utenfor tabellene (tall byttet med #, antall, eksempelbong):');
+    if (!D.bu.length) out.push('  ingen');
+    D.bu.forEach(function (u) { out.push('  ' + u.t + '\t' + u.n + '\t' + u.id); });
+    out.push('', 'Hendelsesord (ord, antall, tekst, eksempelbong):');
     if (!D.ev.length) out.push('  ingen');
     D.ev.forEach(function (e) { out.push('  ' + e.k + '\t' + e.n + '\t' + e.t + '\t' + e.id); });
     out.push('', 'Ukjente linjer (tekst med tall som #, antall, eksempelbong):');
@@ -1784,6 +1892,13 @@
     body.appendChild(el('b', { class: 'kvr-subh', text: 'Kanal (saleChannel) og rådata for tid' }));
     body.appendChild(CI.rows.length ? tbl(CI.head, CI.rows) : hintEl('Ingen rader i listen.'));
     body.appendChild(hintEl(CI.rawTxt + ' Betydningen av kanalkodene er ikke bekreftet: tabellen viser bare antall og snitt, uten kasserer- eller medlemsnumre. «Kasser» er antall ulike kasser, «Kassenr» de første nummerne.'));
+    var PI = payInfo();
+    body.appendChild(el('b', { class: 'kvr-subh', text: 'Betalingsmåter' }));
+    body.appendChild(PI.rows.length ? tbl(PI.head, PI.rows) : hintEl('Ingen skannede bonger med betalingslinjer.'));
+    body.appendChild(hintEl(PI.cwTxt + ' «I CW-listen» sammenligner etiketten på bongen (teksten før kolon) med navnene i filteret; ulik skrivemåte gir «nei».'));
+    body.appendChild(el('b', { class: 'kvr-subh', text: 'Topptekst og bunn (versjon 7)' }));
+    body.appendChild(hintEl(D.v7 + ' av ' + D.total + ' skannede bonger har topptekst/bunn lest. Topptekst (butikk, kasse, kasserer, medlem) på ' + D.hdr + '; terminal-ID på ' + D.ft.term + '; autorisasjonskode på ' + D.ft.auth + '. Inngangsmåter: ' + (Object.keys(D.ft.modes).map(function (m) { return m + ' ' + D.ft.modes[m]; }).join(', ') || 'ingen funnet') + '.'));
+    body.appendChild(D.bu.length ? tbl(['Linje utenfor tabell', 'Antall', 'Eksempelbong'], D.bu.slice(0, 30).map(function (u) { return [u.t, u.n, u.id]; })) : hintEl('Ingen ukjente linjer utenfor tabellene.'));
     body.appendChild(hintEl('Løpenummer i topptekst mot valgt rad: ' + seqProof.ok + ' stemte, ' + seqProof.bad + ' avvek' + (seqProof.ok >= 3 ? ' (kontrollen er aktiv: bonger med feil nummer avvises)' : ' (kontrollen aktiveres etter 3 treff)') + '.'));
     body.appendChild(hintEl(D.v4 ? D.v4 + ' av ' + D.total + ' skannede bonger har ny skanningsdata (eldre må skannes på nytt). Dette er linjer pluginen ikke kjenner igjen, og ord som tyder på annullert, parkert, manuell pris eller spør pris. Del listen for å få testene utvidet.' : 'Ingen skanninger med ny data ennå. Skann kvitteringer først (Skann → Skann innhold).'));
     if (D.v4) {
@@ -2740,6 +2855,8 @@
     filters.onlyAnom = ui.onlyAnom.checked;
     filters.bong = ui.bong.value.trim();
     filters.item = ui.item.value.trim();
+    filters.text = ui.text.value.trim();
+    filters.pay = ui.pay.value;
     filters.pant = ui.pant.value;
     filters.disc = ui.disc.value;
     filters.discFrom = ui.discFrom.value;
@@ -2751,8 +2868,10 @@
 
   function writeForm() {
     optsKey = '';
-    ['dateFrom', 'dateTo', 'timeFrom', 'timeTo', 'sumMin', 'sumMax', 'member', 'bong', 'item', 'discFrom', 'discTo'].forEach(function (k) { ui[k].value = filters[k]; });
+    ['dateFrom', 'dateTo', 'timeFrom', 'timeTo', 'sumMin', 'sumMax', 'member', 'bong', 'item', 'text', 'discFrom', 'discTo'].forEach(function (k) { ui[k].value = filters[k]; });
     syncSpecialOpts();
+    syncPayOpts();
+    ui.pay.value = filters.pay;
     ui.onlyNegative.checked = filters.onlyNegative;
     ui.onlyMember.checked = filters.onlyMember;
     ui.onlyDup.checked = filters.onlyDup;
@@ -2777,6 +2896,22 @@
     words.forEach(function (w) { ui.special.appendChild(el('option', { value: w, text: w.charAt(0).toUpperCase() + w.slice(1) })); });
     if (cur && cur !== '*' && words.indexOf(cur) === -1) ui.special.appendChild(el('option', { value: cur, text: cur }));
     ui.special.value = cur;
+  }
+
+  // Valgene under «Betalingsmåte» er etikettene som finnes på de skannede bongene.
+  var payKey = null;
+  function syncPayOpts() {
+    if (!ui.pay) return;
+    var seen = {}, key = Object.keys(scanMap).length + ':' + (filters.pay || '');
+    if (key === payKey) return;
+    payKey = key;
+    Object.keys(scanMap).forEach(function (id) { var sc = scanMap[id]; if (sc && sc.pay && !sc.settle) Object.keys(sc.pay).forEach(function (k) { seen[k] = 1; }); });
+    var cur = ui.pay.value || filters.pay, labels = Object.keys(seen).sort(function (a, b) { return a.localeCompare(b, 'nb'); }).slice(0, 40);
+    ui.pay.innerHTML = '';
+    ui.pay.appendChild(el('option', { value: '', text: 'Alle' }));
+    labels.forEach(function (k) { ui.pay.appendChild(el('option', { value: k, text: k })); });
+    if (cur && labels.indexOf(cur) === -1) ui.pay.appendChild(el('option', { value: cur, text: cur }));
+    ui.pay.value = cur;
   }
 
   function onChange() { readForm(); apply(); }
@@ -3432,6 +3567,9 @@
     ui.note = el('select', {}, [opt('', 'Alle'), opt('any', 'Har notat eller status'), opt('oppfolging', 'Til oppfølging'), opt('sjekket', 'Sjekket')]);
     ui.note.addEventListener('change', onChange);
     ui.item = input('text', { placeholder: 'EAN eller varenavn (skannede)' });
+    ui.text = input('text', { placeholder: 'ord, EAN, beløp, kortnr, referanse …' });
+    ui.pay = el('select', { 'aria-label': 'Betalingsmåte' }, [el('option', { value: '', text: 'Alle' })]);
+    ui.pay.addEventListener('change', onChange);
     var secSum = section('sum', 'Sum, medlem og bong', [
       el('div', { class: 'kvr-row' }, [field('Sum fra', ui.sumMin), field('Sum til', ui.sumMax)]),
       neg.node, field('Medlemssøk', ui.member), mem.node, dp.node,
@@ -3496,7 +3634,9 @@
       ]), fileIn]);
     var secContent = section('content', 'Innhold', [
       hintEl('Filtre som leser innholdet på kvitteringene. De krever at kvitteringene er skannet: bruk «Skann nå» øverst, eller fanen Skann.'),
+      field('Søk i bongen (alt innhold, flere ord)', ui.text, true),
       field('Vare (EAN eller navn)', ui.item, true),
+      field('Betalingsmåte', ui.pay, true),
       pfield('Varegruppe', ui.groups, true),
       el('div', { class: 'kvr-row' }, [field('Pant', ui.pant, true), field('Rabatt', ui.disc, true)]),
       el('div', { class: 'kvr-row' }, [field('Rabatt % fra', ui.discFrom, true), field('Rabatt % til', ui.discTo, true)]),
@@ -3937,7 +4077,7 @@
     if (db) {
       mem = await readAll(db, 'kv');
       var raw = await readAll(db, 'scan');
-      Object.keys(raw).forEach(function (k) { if (raw[k] && (raw[k].v >= 2 && raw[k].v <= 6)) scanMap[k] = raw[k]; });
+      Object.keys(raw).forEach(function (k) { if (raw[k] && (raw[k].v >= 2 && raw[k].v <= 7)) scanMap[k] = raw[k]; });
     }
     migrateLocal();
     rules = L.sanitizeRules(store(K.rules));

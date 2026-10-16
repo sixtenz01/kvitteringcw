@@ -101,7 +101,7 @@
     <tr><td>Dato og tid</td><td>Hurtigknapper (I dag, I går, Siste 24 t, Natt 00–06, Dag 06–18, Kveld 18–24) og fritt valg av dato og klokkeslett. Tidsrom over midnatt fungerer (for eksempel 22:00 til 02:00).</td></tr>
     <tr><td>Kasse, kasserer og type</td><td>Piller du slår av og på. Type er 1 Salg og 2 Kassaoppgjør.</td></tr>
     <tr><td>Sum, medlem og bong</td><td>Sum fra og til, bare negative summer (retur/panteretur), medlemssøk, bare med medlem, bare mulige duplikater (samme beløp, butikk, kasse og tid), bongnummer og notat/status.</td></tr>
-    <tr><td>Innhold <em>skanning</em></td><td>Vare (EAN eller navn), varegruppe, pant (har pant eller panteretur, har pant, har panteretur), rabatt (har rabatt, uten årsak, med årsak, har kupong, eller én bestemt årsak), rabatt-prosent fra og til (for eksempel 40 til 40 for alle med 40 % rabatt) og spesialbetaling (eget forbruk, internt forbruk, utbetaling, finansiering, sjekk, eller alle ordene i listen under Innstillinger → Spesialbetalinger).</td></tr>
+    <tr><td>Innhold <em>skanning</em></td><td>Søk i bongen (alt innhold: ord, EAN, beløp, kortnummer, referanse, kupong, terminal; flere ord må alle treffe, «sitat» gir en frase), Vare (EAN eller navn), betalingsmåte (etikettene som finnes på de skannede bongene), varegruppe, pant (har pant eller panteretur, har pant, har panteretur), rabatt (har rabatt, uten årsak, med årsak, har kupong, eller én bestemt årsak), rabatt-prosent fra og til (for eksempel 40 til 40 for alle med 40 % rabatt) og spesialbetaling (eget forbruk, internt forbruk, utbetaling, finansiering, sjekk, eller alle ordene i listen under Innstillinger → Spesialbetalinger).</td></tr>
     <tr><td>Sortering og lagrede filtre</td><td>Standard, sum høyest eller lavest først, nyeste eller eldste først. Gi filteret et navn og trykk Lagre; last eller slett fra rullegardinen.</td></tr>
   </tbody></table></div>
 
@@ -183,10 +183,10 @@
     <tr><td>Kassadifferanse over tid</td><td>Antall oppgjør, minus og pluss per kasserer og kasse.</td></tr>
     <tr><td>Tallanalyse: Benford og runde beløp</td><td>Benford og andel hele kroner per kasserer.</td></tr>
     <tr><td>Rabatter og kuponger</td><td>Se kapittel 5.</td></tr>
-    <tr><td>Bongregnskap og referanser</td><td>Dekning og treff for linjer mot Totalt, betaling mot Totalt, MVA-tabell og betalingsreferanse, og knappen «Skann på nytt» for eldre skanninger. Se kapittel 6.</td></tr>
+    <tr><td>Bongregnskap og referanser</td><td>Dekning og treff for linjer mot Totalt, betaling mot Totalt, MVA-tabell og betalingsreferanse, topptekst og bunn (kasserer, kasse og medlem mot listen, autorisasjonskode), og knappen «Skann på nytt» for eldre skanninger. Se kapittel 6.</td></tr>
     <tr><td>Medlemsnummer</td><td>Medlemsnr med flest bonger og funn, med lenke som filtrerer listen. Se kapittel 6.</td></tr>
     <tr><td>Pantelapper: manuell og maskin</td><td>Pantelapper per kasserer delt på kode 99 (manuell) og 399 (pantemaskin), med slettede og gjenbrukte lapper. Se kapittel 6.</td></tr>
-    <tr><td>Linjer, kort og spesialbetaling</td><td>Slettede og makulerte varelinjer, spesialbetalinger, spør pris, returer på samme kort og manuell kvittering. Se kapittel 6.</td></tr>
+    <tr><td>Linjer, kort og spesialbetaling</td><td>Slettede og makulerte varelinjer, spesialbetalinger, spør pris, returer på samme kort, manuell kvittering, tempo (tid mellom bonger), overvåkede varer og retur av vare uten kjøp. Se kapittel 6.</td></tr>
     <tr><td>Pris, kjøpeutbytte og hendelser</td><td>Dekning og avvik for pris per vare, Kjøpeutbytte og hendelsesord, og knappen Diagnostikk. Se kapittel 6.</td></tr>
     <tr><td>Avvik per bong</td><td>Kjører bare avviksjekken (uten kontroller på tvers).</td></tr>
     <tr><td>Egne avviksregler</td><td>Dine egne regler, se kapittel 9.</td></tr>
@@ -339,7 +339,7 @@
   <li><strong>Hendelsesord:</strong> tekstlinjer (ikke varenavn) med ord som annullert, makulert, parkert, på vent, manuell, spør pris, overstyr, prisendring eller kansell flagges. Ordene «manuell» og «spør pris» telles ikke her på bonger som allerede er flagget av «Spør pris» eller «Manuell kvittering».</li>
   <li><strong>Ukjente linjer:</strong> linjer pluginen ikke kjenner igjen samles opp, med tall byttet mot #.</li>
 </ul>
-<p>Åpne <strong>Diagnostikk</strong> fra kortet «Pris, kjøpeutbytte og hendelser» eller fra Innstillinger → Generelt. Der ser du først en sammenligning av klokkeslettet i listen og på bongen, så en kanaltabell (saleChannel) med antall bonger, typer, butikker, kasser, snittbeløp, medlemsandel og returer per kanal, med rådata for tid (type og ulike verdier), og til slutt hendelsesord og ukjente linjer med antall og et eksempel på bongnummer. Betydningen av kanalkodene er ikke bekreftet; tabellen inneholder ingen kasserer- eller medlemsnumre. «Kopier som tekst» gir en liste du kan dele, slik at testene kan utvides med det Lindbak faktisk viser. Listen inneholder ingen varenavn eller beløp, men bongnummer.</p>
+<p>Åpne <strong>Diagnostikk</strong> fra kortet «Pris, kjøpeutbytte og hendelser» eller fra Innstillinger → Generelt. Der ser du først en sammenligning av klokkeslettet i listen og på bongen, så en kanaltabell (saleChannel) med antall bonger, typer, butikker, kasser, snittbeløp, medlemsandel og returer per kanal, med rådata for tid (type og ulike verdier), så betalingsmåtene på bongene (sammenlignet med navnene i CWs filter hvis listen er lastet), hva som er lest av topptekst og bunn (terminal-ID, autorisasjonskode, inngangsmåte) med linjer utenfor tabellene pluginen ikke kjenner igjen, og til slutt hendelsesord og ukjente linjer med antall og et eksempel på bongnummer. Betydningen av kanalkodene er ikke bekreftet; tabellen inneholder ingen kasserer- eller medlemsnumre. «Kopier som tekst» gir en liste du kan dele, slik at testene kan utvides med det Lindbak faktisk viser. Listen inneholder ingen varenavn eller beløp, men bongnummer.</p>
 <h3>Pantelapper: manuell, maskin, slettet og gjenbrukt</h3>
 <p>Pantelappen har to koder: <code>99 PANTELAPP</code> er lagt inn manuelt av kassereren, og <code>399 PANTELAPP</code> kommer fra pantemaskinen. Kortet «Pantelapper: manuell og maskin» viser per kasserer hvor mange av hver, og beløpet.</p>
 <div class="tw"><table>
@@ -390,6 +390,21 @@
   <li><strong>Retur mot kassadifferanse</strong> (under Kassadifferanse over tid): Spearman-korrelasjon over dager mellom kassererens returandel og kassadifferanse. Negativ ρ betyr at dager med flere returer har mer minus i kassen. Krever minst 8 dager med minst 5 salg og et kassaoppgjør.</li>
   <li><strong>Krymping i kassererprofilen:</strong> tallene trekkes mot butikksnittet (som 10 bonger) før sammenligningen, så en kasserer med få bonger ikke flagges på tilfeldigheter.</li>
 </ul>
+<h3>Tempo, overvåkede varer og retur uten kjøp</h3>
+<p>Tre kontroller som bruker det pluginen allerede leser: tidspunktene i listen og innholdet på de skannede bongene.</p>
+<div class="tw"><table>
+  <thead><tr><th>Kontroll</th><th>Hva som sjekkes</th></tr></thead>
+  <tbody>
+    <tr><td>Tempo: tid mellom bonger</td><td>Bonger på samme kasse og dag som kommer tettere enn et menneske rekker (standard: minst fire bonger med høyst 25 sekunder mellom). Krever at listen viser sekunder; ellers telles bonger i samme minutt (standard seks). Diagnostikk og kortet viser hva listen har. Bonger på 0,00 kr telles per kasserer.</td></tr>
+    <tr><td>Overvåkede varer</td><td>Du legger inn EAN (starten på koden) eller del av varenavn under Innstillinger → Overvåkede varer, for eksempel tobakk, gavekort eller energidrikk. Pluginen flagger retur og sletting av dem, og markerer kassereren når andelen salg er høyere enn butikkens. Av til listen er fylt ut.</td></tr>
+    <tr><td>Retur av vare uten kjøp</td><td>En returlinje (EAN) som kortet eller medlemmet ikke har kjøpt de siste dagene (standard sju), selv om de har andre kjøp i perioden. Krever at minst 80 % av salgene er skannet, og at historikken dekker tidsrommet før returen; ellers står returen som «ikke vurdert». Uten kort og medlem kan du slå på en svakere test: ingen salg av varen samme dag.</td></tr>
+  </tbody>
+</table></div>
+<div class="callout"><b>Tolk med forsiktighet</b>
+  <p>Raske serier kan være kø med få varer eller selvbetjening, og en retur kan gjelde et kjøp før perioden, kontant eller i en annen butikk. Resultatene er indikasjoner. Se på bongene før du konkluderer.</p>
+</div>
+<h3>Topptekst og bunn</h3>
+<p>Fra versjon 7 leser skanningen også teksten utenfor tabellene på bongen: toppteksten (butikk, kasse, kasserer, medlemsnr) og bunnen med kortterminalens tekst (terminal-ID, autorisasjonskode, inngangsmåte som chip, kontaktløs eller tastet). Bare disse verdiene og ukjente linjer med tall byttet ut lagres, ikke hele teksten. Kasserer, kasse og medlem i toppteksten sammenlignes med listen; et felt kontrolleres bare når minst 90 % av minst ti bonger stemmer fra før, så et uventet format ikke gir falske treff. Samme autorisasjonskode på flere bonger i samme butikk og terminal flagges. Eldre skanninger tas på nytt fra kortet «Bongregnskap og referanser».</p>
 <div class="callout"><b>Skann på nytt</b>
   <p>Pris, Kjøpeutbytte, hendelsesord og diagnostikk bygger på data som bare nye skanninger har, og eldre skanninger tas på nytt neste gang du skanner. Totalt, MVA og betalingsreferanse krever enda en skanningsversjon, og kortdata (returer på samme kort) en til; da tar du eldre bonger på nytt fra kortet «Bongregnskap og referanser» (med bekreftelse først). Dekningen står i kortene og i revisjonsrapporten.</p>
 </div>
@@ -564,7 +579,7 @@
   <dt>Til gode-lapp / manuell kvittering</dt><dd>Kvittering skrevet for hånd eller en lapp som gir kunden tilgode. Sammenlignes med andre bonger i butikken.</dd>
   <dt>Kjøpeutbytte</dt><dd>Tabellen med Grunnlag, Kjøpeutbytte og MVA bonus på medlemsbonger.</dd>
   <dt>Hendelsesord</dt><dd>Ord på tekstlinjer som tyder på annullert, parkert, manuell pris eller spør pris.</dd>
-  <dt>Diagnostikk</dt><dd>Oversikt over klokkeslett, kanaltabell, linjer pluginen ikke kjenner igjen og hendelsesord, til å dele slik at testene kan utvides.</dd>
+  <dt>Diagnostikk</dt><dd>Oversikt over klokkeslett, kanaltabell, betalingsmåter, topptekst og bunn, linjer pluginen ikke kjenner igjen og hendelsesord, til å dele slik at testene kan utvides.</dd>
   <dt>Omfang</dt><dd>Perioden, butikkene, kassererne og kassene du velger at analysen skal gjelde.</dd>
   <dt>Datagrunnlag</dt><dd>Alle innlastede bonger i valgte butikker. Tester som må se hele bildet bruker det.</dd>
   <dt>Terskel</dt><dd>Grensen en test bruker for å avgjøre om noe flagges.</dd>
@@ -586,6 +601,7 @@
   <li>Hvordan annullerte bonger, manuell pris, bonger på vent og «spør pris» ser ut. Pluginen leter etter hendelsesord og samler ukjente linjer (Diagnostikk), men vet ikke hva Lindbak faktisk viser.</li>
   <li>Hvordan slettede varelinjer og pantelapper, «spør pris», manuelle kvitteringer, til gode-lapper, spesialbetalinger og kortnummer står på bongen. Testene leter etter motlinjer, ord og maskerte kortnumre, og Diagnostikk samler det de ikke kjenner igjen.</li>
   <li>At Kjøpeutbytte-tabellen finnes på medlemsbonger og hva grunnlaget omfatter. Testene kalibrerer seg mot det som finnes.</li>
+  <li>Hvordan topptekst og bunn ser ut (butikk, kasse, kasserer, medlem, terminal-ID, autorisasjonskode, inngangsmåte), om listen viser sekunder, og hva kanalkodene betyr. Testene kontrollerer bare felt som stemmer fra før, og Diagnostikk viser hva som er lest.</li>
   <li>At BUTIKK-kolonnen i listen og butikklisten i Lindbak har butikknavn, og at butikknummer med mer enn fire siffer er nivå pluss avdelingsnummer (131 og 1003).</li>
   <li>At en rabatt som mange kasserere gir på samme vare er en sentral kampanje. Pluginen spør i stedet for å anta, og kan ikke se kampanjen selv.</li>
   <li>At medlemsnummer alltid er satt på bongen i listen, og hvilket format det har.</li>
