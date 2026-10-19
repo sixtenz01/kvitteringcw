@@ -3366,9 +3366,9 @@
 
   function clamp(panel) {
     if (curSize > 0) return;
-    var w = panel.offsetWidth;
+    var w = panel.offsetWidth, keep = panel.classList.contains('kvr-collapsed') ? 48 : 200;
     var left = Math.min(Math.max(0, parseFloat(panel.style.left) || 0), Math.max(0, window.innerWidth - w));
-    var top = Math.min(Math.max(0, parseFloat(panel.style.top) || 0), Math.max(0, window.innerHeight - 40));
+    var top = Math.min(Math.max(0, parseFloat(panel.style.top) || 0), Math.max(0, window.innerHeight - keep));
     panel.style.left = left + 'px';
     panel.style.top = top + 'px';
     panel.style.maxHeight = Math.max(160, window.innerHeight - top - 12) + 'px';
@@ -3460,8 +3460,38 @@
     });
   }
 
+  // Panelet skal alltid kunne nås. Er det utenfor skjermen (lagret plassering fra et annet vindu), fjernet fra siden eller dekket av noe i CW,
+  // nullstilles plasseringen eller panelet løftes øverst. Sjekkes hvert 1,5 sekund sammen med gridet.
+  var panelEl = null, coverFixes = 0, rescued = 0;
+  function ensureVisible() {
+    var panel = panelEl, why = '';
+    if (!panel) return;
+    if (!panel.isConnected) { document.body.appendChild(panel); why = 'fjernet fra siden'; }
+    var r = panel.getBoundingClientRect(), vw = window.innerWidth, vh = window.innerHeight;
+    var keepH = panel.classList.contains('kvr-collapsed') ? 40 : 120;
+    if (r.width < 20 || r.height < 20 || r.right < 120 || r.left > vw - 120 || r.bottom < 60 || r.top > vh - keepH) {
+      store(K.pos, null); store(K.size, null);
+      panel.style.width = ''; panel.style.height = '';
+      if (sizeMode() > 0) setSizeMode(0, true); else placePanel(panel);
+      why = why || 'utenfor skjermen';
+    } else if (coverFixes < 3) {
+      var hr = (panel.querySelector('.kvr-head') || panel).getBoundingClientRect();
+      var hit = document.elementFromPoint(hr.left + hr.width / 2, hr.top + hr.height / 2);
+      if (hit && !panel.contains(hit) && !(hit.closest && hit.closest('.kvr-modal'))) {
+        coverFixes++;
+        (coverFixes === 1 ? document.body : document.documentElement).appendChild(panel);
+        why = why || 'dekket av siden';
+      }
+    }
+    if (why && rescued < 5) {
+      rescued++;
+      try { console.info('[Kvitteringshenter] panelet var ' + why + ' og ble hentet fram.'); } catch (e) { /* ingen konsoll */ }
+    }
+  }
+
   function buildPanel() {
     var panel = el('div', { id: 'kvr-panel' });
+    panelEl = panel;
 
     ui.badge = el('span', { class: 'kvr-badge', text: 'ingen filter' });
     var toggle = el('button', { type: 'button', class: 'kvr-icon', title: 'Skjul/vis (Alt+K)', text: '–' });
@@ -4052,9 +4082,12 @@
     renderNotes();
     renderReportLog();
     installKeys();
+    setTimeout(ensureVisible, 300);
+    window.addEventListener('load', function () { setTimeout(ensureVisible, 300); });
   }
 
   function attach() {
+    ensureVisible();
     var g = getGrid();
     if (!g) return;
     if (g.__kvBound) {

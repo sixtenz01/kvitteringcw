@@ -224,6 +224,7 @@ NODE_PATH=<global node_modules> node test/avdeling.js  # butikknummer = nivå + 
 NODE_PATH=<global node_modules> node test/butikk.js    # butikknavn fra BUTIKK-kolonnen, redigering, filter samlet under Filtrer
 NODE_PATH=<global node_modules> node test/linjer.js    # samme funn i panelet: kort, søk på spesialbetaling og rabatt-%
 node test/innhold.test.js                              # tempo, overvåkede varer, retur uten kjøp, topptekst/bunn (v7), betalingsmåter, fulltekstsøk
+NODE_PATH=<global node_modules> node test/synlig.js     # panelet er alltid synlig: lagret plassering utenfor skjermen, fjernet fra siden, dekket
 NODE_PATH=<global node_modules> node test/innhold.js    # samme i panelet: skanning av topptekst/bunn, funn, kort, Diagnostikk, søk og betalingsfilter
 NODE_PATH=<global node_modules> node test/stor.js  # panelstørrelse: Vanlig/Stor/Full, dokking, kolonner, husking
 TOUR=<mappe> NODE_PATH=<global node_modules> node test/tour.js  # skjermbilder av alle faner (valgfritt)
@@ -236,3 +237,5 @@ TOUR=<mappe> NODE_PATH=<global node_modules> node test/tour.js  # skjermbilder a
 - Skjult/omsortert rader via `tr.style.display` og DOM-rekkefølge i Kendo-gridet (testet kun mot et enkelt fiktivt grid).
 - Avkrysningsboks plasseres i første celle; sjekk at den ikke kolliderer med Lindbaks egen kolonne.
 - `receiptType 11` er uavklart og vises som «PDA-operasjon (uavklart)».
+
+Versjon 3.21.1: panelet hentes fram av seg selv hvis det ligger utenfor skjermen (lagret plassering fra et annet vindu eller med verktøylinjer åpne), er fjernet fra siden eller er dekket av noe i CW. Det må alltid være minst 200 px av høyden synlig (48 px når det er sammenfoldet), og z-index er satt til høyeste verdi. Test: `test/synlig.js`.
