@@ -66,7 +66,7 @@ L.DISC_REASONS.forEach((r, i) => has(r));
 ['Alt+K', 'Alt+klikk'].forEach((t) => assert.ok(html.includes(t.replace('Alt+', '<kbd>Alt</kbd>+').replace('+K', '+<kbd>K</kbd>')) || text.includes(t) || html.includes('<kbd>Alt</kbd>+'), t));
 
 // tegnforklaringen i hjelpen og i veiledningen følger hverandre, og kampanjespørsmålet og butikknavn er forklart
-['Resultatet står fast', 'Hent i CW', 'Jobbe videre mens pluginen skanner', 'Søk i bongen', 'Betalingsmåte', 'Tempo: tid mellom bonger', 'Overvåkede varer', 'Retur av vare uten kjøp', 'Topptekst og bunn', 'versjon 7', 'kanaltabell', 'Overstrøket årsak', 'Kan være sentral kampanje', 'Svar nå', 'Rabatt uten årsak', 'Mulig sentral kampanje', 'Nivå og avdelingsnummer', 'Spesialbetaling', 'Spør pris', 'Samme forhold', 'kampanjesvar', 'Ja, kampanje', 'Nei, ikke kampanje', 'Angre', 'Gi butikken navn'].forEach(has);
+['Makulert linje på bong', 'manuell pantelapp (99)', 'vises den som en kvittering', 'Resultatet står fast', 'Hent i CW', 'Jobbe videre mens pluginen skanner', 'Søk i bongen', 'Betalingsmåte', 'Tempo: tid mellom bonger', 'Overvåkede varer', 'Retur av vare uten kjøp', 'Topptekst og bunn', 'versjon 7', 'kanaltabell', 'Overstrøket årsak', 'Kan være sentral kampanje', 'Svar nå', 'Rabatt uten årsak', 'Mulig sentral kampanje', 'Nivå og avdelingsnummer', 'Spesialbetaling', 'Spør pris', 'Samme forhold', 'kampanjesvar', 'Ja, kampanje', 'Nei, ikke kampanje', 'Angre', 'Gi butikken navn'].forEach(has);
 ['Overstrøket årsak', 'sentral kampanje', 'Panelstørrelse'].forEach((t) => assert.ok(content.includes(t), 'hjelpen i panelet mangler «' + t + '»'));
 
 // ---- lenker og bilder er hele

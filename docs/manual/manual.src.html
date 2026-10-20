@@ -49,8 +49,8 @@
   <thead><tr><th>Størrelse</th><th>Hva du får</th></tr></thead>
   <tbody>
     <tr><td><strong>Vanlig</strong> ⤢</td><td>Det lille, flyttbare panelet. Du kan dra i toppen og trekke i hjørnet.</td></tr>
-    <tr><td><strong>Stor</strong> ⛶</td><td>Panelet dokkes til høyre og fyller høyden. Lindbak-lista blir stående synlig til venstre, så du kan se bongene mens du leser analysen. Kortene ligger i to kolonner når bredden tillater det.</td></tr>
-    <tr><td><strong>Full</strong> ⤡</td><td>Panelet bruker hele skjermen, med flere kolonner og brede tabeller uten rulling til siden. Best til gjennomgang av Detaljer og rapporter.</td></tr>
+    <tr><td><strong>Stor</strong> ⛶</td><td>Panelet dokkes til høyre og fyller høyden. Lindbak-lista blir stående synlig til venstre, så du kan se bongene mens du leser analysen. Kortene ligger i to kolonner når bredden tillater det. Du kan dra i toppen for å flytte det; plasseringen huskes for Stor og Full hver for seg, og dobbeltklikk på toppen legger panelet tilbake på plass.</td></tr>
+    <tr><td><strong>Full</strong> ⤡</td><td>Panelet bruker hele skjermen, med flere kolonner og brede tabeller uten rulling til siden. Best til gjennomgang av Detaljer og rapporter. Kan også flyttes ved å dra i toppen.</td></tr>
   </tbody></table></div>
 {{shotw:stor-dokket}}
 {{shotw:stor-full}}
@@ -131,7 +131,7 @@
 <h3 id="analyse">Analyse</h3>
 <p>Analyse har fem delfaner. Du bruker mest <strong>Sjekk først</strong>.</p>
 <h4>Sjekk først</h4>
-<p>Her kjører du analysen og får en prioritert liste. Øverst står <strong>Analyse</strong>-kortet med omfanget og knappen <strong>Kjør analyse</strong>. Analysen skanner det som mangler, kjører alle testene og rangerer bongene etter risikoscore.</p>
+<p>Her kjører du analysen og får en prioritert liste. Øverst står <strong>Analyse</strong>-kortet med omfanget og knappen <strong>Kjør analyse</strong>. Analysen skanner det som mangler, kjører alle testene og rangerer bongene etter risikoscore. Åpner du en bong i listen, vises den som en kvittering: butikk, kasse, kasserer og tid øverst, varelinjene med antall og rabatt, Totalt og betaling nederst. Slettede og makulerte linjer er overstreket, og det testene reagerer på (manuell pantelapp, slettet pantelapp fra maskinen, rabatt uten årsak, hendelsesord) er markert med rødt.</p>
 {{shots:sjekk-for,sjekk-etter}}
 <p>Under <strong>Velg omfang</strong> avgjør du hva som analyseres. Omfanget er uavhengig av filtrene i listen, med mindre du huker av for å bruke dem også.</p>
 {{shotw:sjekk-omfang}}
@@ -346,19 +346,21 @@
 <p>Åpne <strong>Diagnostikk</strong> fra kortet «Pris, kjøpeutbytte og hendelser» eller fra Innstillinger → Generelt. Der ser du først en sammenligning av klokkeslettet i listen og på bongen, så en kanaltabell (saleChannel) med antall bonger, typer, butikker, kasser, snittbeløp, medlemsandel og returer per kanal, med rådata for tid (type og ulike verdier), så betalingsmåtene på bongene (sammenlignet med navnene i CWs filter hvis listen er lastet), hva som er lest av topptekst og bunn (terminal-ID, autorisasjonskode, inngangsmåte) med linjer utenfor tabellene pluginen ikke kjenner igjen, og til slutt hendelsesord og ukjente linjer med antall og et eksempel på bongnummer. Betydningen av kanalkodene er ikke bekreftet; tabellen inneholder ingen kasserer- eller medlemsnumre. «Kopier som tekst» gir en liste du kan dele, slik at testene kan utvides med det Lindbak faktisk viser. Listen inneholder ingen varenavn eller beløp, men bongnummer.</p>
 <h3>Pantelapper: manuell, maskin, slettet og gjenbrukt</h3>
 <p>Pantelappen har to koder: <code>99 PANTELAPP</code> er lagt inn manuelt av kassereren, og <code>399 PANTELAPP</code> kommer fra pantemaskinen. Kortet «Pantelapper: manuell og maskin» viser per kasserer hvor mange av hver, og beløpet.</p>
+<p>Fra versjon 3.23.0 gir pant bare reaksjon på to ting: <strong>manuell pantelapp (99)</strong> og <strong>pantelapp fra maskinen (399) som er slettet</strong>. En vanlig panteretur fra maskinen gir ingen reaksjon: stor panteretur, mange pantelapper, kontant tilbake uten salg (også flere ganger), pantelapp innløst flere ganger og slettede varelinjer med pant og kontant er av som standard, og rene pantereturer teller ikke som retur, rundt beløp eller gjentatt beløp. Lagrede innstillinger legges om én gang ved oppdatering. Alt kan slås på igjen under Innstillinger.</p>
 <div class="tw"><table>
   <thead><tr><th>Test</th><th>Hva den finner</th></tr></thead>
   <tbody>
     <tr><td>Manuell pantelapp</td><td>En bong med manuelle pantelapper (kode 99) på minst 50 kr. Kassereren har tastet beløpet selv.</td></tr>
     <tr><td>Mange manuelle pantelapper</td><td>En kasserer med minst 5 bonger med manuell pantelapp og høyere andel enn butikken.</td></tr>
-    <tr><td>Pantelapp slettet</td><td>En pantelapp og en motlinje med samme beløp på samme bong.</td></tr>
-    <tr><td>Pantelapp innløst flere ganger</td><td>Samme sum (minst 20 kr) på ulike bonger innen 60 minutter eller på samme kasse samme dag, eller samme lappnummer hvis bongen viser det. Bonger med flere pantelapper sammenlignes også på bongsummen. Erstatter den gamle testen «Samme pantebeløp utbetalt flere ganger».</td></tr>
+    <tr><td>Pantelapp slettet</td><td>En pantelapp fra pantemaskinen (399) og en motlinje med samme beløp på samme bong. Hvilke koder som gjelder velges under «Pantelapp slettet gjelder koder» (standard 399).</td></tr>
+    <tr><td>Pantelapp innløst flere ganger (av som standard)</td><td>Samme sum (minst 20 kr) på ulike bonger innen 60 minutter eller på samme kasse samme dag, eller samme lappnummer hvis bongen viser det. Bonger med flere pantelapper sammenlignes også på bongsummen. Erstatter den gamle testen «Samme pantebeløp utbetalt flere ganger».</td></tr>
   </tbody></table></div>
 {{shotw:d-lapp}}
 <h3>Slettede varelinjer og makulerte varer</h3>
 <p>Når en varelinje slettes etter at den er skannet, står den igjen på bongen sammen med en motlinje (samme kode og beløp med motsatt fortegn). Pluginen kobler dem og regner begge som slettet.</p>
 <ul>
-  <li><strong>Varelinjer slettet, pant utbetalt kontant:</strong> en kunde handler for 150 kr og betaler med pantelapp for 150 kr, og kassereren sletter deretter varelinjene slik at pantelappen utbetales som kontanter. Bongen flagges når de slettede linjene gjør at bare pant og kontant tilbake står igjen. «Kontant tilbake uten salg» regner nå også slettede linjer som ikke solgt.</li>
+  <li><strong>Makulert linje på bong:</strong> hver bong med en varelinje og motlinje flagges (2 poeng), også når varen er solgt på nytt, når dekningen er lav og når hele bongen er makulert. Har bongen samtidig rundt beløp, får den begge reaksjonene. Står «makulert» eller «annullert» som tekst på bongen, i en betalingslinje eller i topp/bunn, flagges den også som hendelsesord.</li>
+  <li><strong>Varelinjer slettet, pant utbetalt kontant (av som standard):</strong> en kunde handler for 150 kr og betaler med pantelapp for 150 kr, og kassereren sletter deretter varelinjene slik at pantelappen utbetales som kontanter. Bongen flagges når de slettede linjene gjør at bare pant og kontant tilbake står igjen. «Kontant tilbake uten salg» regner nå også slettede linjer som ikke solgt.</li>
   <li><strong>Makulert vare ikke solgt på ny:</strong> for hver slettet vare med EAN sjekkes det om samme vare er solgt på en annen bong i butikken innen 120 minutter før eller etter. Er den ikke det, flagges bongen. Testen krever at minst 80 % av salgene er skannet.</li>
   <li><strong>Mange makulerte varelinjer:</strong> kassereren markeres ved minst 5 slettede linjer.</li>
 </ul>

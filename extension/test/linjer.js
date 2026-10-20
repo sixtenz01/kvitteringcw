@@ -65,6 +65,13 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   const errors = [], apiCalls = [];
   page.on('pageerror', e => { errors.push(e.message); console.error('PAGEERROR', e.message); });
   await page.addInitScript(() => { window.__kvrScan = { settle: 0, poll: 10 }; });
+  // pant-testene som er av som standard fra 3.23.0 slås på, så de fortsatt er dekket her
+  await page.addInitScript(() => {
+    const kv = { 'kvr.pantmig.v1': 1, 'kvr.anom.v1': { bigReturn: '300', manyLapper: '8', roundMin: '500', settleDiff: '1', cashNoSale: true }, 'kvr.ctl.v1': { cashNoSaleN: '3', lappReuseMin: '60', voidCashOn: '1', lappDelCodes: '' } };
+    const rq = indexedDB.open('kvr-store', 1);
+    rq.onupgradeneeded = () => { rq.result.createObjectStore('kv'); rq.result.createObjectStore('scan'); };
+    rq.onsuccess = () => { const tx = rq.result.transaction('kv', 'readwrite'); Object.keys(kv).forEach((k) => { const g = tx.objectStore('kv').get(k); g.onsuccess = () => { if (g.result === undefined) tx.objectStore('kv').put(kv[k], k); }; }); };
+  });
   await page.route('https://chainweb.coop.no/**', r => {
     if (r.request().url().indexOf('/Api/') !== -1) { apiCalls.push(r.request().url()); return r.fulfill({ status: 404, body: '' }); }
     return r.fulfill({ contentType: 'text/html; charset=utf-8', body: html });

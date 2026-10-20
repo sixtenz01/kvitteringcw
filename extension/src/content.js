@@ -7,7 +7,7 @@
   var K = {
     saved: 'kvr.saved.v1', collapsed: 'kvr.collapsed.v1', scan: 'kvr.scan.v2', pos: 'kvr.pos.v1',
     size: 'kvr.size.v1', sec: 'kvr.sec.v1', rules: 'kvr.rules.v1', anom: 'kvr.anom.v1',
-    stores: 'kvr.stores.v1', tab: 'kvr.tab.v1', layout: 'kvr.layout.v1', arules: 'kvr.arules.v1', notes: 'kvr.notes.v1', tasks: 'kvr.tasks.v1', ctl: 'kvr.ctl.v1', keynav: 'kvr.keynav.v1', tshift: 'kvr.tshift.v1', nlog: 'kvr.nlog.v1', wide: 'kvr.wide.v1', sub: 'kvr.sub.v1', weights: 'kvr.weights.v1', camp: 'kvr.camp.v1', lastrun: 'kvr.lastrun.v1', scope: 'kvr.scope.v1', help: 'kvr.help.v1', sub2: 'kvr.sub2.v1', reports: 'kvr.reports.v1', repopts: 'kvr.repopts.v1'
+    stores: 'kvr.stores.v1', tab: 'kvr.tab.v1', layout: 'kvr.layout.v1', arules: 'kvr.arules.v1', notes: 'kvr.notes.v1', tasks: 'kvr.tasks.v1', ctl: 'kvr.ctl.v1', keynav: 'kvr.keynav.v1', tshift: 'kvr.tshift.v1', nlog: 'kvr.nlog.v1', wide: 'kvr.wide.v1', sub: 'kvr.sub.v1', weights: 'kvr.weights.v1', camp: 'kvr.camp.v1', lastrun: 'kvr.lastrun.v1', scope: 'kvr.scope.v1', help: 'kvr.help.v1', sub2: 'kvr.sub2.v1', reports: 'kvr.reports.v1', repopts: 'kvr.repopts.v1', pantmig: 'kvr.pantmig.v1', pos2: 'kvr.pos2.v1'
   };
   var sayTimer = null;
   var failedRecs = [];
@@ -1749,8 +1749,8 @@
           r.scanned ? { t: r.lapperPer.toFixed(2), bad: r.flags.lapperPer } : '–', r.scanned ? { t: r.negPer.toFixed(2), bad: r.flags.negPer } : '–'];
       });
       rows.push(['Butikksnitt', st.count, pct(st.retShare), fmt(st.avg), st.scanned ? st.lapperPer.toFixed(2) : '–', st.scanned ? st.negPer.toFixed(2) : '–']);
-      ui.ctlProfile.appendChild(tbl(['Kasserer', 'Salg', 'Returandel', 'Snitt kr', 'Pantelapp/salg', 'Korr./salg'], rows));
-      ui.ctlProfile.appendChild(hintEl('Rødt = minst ' + ctlCfg.profFactor + '× butikksnittet (snitt også under 1/' + ctlCfg.profFactor + '). Returandel = salg med negativ sum. Pantelapper og korrigeringer (negative varelinjer utenom pant) krever skanning. Kasserere med færre enn ' + ctlCfg.profMin + ' bonger vurderes ikke.' + (ctlCfg.profShrink ? ' Tallene krympes mot butikksnittet (som ' + ctlCfg.profShrink + ' bonger), så få bonger gir små utslag.' : '')));
+      ui.ctlProfile.appendChild(tbl(['Kasserer', 'Salg', 'Returandel', 'Snitt kr', 'Manuell pant/salg', 'Korr./salg'], rows));
+      ui.ctlProfile.appendChild(hintEl('Rødt = minst ' + ctlCfg.profFactor + '× butikksnittet (snitt også under 1/' + ctlCfg.profFactor + '). Returandel = salg med negativ sum, uten rene pantereturer. Manuell pant = pantelapper med kode 99. Den og korrigeringer (negative varelinjer utenom pant) krever skanning. Kasserere med færre enn ' + ctlCfg.profMin + ' bonger vurderes ikke.' + (ctlCfg.profShrink ? ' Tallene krympes mot butikksnittet (som ' + ctlCfg.profShrink + ' bonger), så få bonger gir små utslag.' : '')));
     }
     // funn
     if (!R.findings.length) ui.ctlFindings.appendChild(hintEl('Ingen funn med gjeldende terskler.'));
@@ -2120,7 +2120,7 @@
       secs.push({ h: 'Funn på tvers av bonger', li: Object.keys(fc).length ? Object.keys(fc).map(function (t) { return t + ': ' + fc[t]; }) : ['Ingen funn.'] });
       var pf = ctlRes.profile.rows.filter(function (r) { return r.flagged; });
       secs.push({ h: 'Kassererprofil', li: pf.length ? pf.map(function (r) {
-        return 'Kasserer ' + r.id + ': ' + Object.keys(r.flags).filter(function (k) { return r.flags[k]; }).map(function (k) { return { retShare: 'returandel ' + pct(r.retShare), avg: 'snitt ' + fmt(r.avg), lapperPer: 'pantelapper/salg ' + r.lapperPer.toFixed(2), negPer: 'korrigeringer/salg ' + r.negPer.toFixed(2) }[k]; }).join(', ');
+        return 'Kasserer ' + r.id + ': ' + Object.keys(r.flags).filter(function (k) { return r.flags[k]; }).map(function (k) { return { retShare: 'returandel ' + pct(r.retShare), avg: 'snitt ' + fmt(r.avg), lapperPer: 'manuelle pantelapper/salg ' + r.lapperPer.toFixed(2), negPer: 'korrigeringer/salg ' + r.negPer.toFixed(2) }[k]; }).join(', ');
       }) : ['Ingen avvik fra butikksnittet.'] });
       var rc = ctlRes.recon.filter(function (r) { return r.flag; });
       secs.push({ h: 'Dagsavstemming', li: rc.length ? rc.map(function (r) { return r.day + ' kasse ' + r.kasse + ': diff ' + fmt(r.diff) + ' kr'; }) : ['Ingen avvik.'] });
@@ -2332,7 +2332,7 @@
       var mineP = prof.rows.filter(function (r) { return r.id === F.id; })[0];
       if (mineP) {
         var sa = prof.store;
-        add(section('f-prof', 'Mot butikksnitt', [tbl(['', 'Salg', 'Returandel', 'Snitt kr', 'Pantelapp/salg', 'Korr./salg'], [
+        add(section('f-prof', 'Mot butikksnitt', [tbl(['', 'Salg', 'Returandel', 'Snitt kr', 'Manuell pant/salg', 'Korr./salg'], [
           ['Denne kassereren', mineP.count, { t: pct(mineP.retShare), bad: mineP.flags.retShare }, { t: fmt(mineP.avg), bad: mineP.flags.avg }, mineP.scanned ? { t: mineP.lapperPer.toFixed(2), bad: mineP.flags.lapperPer } : '–', mineP.scanned ? { t: mineP.negPer.toFixed(2), bad: mineP.flags.negPer } : '–'],
           ['Butikksnitt', sa.count, pct(sa.retShare), fmt(sa.avg), sa.scanned ? sa.lapperPer.toFixed(2) : '–', sa.scanned ? sa.negPer.toFixed(2) : '–']
         ])]));
@@ -2433,6 +2433,64 @@
     return el('span', { class: 'kvr-risk ' + levelClass(score), title: 'Risikoscore ' + score + ' poeng = RRS ' + L.rrs(score) + ' av 100', text: lvl.charAt(0).toUpperCase() + lvl.slice(1) + ' ' + score + ' (RRS ' + L.rrs(score) + ')' });
   }
 
+  // Bongen vist som en kvittering: topptekst, varelinjer med antall og rabatt, Totalt, betaling og bunn.
+  // Slettede linjer (linje og motlinje) er overstreket, og det testene reagerer på er markert.
+  function receiptView(it, sc) {
+    var box = el('div', { class: 'kvr-rcpt', role: 'group', 'aria-label': 'Kvittering' });
+    var tag = function (t) { return el('span', { class: 'kvr-rc-tag', text: t }); };
+    var row = function (l, r, cls, tags, title) {
+      var left = el('span', { class: 'kvr-rc-l', text: l, title: title || l });
+      var n = el('div', { class: 'kvr-rc-row' + (cls ? ' ' + cls : '') }, [el('span', { class: 'kvr-rc-lw' }, [left].concat(tags || [])), el('span', { class: 'kvr-rc-r', text: r === null || r === undefined ? '' : r })]);
+      box.appendChild(n);
+      return n;
+    };
+    var sub = function (t, r, cls) { row('  ' + t, r, 'kvr-rc-sub' + (cls ? ' ' + cls : '')); };
+    var sep = function () { box.appendChild(el('div', { class: 'kvr-rc-sep' })); };
+    box.appendChild(el('div', { class: 'kvr-rc-store', text: sLabel(it.storeNumber) }));
+    box.appendChild(el('div', { class: 'kvr-rc-meta', text: 'Kasse ' + it.workstationNumber + ' · Kasserer ' + it.cashierNumber }));
+    box.appendChild(el('div', { class: 'kvr-rc-meta', text: 'Bong ' + (it.bongnr || it.transactionId) + ' · ' + it.endDateTime }));
+    if (L.memberKey(it)) box.appendChild(el('div', { class: 'kvr-rc-meta', text: 'Medlemsnr. ' + L.memberKey(it) }));
+    sep();
+    // linje og motlinje med samme kode og beløp er slettet; de k første positive og negative linjene per nøkkel merkes
+    var pos = {}, neg = {}, cx = L.cancelled(sc);
+    cx.items.concat(cx.pant).forEach(function (c) { var k = c.c + '|' + Math.round(c.a * 100); pos[k] = c.k; neg[k] = c.k; });
+    (sc.items || []).forEach(function (l) {
+      var k = l.c + '|' + Math.round(Math.abs(l.a) * 100), del = false;
+      if (l.a > 0 && pos[k] > 0) { pos[k]--; del = true; } else if (l.a < 0 && neg[k] > 0) { neg[k]--; del = true; }
+      var kind = L.lappKind(l), tags = [], cls = '';
+      if (del) { cls = 'kvr-rc-del'; tags.push(tag('slettet')); if (kind === 'mach' && l.a < 0) cls += ' kvr-rc-hit'; }
+      if (kind === 'man' && l.a < 0) { cls += ' kvr-rc-hit'; tags.push(tag('manuell 99')); }
+      if (!del && l.a < 0 && !kind && !/PANT/i.test(l.n)) tags.push(tag('retur'));
+      row(l.n, fmt(l.a), cls.trim(), tags, l.c + ' ' + l.n);
+      if (typeof l.q === 'number' && typeof l.p === 'number') sub(String(l.q).replace('.', ',') + ' à ' + fmt(l.p), '');
+      if (l.d) {
+        sub('Rabatt' + (typeof l.dp === 'number' ? ' ' + String(l.dp).replace('.', ',') + ' %' : ''), '−' + fmt(l.d));
+        sub(l.dr ? 'Årsak: ' + L.reasonName(l.dr) : 'Uten årsak', '', l.dr ? '' : 'kvr-rc-hit');
+      }
+    });
+    if (sc.trunc) box.appendChild(el('div', { class: 'kvr-rc-meta', text: '… ' + sc.trunc + ' linjer til er ikke lest' }));
+    sep();
+    if (typeof sc.rnd === 'number' && sc.rnd) row('Øreavrunding', fmt(sc.rnd));
+    row('TOTALT', fmt(typeof sc.tot === 'number' ? sc.tot : it.totalAmount), 'kvr-rc-tot');
+    Object.keys(sc.pay || {}).forEach(function (k) { row(k, fmt(sc.pay[k]), /tilbake/i.test(k) ? 'kvr-rc-back' : ''); });
+    (sc.coupons || []).forEach(function (c) { sub('Kupong ' + c.n, c.a ? fmt(c.a) : ''); });
+    (sc.cd || []).forEach(function (c) { sub((c.s ? c.s.toUpperCase() + ' ' : 'Kort ') + (c.f ? c.f + '…' : '…') + c.n, ''); });
+    (sc.rf || []).forEach(function (r) { sub((r.indexOf('T:') === 0 ? 'TransId ' : 'Referanse ') + r.slice(2), ''); });
+    if (sc.mv && sc.mv.length) {
+      sep();
+      sc.mv.forEach(function (v) { sub('MVA ' + (v.r === null ? '?' : String(v.r).replace('.', ',')) + ' % av ' + fmt(v.g), v.m === null ? '' : fmt(v.m)); });
+    }
+    if (sc.ku) sub('Kjøpeutbytte-grunnlag ' + fmt(sc.ku.g), fmt(sc.ku.k));
+    if (sc.ft && (sc.ft.t || sc.ft.a || sc.ft.e)) {
+      sep();
+      if (sc.ft.t) sub('Terminal ' + sc.ft.t, '');
+      if (sc.ft.a) sub('Autorisasjon ' + sc.ft.a, '');
+      if (sc.ft.e) sub(sc.ft.e.join(', '), '');
+    }
+    (sc.ev || []).forEach(function (e) { sub(e.t, '', 'kvr-rc-hit'); });
+    return box;
+  }
+
   function checkRow(rk, first) {
     var it = rk.item, live = recById(rk.id), rec = live || { item: it, tr: null }, id = rk.id, n = notes[id];
     var open = expanded[id] !== undefined ? expanded[id] : first;
@@ -2460,15 +2518,12 @@
     body.appendChild(el('div', { class: 'kvr-hint', text: 'Hvorfor flagget?' }));
     body.appendChild(why);
     var sc = scanMap[id];
-    body.appendChild(el('div', { class: 'kvr-hint', text: sc && sc.settle ? 'Kassaoppgjør' : 'Bonglinjer' }));
+    body.appendChild(el('div', { class: 'kvr-hint', text: sc && sc.settle ? 'Kassaoppgjør' : 'Kvittering' }));
     if (sc && sc.settle) {
       var sd = sc.settle;
       body.appendChild(tbl(['Post', 'Beløp'], [['Telt kontant', fmt(sd.telt.kontant || 0)], ['Telt sum', fmt(sd.telt.sum || 0)], ['Differanse', { t: (sd.diff.sum > 0 ? '+' : '') + fmt(sd.diff.sum || 0), bad: !!sd.diff.sum }], ['Sendt bank', fmt(sd.bank || 0)], ['Pose', sd.pose || '–']]));
     } else if (sc && sc.items) {
-      var lines = sc.items.slice(0, 12).map(function (i) { return [i.n + (i.q ? ' (' + i.q + ' stk)' : ''), fmt(i.a)]; });
-      Object.keys(sc.pay || {}).forEach(function (k) { lines.push([k + ':', fmt(sc.pay[k])]); });
-      body.appendChild(tbl(['Linje', 'Beløp'], lines));
-      if (sc.items.length > 12) body.appendChild(hintEl('… og ' + (sc.items.length - 12) + ' flere linjer. Åpne bongen i listen for alt.'));
+      body.appendChild(receiptView(it, sc));
     } else {
       body.appendChild(el('div', { class: 'kvr-scanwarn' }, [el('span', { text: 'Ikke skannet, så linjene mangler.' }), btn('Skann nå', scanVisible, 'kvr-sm')]));
     }
@@ -3411,13 +3466,43 @@
   }
 
   function clamp(panel) {
-    if (curSize > 0) return;
+    if (curSize > 0) { if (modePos(curSize)) clampBig(panel); return; }
     var w = panel.offsetWidth, keep = panel.classList.contains('kvr-collapsed') ? 48 : 200;
     var left = Math.min(Math.max(0, parseFloat(panel.style.left) || 0), Math.max(0, window.innerWidth - w));
     var top = Math.min(Math.max(0, parseFloat(panel.style.top) || 0), Math.max(0, window.innerHeight - keep));
     panel.style.left = left + 'px';
     panel.style.top = top + 'px';
     panel.style.maxHeight = Math.max(160, window.innerHeight - top - 12) + 'px';
+  }
+
+  // Stor og Full kan også flyttes. Plasseringen lagres per størrelse (K.pos2 = { 1: {left, top}, 2: {...} }); uten lagret plassering dokkes panelet som før.
+  // Inline-stil med !important trengs fordi dokkingen i CSS bruker !important.
+  function modePos(mode) { var all = store(K.pos2) || {}; var p = all[mode]; return p && typeof p.left === 'number' && typeof p.top === 'number' ? p : null; }
+  function setModePos(mode, pos) {
+    var all = Object.assign({}, store(K.pos2) || {});
+    if (pos) all[mode] = pos; else delete all[mode];
+    store(K.pos2, all);
+  }
+  function putImportant(panel, left, top) {
+    panel.style.setProperty('left', left + 'px', 'important');
+    panel.style.setProperty('top', top + 'px', 'important');
+    panel.style.setProperty('right', 'auto', 'important');
+  }
+  function clampBig(panel) {
+    var r = panel.getBoundingClientRect(), vw = window.innerWidth, vh = window.innerHeight;
+    // minst 260 px synlig til venstre (så tittellinjen kan gripes, ikke bare knappene), minst 120 px til høyre
+    var left = Math.min(Math.max(r.left, Math.min(0, 260 - r.width)), vw - 120);
+    var top = Math.min(Math.max(r.top, 0), Math.max(0, vh - 48));
+    putImportant(panel, left, top);
+  }
+  function applyModePos(panel) {
+    if (curSize === 0) {
+      if (panel.style.getPropertyPriority('left') === 'important') ['left', 'top', 'right'].forEach(function (k) { panel.style.removeProperty(k); });
+      return;
+    }
+    ['left', 'top', 'right'].forEach(function (k) { panel.style.removeProperty(k); });
+    var p = modePos(curSize);
+    if (p) { putImportant(panel, p.left, p.top); clampBig(panel); }
   }
 
   // Panelstørrelse: 0 vanlig, 1 stor (dokket til høyre, lista i Lindbak er fortsatt synlig til venstre), 2 full (hele skjermen).
@@ -3451,6 +3536,7 @@
     if (persist) store(K.wide, mode);
     if (was > 0 && mode === 0) { panel.style.width = ''; panel.style.height = ''; store(K.size, null); }
     paintSizeMode();
+    applyModePos(panel);
     if (mode === 0) placePanel(panel);
     setTimeout(renderChartsIfVisible, 80);
   }
@@ -3474,7 +3560,8 @@
     var start = null;
     head.addEventListener('pointerdown', function (e) {
       if (e.button !== 0 || e.target.closest('button')) return;
-      start = { x: e.clientX, y: e.clientY, left: parseFloat(panel.style.left) || 0, top: parseFloat(panel.style.top) || 0, moved: false };
+      var r0 = panel.getBoundingClientRect();
+      start = { x: e.clientX, y: e.clientY, left: r0.left, top: r0.top, moved: false };
       head.setPointerCapture(e.pointerId);
       e.preventDefault();
     });
@@ -3483,9 +3570,10 @@
       var dx = e.clientX - start.x, dy = e.clientY - start.y;
       if (Math.abs(dx) + Math.abs(dy) > 4) start.moved = true;
       if (!start.moved) return;
+      panel.classList.add('kvr-dragging');
+      if (curSize > 0) { putImportant(panel, start.left + dx, start.top + dy); clampBig(panel); return; }
       panel.style.left = (start.left + dx) + 'px';
       panel.style.top = (start.top + dy) + 'px';
-      panel.classList.add('kvr-dragging');
       clamp(panel);
     });
     head.addEventListener('pointerup', function () {
@@ -3493,12 +3581,13 @@
       var moved = start.moved;
       start = null;
       panel.classList.remove('kvr-dragging');
-      if (moved) store(K.pos, { left: parseFloat(panel.style.left), top: parseFloat(panel.style.top) });
+      if (moved) { if (curSize > 0) setModePos(curSize, { left: parseFloat(panel.style.left), top: parseFloat(panel.style.top) }); else store(K.pos, { left: parseFloat(panel.style.left), top: parseFloat(panel.style.top) }); }
       else onTap();
     });
     head.addEventListener('pointercancel', function () { start = null; panel.classList.remove('kvr-dragging'); });
     head.addEventListener('dblclick', function (e) {
       if (e.target.closest('button')) return;
+      if (curSize > 0) { setModePos(curSize, null); applyModePos(panel); return; }
       store(K.pos, null);
       store(K.size, null);
       panel.style.width = ''; panel.style.height = '';
@@ -3518,7 +3607,7 @@
     if (r.width < 20 || r.height < 20 || r.right < 120 || r.left > vw - 120 || r.bottom < 60 || r.top > vh - keepH) {
       store(K.pos, null); store(K.size, null);
       panel.style.width = ''; panel.style.height = '';
-      if (sizeMode() > 0) setSizeMode(0, true); else placePanel(panel);
+      if (curSize > 0) { setModePos(curSize, null); applyModePos(panel); } else placePanel(panel);
       why = why || 'utenfor skjermen';
     } else if (coverFixes < 3) {
       var hr = (panel.querySelector('.kvr-head') || panel).getBoundingClientRect();
@@ -4113,11 +4202,12 @@
       if (panel.classList.contains('kvr-collapsed') || sizeMode() > 0) return;
       if (panel.style.width || panel.style.height) { store(K.size, { width: panel.style.width, height: panel.style.height }); renderChartsIfVisible(); }
     });
-    window.addEventListener('resize', function () { if (sizeMode() === 0) clamp(panel); });
+    window.addEventListener('resize', function () { clamp(panel); });
 
     curSize = sizeMode();
     placePanel(panel);
     paintSizeMode();
+    applyModePos(panel);
     if (store(K.collapsed)) setCollapsed(true);
     renderSaved();
     renderRules();
@@ -4168,6 +4258,14 @@
     loadNoteLog();
     tasksCustom = Array.isArray(store(K.tasks)) ? store(K.tasks) : [];
     ctlCfg = L.sanitizeControl(store(K.ctl));
+    if (!store(K.pantmig)) {
+      // 3.23.0: pant gir bare reaksjon på manuell pantelapp (99) og slettet pantelapp fra maskinen (399). Eldre lagrede innstillinger legges om én gang.
+      anomCfg.bigReturn = ''; anomCfg.manyLapper = ''; anomCfg.cashNoSale = false;
+      ctlCfg.cashNoSaleN = ''; ctlCfg.lappReuseMin = ''; ctlCfg.voidCashOn = '';
+      if (store(K.anom)) store(K.anom, anomCfg);
+      if (store(K.ctl)) store(K.ctl, ctlCfg);
+      store(K.pantmig, 1);
+    }
     keyNav = store(K.keynav) !== false;
     timeShift = Number(store(K.tshift)) || 0;
     weights = L.sanitizeWeights(store(K.weights));

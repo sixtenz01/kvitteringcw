@@ -133,7 +133,7 @@ tr.kvr-follow>td.kvr-cb-cell::after{color:#e37400}
 /* stor visning: dokket til høyre (lista i Lindbak er synlig) eller full skjerm; innholdet flyter i flere kolonner */
 #kvr-panel.kvr-big:not(.kvr-collapsed){left:auto !important;right:12px;top:12px !important;width:min(62vw,1240px) !important;height:calc(100vh - 24px) !important;max-height:none !important;max-width:none;resize:none}
 #kvr-panel.kvr-full:not(.kvr-collapsed){left:1.5vw !important;top:1.5vh !important;width:97vw !important;height:97vh !important;max-height:none !important;max-width:none;resize:none}
-#kvr-panel.kvr-big .kvr-head,#kvr-panel.kvr-full .kvr-head{cursor:default}
+#kvr-panel.kvr-big .kvr-head,#kvr-panel.kvr-full .kvr-head{cursor:grab}
 #kvr-panel.kvr-big .kvr-scroll,#kvr-panel.kvr-full .kvr-scroll{padding:14px 16px}
 #kvr-panel.kvr-big .kvr-scroll>.kvr-pane,#kvr-panel.kvr-full .kvr-scroll>.kvr-pane{display:block;column-width:470px;column-gap:16px}
 #kvr-panel.kvr-big .kvr-host,#kvr-panel.kvr-full .kvr-host,#kvr-panel.kvr-big .kvr-pane .kvr-pane,#kvr-panel.kvr-full .kvr-pane .kvr-pane{display:contents}
@@ -318,3 +318,19 @@ tr.kvr-follow>td.kvr-cb-cell::after{color:#e37400}
 .kvr-modal .kvr-table td{padding:4px;border-bottom:1px solid var(--kv-soft)}
 .kvr-modal .kvr-table td:not(:first-child),.kvr-modal .kvr-table th:not(:first-child){text-align:right}
 .kvr-modal .kvr-table .kvr-row{justify-content:flex-end}
+/* Bongen som kvittering */
+#kvr-panel .kvr-rcpt{font:12px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;color:#2a2a2a;background:#fffef8;border:1px solid #e4dfd0;border-radius:3px;padding:12px 14px 16px;max-width:360px;margin:4px 0 8px;box-shadow:0 1px 4px rgba(40,30,0,.10);max-height:460px;overflow:auto}
+#kvr-panel .kvr-rc-store{text-align:center;font-weight:700;text-transform:uppercase;letter-spacing:.02em}
+#kvr-panel .kvr-rc-meta{text-align:center;color:#666;font-size:11px}
+#kvr-panel .kvr-rc-sep{border-top:1px dashed #b8b2a2;margin:7px 0}
+#kvr-panel .kvr-rc-row{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+#kvr-panel .kvr-rc-lw{display:flex;align-items:baseline;gap:4px;min-width:0}
+#kvr-panel .kvr-rc-l{overflow:hidden;text-overflow:ellipsis;white-space:pre}
+#kvr-panel .kvr-rc-r{white-space:nowrap;font-variant-numeric:tabular-nums}
+#kvr-panel .kvr-rc-sub{color:#666;font-size:11px}
+#kvr-panel .kvr-rc-tot{font-weight:700;font-size:13px;margin-top:2px}
+#kvr-panel .kvr-rc-back{font-weight:600}
+#kvr-panel .kvr-rc-del .kvr-rc-l,#kvr-panel .kvr-rc-del .kvr-rc-r{text-decoration:line-through;color:#8d887a}
+#kvr-panel .kvr-rc-hit{background:var(--kv-bad-bg);color:var(--kv-bad-fg);border-radius:2px;margin:0 -4px;padding:0 4px}
+#kvr-panel .kvr-rc-hit .kvr-rc-l,#kvr-panel .kvr-rc-hit .kvr-rc-r{color:var(--kv-bad-fg)}
+#kvr-panel .kvr-rc-tag{flex:none;font:600 9.5px/1.5 system-ui,sans-serif;padding:0 4px;border-radius:3px;background:#efe9da;color:#5b5446;text-transform:uppercase;letter-spacing:.03em}

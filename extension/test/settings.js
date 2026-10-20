@@ -90,6 +90,8 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   assert.strictEqual(await page.$$eval('details.kvr-set', n => n.length), 27);
   await group('bong');
   assert.strictEqual(await badge('bong'), '');
+  assert.ok(await input('bong', 'Stor panteretur fra').isDisabled(), 'stor panteretur er av som standard (pant gir bare reaksjon på 99 og slettet 399)');
+  await page.check('[data-sec=set-bong] input[aria-label="Stor panteretur fra: på"]');
   await input('bong', 'Stor panteretur fra').fill('250');
   await input('bong', 'Stor panteretur fra').press('Tab');
   assert.strictEqual(await badge('bong'), '1 endret');
@@ -107,7 +109,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   assert.strictEqual(await badge('bong'), '2 endret');
   await page.click('[data-sec=set-bong] button:text-is("Standard for denne gruppen")');
   assert.strictEqual(await badge('bong'), '');
-  assert.strictEqual(await input('bong', 'Stor panteretur fra').inputValue(), '300');
+  assert.ok(await input('bong', 'Stor panteretur fra').isDisabled(), 'tilbake til av');
   assert.strictEqual(await input('bong', 'Poeng: Stor panteretur').inputValue(), '3');
   assert.match(await page.innerText('.kvr-stats'), /«Avvik per bong» er satt tilbake til standard/);
 

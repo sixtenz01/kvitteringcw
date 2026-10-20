@@ -8,8 +8,8 @@ const TR = (a, c) => `<tr><td>${a}</td><td></td><td>${c}</td></tr>`;
 const make = (n, o) => Object.assign({ id: `1001-1-${n}`, cashier: 'B', time: `2026-10-02 10:${String(10 + n).padStart(2, '0')}`, tot: 50 + n, body: [TR(`70000000000${n % 10} VARE`, f2(50 + n)), TR('Bank:', f2(50 + n))] }, o);
 const FIRST = [];
 for (let i = 1; i <= 5; i++) FIRST.push(make(i));
-// tre bonger med bare pantelapper og kontant tilbake: flagges som avvik
-for (let i = 6; i <= 8; i++) FIRST.push(make(i, { cashier: 'C', tot: -80, body: [TR('399 PANTELAPP', '-80.00'), TR('Kontant tilbake:', '80.00')] }));
+// tre bonger med manuell pantelapp (kode 99): flagges som avvik
+for (let i = 6; i <= 8; i++) FIRST.push(make(i, { cashier: 'C', tot: -80, body: [TR('99 PANTELAPP', '-80.00'), TR('Kontant tilbake:', '80.00')] }));
 // listen etter et manuelt søk i CW: helt andre bonger
 const OTHER = [];
 for (let i = 21; i <= 23; i++) OTHER.push(make(i, { time: `2026-10-03 09:${String(10 + i)}` }));
@@ -70,6 +70,13 @@ setRows(FIRST);
   const before = await txt('[data-sec=chk-list]');
   assert.match(before, /sjekk først \(3\)/i);
   assert.strictEqual(await page.$$eval('#g tbody tr.kvr-flag', (n) => n.length), 3);
+  // bongen vises som en kvittering, med den manuelle pantelappen markert
+  const rc = await txt('[data-sec=chk-list] .kvr-rcpt');
+  assert.match(rc, /COOP MEGA KOLBOTN|1001/i);
+  assert.match(rc, /Kasse 1 · Kasserer C/);
+  assert.match(rc, /PANTELAPP manuell 99 −80,00/i);
+  assert.match(rc, /TOTALT −80,00/);
+  assert.strictEqual(await page.$$eval('[data-sec=chk-list] .kvr-rcpt .kvr-rc-hit', (n) => n.length), 1);
 
   // brukeren søker manuelt i CW: listen byttes helt
   await page.evaluate(() => window.__setRows(OTHER));

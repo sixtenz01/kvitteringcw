@@ -55,6 +55,13 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   page.on('dialog', d => d.accept('Bakeri'));
   const apiCalls = [];
   await context.addInitScript(() => { window.__kvrScan = { settle: 0, poll: 10 }; });
+  // pant-testene som er av som standard fra 3.23.0 slås på, så de fortsatt er dekket her
+  await context.addInitScript(() => {
+    const kv = { 'kvr.pantmig.v1': 1, 'kvr.anom.v1': { bigReturn: '300', manyLapper: '8', roundMin: '500', settleDiff: '1', cashNoSale: true }, 'kvr.ctl.v1': { cashNoSaleN: '3', lappReuseMin: '60', voidCashOn: '1', lappDelCodes: '' } };
+    const rq = indexedDB.open('kvr-store', 1);
+    rq.onupgradeneeded = () => { rq.result.createObjectStore('kv'); rq.result.createObjectStore('scan'); };
+    rq.onsuccess = () => { const tx = rq.result.transaction('kv', 'readwrite'); Object.keys(kv).forEach((k) => { const g = tx.objectStore('kv').get(k); g.onsuccess = () => { if (g.result === undefined) tx.objectStore('kv').put(kv[k], k); }; }); };
+  });
   await page.route('https://chainweb.coop.no/**', async r => {
     const u = r.request().url();
     if (u.indexOf('/Api/') !== -1) { apiCalls.push(u); return r.fulfill({ status: 404, body: '' }); }
@@ -91,6 +98,8 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
     await tab('Innstillinger');
     if (!(await page.$eval(`[data-sec=set-${group}]`, d => d.open))) await page.click(`[data-sec=set-${group}] summary`);
     const inp = page.locator(`[data-sec=set-${group}] input[aria-label="${label}"]`);
+    // en test som er av (tom verdi) slås på først
+    if (await inp.isDisabled()) await page.check(`[data-sec=set-${group}] input[aria-label="${label}: på"]`);
     await inp.fill(value);
     await inp.press('Tab');
   };
@@ -385,7 +394,8 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   assert.ok(scores.length >= 3, 'flere flaggede bonger');
   assert.deepStrictEqual(scores, scores.slice().sort((a, b) => b - a), 'sortert etter risiko');
   assert.match(await page.innerText('[data-sec=chk-list] .kvr-ck'), /Hvorfor flagget\?/);
-  assert.match(await page.innerText('[data-sec=chk-list] .kvr-ck'), /Bonglinjer/);
+  assert.match(await page.innerText('[data-sec=chk-list] .kvr-ck'), /Kvittering/);
+  assert.ok(await page.$('[data-sec=chk-list] .kvr-ck .kvr-rcpt .kvr-rc-tot'), 'bongen vises som kvittering med Totalt');
   assert.match(await page.innerText('[data-sec=chk-top]'), /\d+ å sjekke · \d+ høy risiko/);
   assert.match(await page.innerText('[data-sec=chk-cash]'), /Kasserer/i);
   const n0 = scores.length;

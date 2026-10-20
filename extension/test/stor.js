@@ -49,6 +49,11 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   await load();
   const box = () => page.$eval('#kvr-panel', n => { const r = n.getBoundingClientRect(); return { l: Math.round(r.left), t: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height), cls: n.className }; });
   const go = async (main, sub) => { await page.click(`.kvr-tab:has-text("${main}")`); if (sub) await page.click(`.kvr-sub:text-is("${sub}")`); };
+  const drag = async (dx, dy) => {
+    const h = await page.$eval('#kvr-panel .kvr-head', n => { const r = n.getBoundingClientRect(); return { x: Math.max(r.left, 0) + 30, y: r.top + r.height / 2 }; });
+    await page.mouse.move(h.x, h.y); await page.mouse.down();
+    await page.mouse.move(h.x + dx / 2, h.y + dy / 2, { steps: 4 }); await page.mouse.move(h.x + dx, h.y + dy, { steps: 4 }); await page.mouse.up();
+  };
   const cols = () => page.$$eval('#kvr-panel .kvr-scroll .kvr-card', cs => { const x = {}; cs.filter(c => c.offsetParent !== null).forEach(c => { x[Math.round(c.getBoundingClientRect().left / 20)] = true; }); return Object.keys(x).length; });
 
   await go('Analyse', 'Diagram');
@@ -61,15 +66,28 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   assert.ok(b1.w >= 980 && b1.w <= 1000, 'stor: 62 % av bredden (' + b1.w + ')');
   assert.ok(b1.l > 560 && b1.l + b1.w <= 1600 - 10, 'dokket til høyre, lista til venstre er synlig');
   assert.ok(b1.h >= 870, 'stor: nesten full høyde');
-  assert.strictEqual(await page.$eval('#kvr-panel .kvr-head', n => getComputedStyle(n).cursor), 'default');
+  assert.strictEqual(await page.$eval('#kvr-panel .kvr-head', n => getComputedStyle(n).cursor), 'grab', 'kan flyttes også i stor');
   assert.ok(await page.$eval('html', n => n.classList.contains('kvr-bigui')));
   assert.ok((await page.$$eval('tbody tr', t => t[0].getBoundingClientRect().left)) < 200, 'Lindbak-lista ligger fortsatt til venstre');
   assert.ok((await cols()) >= 2, 'minst to kolonner i stor');
+  // stor kan flyttes; plasseringen gjelder bare stor og huskes
+  await drag(-300, 40);
+  const bm = await box();
+  assert.ok(Math.abs(bm.l - (b1.l - 300)) <= 3 && Math.abs(bm.t - (b1.t + 40)) <= 3 && bm.w === b1.w, 'stor er flyttet (' + JSON.stringify(bm) + ')');
+  // kan ikke dras helt ut av vinduet: minst 120 px og tittellinjen er igjen
+  await drag(-3000, -500);
+  const bx = await box();
+  assert.ok(bx.l + bx.w >= 259 && bx.t >= 0, 'klemt innenfor vinduet (' + JSON.stringify(bx) + ')');
+  await drag(bm.l - bx.l, bm.t - bx.t);
   assert.match(await page.$eval('button[aria-label="Panelstørrelse"]', n => n.title), /Fullskjerm/);
   await page.click('button[aria-label="Panelstørrelse"]');
   const b2 = await box();
   assert.ok(/kvr-full/.test(b2.cls) && b2.w >= 1550 && b2.h >= 860, 'full: nesten hele skjermen (' + JSON.stringify(b2) + ')');
   assert.ok((await cols()) >= 3, 'minst tre kolonner i full');
+  // full kan også flyttes, med egen plassering
+  await drag(80, 30);
+  const bf = await box();
+  assert.ok(Math.abs(bf.l - (b2.l + 80)) <= 3 && Math.abs(bf.t - (b2.t + 30)) <= 3, 'full er flyttet (' + JSON.stringify(bf) + ')');
   // modal bruker mer bredde i stor visning
   await page.click('#kvr-panel button[aria-label="Hjelp"]');
   assert.ok((await page.$eval('.kvr-dlg', n => n.getBoundingClientRect().width)) > 900, 'dialog blir bredere');
@@ -78,11 +96,16 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   // valget huskes etter omlasting
   await load();
   assert.ok(/kvr-full/.test((await box()).cls), 'full huskes');
+  assert.ok(Math.abs((await box()).l - bf.l) <= 3, 'plasseringen i full huskes');
+  // dobbeltklikk på tittellinjen legger full tilbake på plass
+  await page.dblclick('#kvr-panel .kvr-head', { position: { x: 40, y: 10 } });
+  assert.ok(Math.abs((await box()).l - b2.l) <= 3, 'full er tilbake');
   // innstillingen under Generelt følger knappen og kan endre størrelsen
   await go('Mer', 'Innstillinger');
   assert.strictEqual(await page.inputValue('select[aria-label="Panelstørrelse"]'), '2');
   await page.selectOption('select[aria-label="Panelstørrelse"]', '1');
   assert.ok(/kvr-big/.test((await box()).cls));
+  assert.ok(Math.abs((await box()).l - bm.l) <= 3, 'plasseringen i stor huskes (' + (await box()).l + ' mot ' + bm.l + ')');
   // «Vis i listen» fra full visning flytter panelet til siden (dokket), uten å lagre valget
   await page.selectOption('select[aria-label="Panelstørrelse"]', '2');
   await go('Analyse', 'Sjekk først');

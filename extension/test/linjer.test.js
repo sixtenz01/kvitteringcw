@@ -3,11 +3,16 @@
 const assert = require('assert');
 const L = require('../src/logic.js');
 
+// Pant-testene som er av som standard fra 3.23.0 (stor panteretur, mange pantelapper, kontant tilbake uten salg, gjenbruk,
+// slettede varelinjer med pant og kontant) slås på her, slik at de fortsatt er dekket. Pantelapp slettet gjelder alle koder.
+const defaultAnomOn = () => Object.assign(L.defaultAnom(), { bigReturn: '300', manyLapper: '8', cashNoSale: true });
+const defaultControlOn = () => Object.assign(L.defaultControl(), { cashNoSaleN: '3', lappReuseMin: '60', voidCashOn: '1', lappDelCodes: '' });
+
 let seq = 0;
 const bong = (o) => Object.assign({ transactionId: 'T-' + (++seq), endDateTime: '2026-10-05 12:00', storeNumber: 1005, workstationNumber: 1, cashierNumber: 'A', totalAmount: 10, receiptType: 1, memberNumber: null }, o || {});
 const scanOf = (rows) => L.parseReceipt(rows);
 const sc = (lines, o) => Object.assign({ v: 6, items: lines.map((l) => Object.assign({ n: 'VARE' }, l)), pay: {}, np: lines.filter((l) => !/^(99|399|220)$/.test(l.c)).length, neg: 0, sale: 0, ret: 0, saleLines: 0, retLines: 0, disc: 0, discN: 0, discNR: 0, discNRsum: 0, coupons: [] }, o || {});
-const CT = () => L.defaultControl();
+const CT = () => defaultControlOn();
 const EAN = '7038010000010', EAN2 = '7038010000027', EAN3 = '7038010000034', EAN4 = '7038010000041';
 const mapOf = (pairs) => pairs.reduce((m, [it, s]) => (m[it.transactionId] = s, m), {});
 
@@ -35,7 +40,7 @@ const mapOf = (pairs) => pairs.reduce((m, [it, s]) => (m[it.transactionId] = s, 
   assert.strictEqual(L.netNp(s1), 0, 'varelinje og motlinje går i null');
   assert.strictEqual(L.netNp(sc([{ c: EAN, a: 10 }])), 1);
   // «Kontant tilbake uten salg» gjelder også når varelinjene er slettet med motlinje
-  const cfg = L.defaultAnom();
+  const cfg = defaultAnomOn();
   assert.ok(L.anomalies(bong(), s1, cfg, [], {}).includes('Kontant tilbake uten salg'));
   assert.ok(L.anomalies(bong(), sc([{ c: '399', n: 'PANTELAPP', a: -50 }], { np: 0, retLines: 1, pay: { 'Kontant tilbake': 50 } }), cfg, [], {}).includes('Kontant tilbake uten salg'));
   assert.ok(!L.anomalies(bong(), sc([{ c: EAN, a: 20 }, { c: '399', n: 'PANTELAPP', a: -50 }], { retLines: 1, pay: { 'Kontant tilbake': 30 } }), cfg, [], {}).includes('Kontant tilbake uten salg'));
@@ -124,6 +129,11 @@ const mapOf = (pairs) => pairs.reduce((m, [it, s]) => (m[it.transactionId] = s, 
   assert.strictEqual(r.resold, 1);
   assert.strictEqual(r.voided, 3);
   assert.ok(r.applicable);
+  // makulert linje flagges på hver bong med linje og motlinje, også når varen er solgt på ny og når dekningen er lav
+  const vl = f('voidLine');
+  assert.strictEqual(vl.length, r.bongs);
+  assert.ok(vl.some((x) => x.ids[0] === v1.transactionId), 'kaffe solgt på ny er likevel makulert');
+  assert.match(vl.find((x) => x.ids[0] === v2.transactionId).detail, /varelinje makulert \(20\.00 kr\): MELK/);
   // utenfor 120 min: stor mellomtid gir treff på kaffe også
   const tight = L.voidChecks(all, all, map, Object.assign(CT(), { voidResaleMin: '30' }));
   assert.ok(tight.findings.some((x) => x.code === 'voidNoResale' && x.ids[0] === v1.transactionId));
@@ -131,7 +141,7 @@ const mapOf = (pairs) => pairs.reduce((m, [it, s]) => (m[it.transactionId] = s, 
   const k = L.voidChecks(all, all, map, Object.assign(CT(), { voidCashN: '3' }));
   assert.deepStrictEqual(k.findings.filter((x) => x.code === 'voidCash2').map((x) => [x.cashier, x.flag]), [['K', false]]);
   // av
-  assert.strictEqual(L.voidChecks(all, all, map, Object.assign(CT(), { voidCashOn: '', voidResaleMin: '', voidCashN: '' })).findings.length, 0);
+  assert.strictEqual(L.voidChecks(all, all, map, Object.assign(CT(), { voidCashOn: '', voidResaleMin: '', voidCashN: '', voidLineOn: '' })).findings.length, 0);
   // for lav dekning gir ingen gjensalgstest
   const half = L.voidChecks(all, all.concat(Array.from({ length: 20 }, () => bong())), map, CT());
   assert.ok(!half.applicable && !half.findings.some((x) => x.code === 'voidNoResale'));
@@ -344,7 +354,7 @@ const mapOf = (pairs) => pairs.reduce((m, [it, s]) => (m[it.transactionId] = s, 
   w.forEach((t) => { assert.ok(t in L.RISK_WEIGHTS, t); assert.ok(L.groupForReason(t), 'gruppe for ' + t); });
   assert.strictEqual(L.groupForReason('Pantelapp slettet'), 'lapp');
   assert.strictEqual(L.groupForReason('Høy rabattprosent'), 'disc');
-  const dc = L.defaultControl();
+  const dc = defaultControlOn();
   assert.deepStrictEqual([dc.lappManualMin, dc.lappReuseMin, dc.voidResaleMin, dc.discHiFrom, dc.discHiTo, dc.campBongs, dc.campCashiers, dc.campDay, dc.askDevPct, dc.cardRetN], ['50', '60', '120', '70', '100', '3', '2', '40', '5', '3']);
   assert.strictEqual(dc.specialWords, 'eget forbruk, internt forbruk, utbetaling, finansiering, sjekk');
   assert.ok(L.rrs(L.riskScore(['Pantelapp slettet', 'Varelinjer slettet, pant utbetalt kontant'])) > 50);
@@ -363,7 +373,7 @@ const mapOf = (pairs) => pairs.reduce((m, [it, s]) => (m[it.transactionId] = s, 
   assert.deepStrictEqual(a.map((q) => q.map((c) => c.key)), [['7000000000017'], ['7311041012582']], 'varen spørres under testen som teller, resten under den andre');
   assert.deepStrictEqual(L.campAsk(bd, fs, 'b2').map((q) => q.length), [0, 0], 'andre bonger påvirkes ikke');
   assert.deepStrictEqual(L.campAsk([{ reason: 'Rabatt uten årsak', counts: true }, { reason: 'Rabatt uten treff på andre salg', counts: true }], fs, 'b1').map((q) => q.map((c) => c.key)), [['7311041012582', '7000000000017'], []], 'teller begge, første får spørsmålet');
-  assert.deepStrictEqual(L.explainReason('Rabatt uten årsak', { id: 'b1', findings: [{ title: 'Rabatt uten årsak', ids: ['b1'], detail: 'Slutter på punktum.' }], cfg: L.defaultAnom() }), 'Slutter på punktum.');
+  assert.deepStrictEqual(L.explainReason('Rabatt uten årsak', { id: 'b1', findings: [{ title: 'Rabatt uten årsak', ids: ['b1'], detail: 'Slutter på punktum.' }], cfg: defaultAnomOn() }), 'Slutter på punktum.');
 }
 
 console.log('linjer: ok');
