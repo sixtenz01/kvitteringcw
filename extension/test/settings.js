@@ -166,6 +166,25 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   await page.click('.kvr-modal button:text-is("Tilbakestill")');
   assert.strictEqual(await input('diff', 'Eller minus totalt over').inputValue(), '100');
 
+  // ordliste for hendelsesord: fjern og legg til ord, huskes
+  await group('events');
+  const words = () => page.$$eval('[data-sec=set-events] .kvr-word', n => n.map(w => w.firstChild.textContent));
+  assert.deepStrictEqual(await words(), ['anull', 'makul', 'makulert', 'storn', 'parker', 'på vent', 'manuell', 'spør pris', 'overstyr', 'prisendring', 'kansell', 'kanseller', 'avbrutt']);
+  await page.click('[data-sec=set-events] button[aria-label="Fjern parker"]');
+  const add = page.locator('[data-sec=set-events] input[aria-label="Ord som gir reaksjon: nytt ord"]');
+  await add.fill('Retur kasse');
+  await add.press('Enter');
+  await page.locator('[data-sec=set-events] input[aria-label="Ord som gir reaksjon: nytt ord"]').fill('anull, tømt');
+  await page.click('[data-sec=set-events] button:text-is("Legg til")');
+  const after = await words();
+  assert.ok(!after.includes('parker') && after.slice(-2).join() === 'retur kasse,tømt' && after.filter(w => w === 'anull').length === 1, 'fjernet, lagt til, ingen dobbel: ' + after.join());
+  assert.ok(await page.$eval('[data-sec=set-events] .kvr-set-words', n => n.classList.contains('kvr-changed')));
+  await page.waitForTimeout(300);
+  assert.match((await idbGet('kv', 'kvr.ctl.v1')).evWords, /retur kasse, tømt$/);
+  assert.ok(!/parker/.test((await idbGet('kv', 'kvr.ctl.v1')).evWords));
+  await group('disc');
+  assert.ok(await page.isChecked('[data-sec=set-disc] .kvr-set-row:has-text("Klassifiser automatisk som kampanjevare") input[type=checkbox]'), 'kampanjevare automatisk er på som standard');
+
   // sletting bekreftes i panelet, ikke med nettleserdialog
   await go('Analyse', 'Detaljer');
   await page.click('[data-sec=custom] button:text-is("Ny regel")');

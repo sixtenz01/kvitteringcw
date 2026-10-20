@@ -214,7 +214,7 @@ const mapOf = (pairs) => pairs.reduce((m, [it, s]) => (m[it.transactionId] = s, 
   // mulig sentral kampanje: samme vare og rabatt hos flere kasserere. Bongen tas med, med notat og spørsmål.
   const camp = Array.from({ length: 12 }, (_, i) => day('c-' + i, '12:' + (10 + i), 'A' + (i % 3), [dl('KAMPANJEVARE', 12, 8, 40)], i < 6 ? '2026-10-05' : '2026-10-06'));
   const cit = camp.map((x) => x[0]), cm = mapOf(camp);
-  const three = { discMatchPct: '30', discPct: '30', discHiFrom: '30', discHiTo: '50' };
+  const three = { discMatchPct: '30', discPct: '30', discHiFrom: '30', discHiTo: '50', campAuto: '' };
   const off = L.discounts(cit, cm, cfgOf(three));
   assert.ok(off.findings.length > 0 && off.findings.every((f) => !f.camp && !/Kan være sentral kampanje/.test(f.detail)), 'uten kampanjeregel: ingen notat');
   const asked = L.discounts(cit, cm, cfgOf(Object.assign({ campBongs: '3', campCashiers: '2' }, three)));
@@ -253,6 +253,18 @@ const mapOf = (pairs) => pairs.reduce((m, [it, s]) => (m[it.transactionId] = s, 
   assert.ok(sr.findings.length > 0 && sr.findings.every((f) => !f.camp) && sr.camp.items.length === 0, 'samme vare og rabatt hos bare én kasserer gir ingen kampanje');
   // for få bonger
   assert.strictEqual(L.discounts(cit.slice(0, 2), cm, cfgOf(Object.assign({ campBongs: '3', campCashiers: '2' }, three))).camp.items.length, 0);
+  // automatisk kampanjevare: flere enn én kasserer selger varen med rabatt på flere enn to ulike bonger
+  const au = cfgOf(Object.assign({ campBongs: '3', campCashiers: '2' }, three, { campAuto: '1' }));
+  const at = L.discounts(cit, cm, au);
+  assert.strictEqual(at.findings.filter((f) => /^disc(NoMatch|High|NoReason)$/.test(f.code)).length, 0, 'kampanjevare flagges ikke');
+  assert.ok(at.findings.every((f) => !f.camp), 'ingen spørsmål');
+  assert.deepStrictEqual([at.camp.items[0].status, at.camp.auto, at.camp.pending, at.camp.confirmed, at.total.withNR], ['auto', 1, 0, 0, 0]);
+  const atNo = L.discounts(cit, cm, au, cit, { [L.campKey(EAN)]: 'ikke' });
+  assert.strictEqual(atNo.findings.filter((f) => f.code === 'discNoReason').length, 12, '«ikke kampanje» overstyrer');
+  assert.deepStrictEqual([atNo.camp.auto, atNo.camp.denied], [0, 1]);
+  const minN = (n, cashiers) => { const b = Array.from({ length: n }, (_, i) => day('t-' + i, '14:' + (10 + i), 'K' + (i % cashiers), [dl('KAMPANJEVARE', 12, 8, 40)])); return L.discounts(b.map((x) => x[0]), mapOf(b), au).camp.auto; };
+  assert.deepStrictEqual([minN(3, 2), minN(2, 2), minN(3, 1), minN(6, 1)], [1, 0, 0, 0], '3 bonger hos 2 kasserere ja; 2 bonger eller 1 kasserer nei');
+  assert.strictEqual(L.discounts(cit, cm, cfgOf(Object.assign({}, three, { campBongs: '', campAuto: '1' }))).camp.auto, 0, 'av når grensen for bonger er tom');
   // svar på vare som ikke finnes i dataene kan angres
   assert.deepStrictEqual(L.discounts([], {}, cfgOf({}), [], { [L.campKey(EAN2)]: 'kampanje' }).camp.items.map((e) => [e.c, e.status, e.n]), [[EAN2, 'kampanje', 0]]);
   // kampanjedag: mange bonger med rabatt samme dag (minst 30 salg) gir notat, ikke skjuling
@@ -355,7 +367,7 @@ const mapOf = (pairs) => pairs.reduce((m, [it, s]) => (m[it.transactionId] = s, 
   assert.strictEqual(L.groupForReason('Pantelapp slettet'), 'lapp');
   assert.strictEqual(L.groupForReason('Høy rabattprosent'), 'disc');
   const dc = defaultControlOn();
-  assert.deepStrictEqual([dc.lappManualMin, dc.lappReuseMin, dc.voidResaleMin, dc.discHiFrom, dc.discHiTo, dc.campBongs, dc.campCashiers, dc.campDay, dc.askDevPct, dc.cardRetN], ['50', '60', '120', '70', '100', '3', '2', '40', '5', '3']);
+  assert.deepStrictEqual([dc.lappManualMin, dc.lappReuseMin, dc.voidResaleMin, dc.discHiFrom, dc.discHiTo, dc.campBongs, dc.campCashiers, dc.campDay, dc.campAuto, dc.askDevPct, dc.cardRetN], ['50', '60', '120', '70', '100', '3', '2', '40', '1', '5', '3']);
   assert.strictEqual(dc.specialWords, 'eget forbruk, internt forbruk, utbetaling, finansiering, sjekk');
   assert.ok(L.rrs(L.riskScore(['Pantelapp slettet', 'Varelinjer slettet, pant utbetalt kontant'])) > 50);
 }

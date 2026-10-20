@@ -336,3 +336,11 @@ tr.kvr-follow>td.kvr-cb-cell::after{color:#e37400}
 #kvr-panel .kvr-rc-tag{flex:none;font:600 9.5px/1.5 system-ui,sans-serif;padding:0 4px;border-radius:3px;background:#efe9da;color:#5b5446;text-transform:uppercase;letter-spacing:.03em}
 /* CWs egne nedtrekk, kalendere og dialoger ligger over panelet, så søket i CW kan brukes selv om panelet dekker feltene */
 .k-animation-container,.k-list-container,.k-calendar-container,.k-window,.k-overlay{z-index:2147483647 !important}
+/* Ordliste i Innstillinger */
+#kvr-panel .kvr-set-words{flex-wrap:wrap}
+#kvr-panel .kvr-set-words .kvr-set-c{flex:1 1 100%;justify-content:flex-start}
+#kvr-panel .kvr-words{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+#kvr-panel .kvr-word{display:inline-flex;align-items:center;gap:2px;padding:2px 4px 2px 9px;border:1px solid var(--kv-edge);border-radius:999px;background:var(--kv-soft);font-size:12px}
+#kvr-panel .kvr-word-x{border:0;background:transparent;cursor:pointer;font-size:14px;line-height:1;padding:0 4px;color:var(--kv-muted);border-radius:999px}
+#kvr-panel .kvr-word-x:hover{background:var(--kv-bad-bg);color:var(--kv-bad-fg)}
+#kvr-panel .kvr-words input{width:140px}

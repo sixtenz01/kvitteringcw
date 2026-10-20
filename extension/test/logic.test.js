@@ -631,7 +631,7 @@ const sgW = L.sanitizeWeights(null);
 assert.strictEqual(L.groupChanges(gBong, L.defaultControl(), L.defaultAnom(), sgW), 0);
 assert.strictEqual(L.groupChanges(gBong, L.defaultControl(), Object.assign(L.defaultAnom(), { bigReturn: '300', cashNoSale: true }), Object.assign({}, sgW, { 'Stor panteretur': 9 })), 3);
 assert.strictEqual(L.groupChanges(gDisc, Object.assign(L.defaultControl(), { discWatch: '' }), L.defaultAnom(), sgW), 1);
-assert.ok(L.SETTING_GROUPS.every(g => g.fields.every(f => ['num', 'time', 'text', 'flag'].includes(f.kind) && ['ctl', 'anom'].includes(f.src))));
+assert.ok(L.SETTING_GROUPS.every(g => g.fields.every(f => ['num', 'time', 'text', 'flag', 'words'].includes(f.kind) && ['ctl', 'anom'].includes(f.src))));
 
 {
 // ---- v4: kjøpeutbytte, hendelsesord og ukjente linjer ----
@@ -749,6 +749,18 @@ assert.deepStrictEqual([dg.total, dg.v4], [3, 2]);
 assert.deepStrictEqual(dg.unk.map(u => [u.t, u.n]), [['Rar tekst', 2], ['Linje annullert', 1]]);
 assert.deepStrictEqual(dg.ev.map(e => [e.k, e.n, e.id]), [['annull', 1, evIt.transactionId]]);
 assert.deepStrictEqual(dg.ku, { with: 0, without: 2 });
+// ordliste: treff på starten av et ord, uavhengig av store/små bokstaver, æøå og doble bokstaver
+assert.deepStrictEqual(['Annullert av kasserer', 'SPØR PRIS', 'På  Vent!', 'Kansellert'].map(L.evNorm), ['anulert av kaserer', 'spor pris', 'pa vent', 'kanselert']);
+const txSc = sc4([], { tx: ['Annullert av kasserer', 'SPØR PRIS', 'Bong på vent', 'Kansellert', 'Panull 3', 'Takk for besøket'] });
+assert.deepStrictEqual(L.eventHits(txSc, L.wordList(L.DEFAULT_EV)).map(h => [h.k, h.t]), [['anull', 'Annullert av kasserer'], ['på vent', 'Bong på vent'], ['spør pris', 'SPØR PRIS'], ['kansell', 'Kansellert']], 'kanseller på samme linje gir ikke nytt treff; «Panull» er ikke starten av et ord');
+assert.deepStrictEqual(L.wordList(L.DEFAULT_EV), ['anull', 'makul', 'makulert', 'storn', 'parker', 'på vent', 'manuell', 'spør pris', 'overstyr', 'prisendring', 'kansell', 'kanseller', 'avbrutt']);
+const txIt = R4(1005, 1, '12', '2026-10-07', '09:10', 10, null), txMap = { [txIt.transactionId]: txSc };
+const own = L.wordList(L.DEFAULT_EV).filter(w => w !== 'anull' && w !== 'kansell' && w !== 'kanseller').concat(['takk']).join(', ');
+const ewOwn = L.eventWords([txIt], txMap, Object.assign(defaultControlOn(), { evWords: own }));
+assert.match(ewOwn.findings[0].detail, /«Bong på vent», «SPØR PRIS», «Takk for besøket»$/, 'egne ord: lagt til «takk», fjernet anull og kansell');
+assert.ok(!/Annullert|Kansellert/.test(ewOwn.findings[0].detail));
+assert.deepStrictEqual(L.eventWords([txIt], txMap, Object.assign(defaultControlOn(), { evWords: '' })).hits, 0, 'tom liste: ingen treff');
+assert.deepStrictEqual(L.diagnostics(txMap, ['takk']).ev.map(e => e.k), ['takk']);
 assert.strictEqual(L.groupForReason('Kasserer bruker eget medlemsnr'), 'member');
 assert.strictEqual(L.groupForReason('Hendelsesord på bong'), 'events');
 assert.strictEqual(L.groupForReason('Kjøpeutbytte avviker fra varesum'), 'ku');

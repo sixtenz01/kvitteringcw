@@ -326,6 +326,10 @@
   var EVENT_WORDS = /(annull|makul|storn|parker|på\s*vent|manuell|sp[øo]r\s*pris|overstyr|prisendring|kansell|avbrut)/i;
   var KNOWN_LABEL = /^(beskrivelse|totalt|sum|subtotal|mva|grunnlag|kj[øo]p|[øo]reavrunding|referanse|transid|retur vare|dato|tid)/i;
 
+  // Standard ordliste for hendelsesord. Kan endres under Innstillinger → Hendelsesord.
+  var WORDS_MAX = 1000;
+  var DEFAULT_EV = 'anull, makul, makulert, storn, parker, på vent, manuell, spør pris, overstyr, prisendring, kansell, kanseller, avbrutt';
+
   // v6: kort (cd) fra tekstlinjer med maskert kortnummer og kortleverandør. Bare det som står på bongen lagres (utstedernr og siste fire).
   var CARD_SCHEME = /\b(visa|master\s*card|maestro|bank\s*axept|amex|american\s*express|diners|jcb|unionpay)\b/i;
   var CARD_MASK = /(?:(\d{4,6})[\s*xX•#.-]*)?[*xX•#]{2,}[\s*xX•#.-]*(\d{4})(?!\d)/;
@@ -347,7 +351,8 @@
   function parseReceipt(rows) {
     var items = [], pay = {}, payN = 0, last = null, coupons = [], ev = [], unk = [], ku = null, kuCols = null;
     var vat = [], vatCols = null, rf = [], tot = null, rnd = 0, hasRnd = false, trunc = 0, discItems = [];
-    var sale = 0, ret = 0, saleLines = 0, retLines = 0, np = 0, neg = 0, cards = [], scheme = '';
+    var sale = 0, ret = 0, saleLines = 0, retLines = 0, np = 0, neg = 0, cards = [], scheme = '', tx = [];
+    var keepTx = function (t) { t = String(t || '').replace(/\s+/g, ' ').trim().slice(0, 80); if (t && tx.length < 15 && tx.indexOf(t) === -1) tx.push(t); };
     var note = function (c0) {
       var t = c0.replace(/\d+/g, '#').replace(/\s+/g, ' ').trim();
       if (!t || /^[#.:\-\/ ]*$/.test(t) || KNOWN_LABEL.test(t)) return;
@@ -356,6 +361,7 @@
     };
     var other = function (c0, cells) {
       var all = cells.join(' ').replace(/\s+/g, ' ').trim();
+      keepTx(all);
       var sch = cardScheme(all);
       if (sch) scheme = sch;
       var cm = CARD_MASK.exec(all), c4 = cm ? cm[2] : (CARD_LAST.exec(all) || [])[1];
@@ -434,6 +440,7 @@
       if (amount === null) { other(c0, cells); return; }
       if (/:\s*$/.test(c0)) {
         var label = c0.replace(/\s*:\s*$/, '').slice(0, 40);
+        keepTx(label + ':');
         var em = EVENT_WORDS.exec(label);
         if (em && ev.length < 6) { var er = { k: em[1].toLowerCase().replace(/\s+/g, ' '), t: (label + ': ' + amount).slice(0, 80) }; if (!ev.some(function (e) { return e.t === er.t; })) ev.push(er); }
         var ls = cardScheme(label);
@@ -469,13 +476,15 @@
     if (unk.length) out.unk = unk;
     if (rows && (rows.tl || rows.bl)) {
       var o2 = parseOutside(rows.tl, rows.bl);
-      out.v = 7;
+      out.v = 8;
+      outsideLines(rows.tl).concat(outsideLines(rows.bl)).forEach(keepTx);
       (o2.ev || []).forEach(function (e) { if (ev.length < 6 && !ev.some(function (x) { return x.t === e.t; })) ev.push(e); });
       if (ev.length) out.ev = ev;
       if (o2.hdr) out.hdr = o2.hdr;
       if (o2.ft) out.ft = o2.ft;
       if (o2.bu) out.bu = o2.bu;
     }
+    if (tx.length) out.tx = tx;
     return out;
   }
 
@@ -947,7 +956,7 @@
     ['priceDevPct', 'Pris avviker fra vanlig pris ≥ % (tom = av)', '10'], ['priceMinN', 'Pris: minst antall salg av varen per butikk og dag', '5'],
     ['priceCashN', 'Pris: kasserer ved ≥ antall avvik (tom = av)', '3'],
     ['kuMissing', 'Medlem uten kjøpeutbytte (tom = av)', '1'], ['kuDiffPct', 'Kjøpeutbytte-grunnlag avviker ≥ % (tom = av)', '25'], ['kuDiffKr', 'Kjøpeutbytte-grunnlag avviker ≥ kr', '20'],
-    ['evOn', 'Hendelsesord på bong (tom = av)', '1'],
+    ['evOn', 'Hendelsesord på bong (tom = av)', '1'], ['evWords', 'Hendelsesord (komma)', DEFAULT_EV],
     ['lineTol', 'Linjer mot Totalt: toleranse kr (tom = av)', '0.10'], ['payTol', 'Betaling mot Totalt: toleranse kr (tom = av)', '0.10'],
     ['vatOn', 'MVA-kontroll (tom = av)', '1'], ['vatTol', 'MVA: toleranse kr', '0.10'], ['vatRates', 'Gyldige MVA-satser % (komma)', '0,12,15,25'],
     ['refDup', 'Samme betalingsreferanse på flere bonger (tom = av)', '1'],
@@ -961,7 +970,7 @@
     ['specialWords', 'Spesialbetaling: ord (komma, tom = av)', DEFAULT_SPECIAL], ['specialN', 'Spesialbetaling: kasserer ved ≥ antall bonger (tom = av)', '3'],
     ['discHiFrom', 'Høy rabatt fra % (tom = av)', '70'], ['discHiTo', 'Høy rabatt til %', '100'],
     ['discMatchPct', 'Rabatt uten treff på andre salg: fra % (tom = av)', '30'], ['discMatchNR', 'Treff-test: bare rabatt uten årsak (tom = alle)', '1'],
-    ['campBongs', 'Mulig kampanje: samme vare med rabatt på ≥ antall bonger (tom = av)', '3'], ['campCashiers', 'Mulig kampanje: hos ≥ antall kasserere', '2'], ['campDay', 'Kampanjedag: andel bonger med rabatt ≥ % (tom = av)', '40'],
+    ['campBongs', 'Mulig kampanje: samme vare med rabatt på ≥ antall bonger (tom = av)', '3'], ['campCashiers', 'Mulig kampanje: hos ≥ antall kasserere', '2'], ['campDay', 'Kampanjedag: andel bonger med rabatt ≥ % (tom = av)', '40'], ['campAuto', 'Kampanjevare automatisk (tom = spør)', '1'],
     ['askDevPct', 'Spør pris avviker fra dagens salg ≥ % (tom = av)', '5'], ['askMinN', 'Spør pris: minst antall salg av varen samme dag', '3'], ['askN', 'Spør pris: kasserer ved ≥ antall bonger (tom = av)', '5'],
     ['cardRetN', 'Returer på samme kort ≥ antall (tom = av)', '3'], ['cardRetDays', 'Returer på samme kort innen dager', '30'],
     ['manualWords', 'Manuell kvittering: ord (komma, tom = av)', 'manuell kvittering, manuell bong, til gode, tilgode'], ['manualDays', 'Manuell kvittering: match innen dager', '3'],
@@ -1035,6 +1044,7 @@
       sf('discMatchNR', 'ctl', 'flag', 'Treff-testen gjelder bare rabatt uten årsak', '', 'Av = alle rabatter, også med årsak.'),
       sf('campBongs', 'ctl', 'num', 'Mulig kampanje: samme vare med rabatt på minst', 'bonger', 'Over alle innlastede dager og butikker. Bongen flagges med notat om mulig sentral kampanje, og du blir spurt om det stemmer.', true),
       sf('campCashiers', 'ctl', 'num', 'Mulig kampanje: hos minst', 'kasserere', 'Samme vare og rabatt hos flere kasserere tyder på kampanje fra sentralt hold, ikke på én person.'),
+      sf('campAuto', 'ctl', 'flag', 'Klassifiser automatisk som kampanjevare', '', 'Selger flere enn én kasserer samme vare med rabatt på flere enn to ulike bonger (grensene over), regnes varen som kampanjevare uten å spørre. Rabatten flagges ikke. Du kan merke en vare som «ikke kampanje».'),
       sf('campDay', 'ctl', 'num', 'Kampanjedag: andel bonger med rabatt over', '%', 'Minst 30 salg den dagen. Rabatter den dagen får notat om mulig kampanjedag.', true)
     ], weights: ['Rabatt uten årsak', 'Mange rabatter uten årsak', 'Rabatt med overvåket årsak', 'Mange rabatter med overvåket årsak', 'Høy rabattprosent', 'Rabatt uten treff på andre salg'] },
     { id: 'member', title: 'Medlemsnummer', text: 'Misbruk av medlemsnummer, for eksempel at en ansatt taster sitt eget på kunders kjøp. Bruker bare listen fra CW og trenger ikke skanning. Gjelder alle innlastede bonger i valgte butikker.', fields: [
@@ -1055,8 +1065,9 @@
       sf('kuDiffPct', 'ctl', 'num', 'Grunnlag avviker fra vanlig forhold til varesum med minst', '%', '', true),
       sf('kuDiffKr', 'ctl', 'num', 'og minst', 'kr')
     ], weights: ['Medlem uten kjøpeutbytte', 'Kjøpeutbytte avviker fra varesum'] },
-    { id: 'events', title: 'Hendelsesord', text: 'Tekstlinjer på bongen med ord som annullert, makulert, parkert, manuell eller spør pris. Slike hendelser er ikke observert ennå; testen fanger dem når de dukker opp. Se Diagnostikk for ukjente linjer.', fields: [
-      sf('evOn', 'ctl', 'flag', 'Test på', '', 'Ord: annull, makul, storn, parker, på vent, manuell, spør pris, overstyr, prisendring, kansell, avbrutt.')
+    { id: 'events', title: 'Hendelsesord', text: 'Tekstlinjer på bongen, også betalingslinjer og topp/bunn, med ord fra ordlisten (annullert, makulert, parkert, manuell, spør pris …). Ordlisten kan endres. Slike hendelser er ikke observert ennå; testen fanger dem når de dukker opp. Se Diagnostikk for ukjente linjer.', fields: [
+      sf('evOn', 'ctl', 'flag', 'Test på', ''),
+      sf('evWords', 'ctl', 'words', 'Ord som gir reaksjon', '', 'Legg til og fjern ord. Treff på starten av et ord, uavhengig av store og små bokstaver, æøå og doble bokstaver («anull» treffer «Annullert»).', true)
     ], weights: ['Hendelsesord på bong'] },
     { id: 'ledger', title: 'Bongen går opp, MVA og betalingsreferanse', text: 'Regnskapet på hver bong: linjene mot Totalt, betalingene mot Totalt, MVA-tabellen, og samme betalingsreferanse på flere bonger. Krever skanning (ny skanning). Hver kontroll kalibrerer seg mot de skannede bongene.', fields: [
       sf('lineTol', 'ctl', 'num', 'Linjer mot Totalt: toleranse', 'kr', 'Summen av varelinjene (etter rabatt, pluss øreavrunding) skal være lik Totalt.', true),
@@ -1160,7 +1171,7 @@
   function sanitizeControl(raw) {
     var d = defaultControl();
     if (!raw || typeof raw !== 'object') return d;
-    Object.keys(d).forEach(function (k) { if (k in raw) d[k] = String(raw[k]).slice(0, 200); });
+    Object.keys(d).forEach(function (k) { if (k in raw) d[k] = String(raw[k]).slice(0, k === 'evWords' ? WORDS_MAX : 200); });
     return d;
   }
 
@@ -1979,7 +1990,7 @@
   }
 
   function campaigns(pop, scanMap, cfg, decisions) {
-    var nB = cnum(cfg.campBongs, null), nC = cnum(cfg.campCashiers, 2), dShare = cnum(cfg.campDay, null), dMin = 30, dec = decisions || {};
+    var nB = cnum(cfg.campBongs, null), nC = cnum(cfg.campCashiers, 2), dShare = cnum(cfg.campDay, null), dMin = 30, dec = decisions || {}, auto = hasNum(cfg.campAuto);
     var item = {}, day = {};
     (pop || []).forEach(function (it) {
       if (!isSale(it)) return;
@@ -2003,8 +2014,9 @@
       e.rate = e.rates[0].rate; e.rateText = ratesText(e.rates);
       e.n = Object.keys(e.bongs).length; e.cashierN = Object.keys(e.cashiers).length; e.storeN = Object.keys(e.stores).length; e.dayN = Object.keys(e.days).length;
       delete e.rateBongs; delete e.bongs; delete e.cashiers; delete e.stores; delete e.days;
-      e.status = dec[k] || '';
-      e.possible = e.status !== 'ikke' && nB !== null && e.n >= nB && e.cashierN >= nC;
+      e.possible = dec[k] !== 'ikke' && nB !== null && e.n >= nB && e.cashierN >= nC;
+      // 'auto' = kampanjevare uten å spørre: flere enn én kasserer, flere enn to bonger (grensene), og ikke avvist av brukeren
+      e.status = dec[k] || (auto && e.possible ? 'auto' : '');
       return e;
     });
     // svar på varer som ikke finnes i dataene nå, så de kan angres
@@ -2027,6 +2039,7 @@
         if (discRate(l) === null || !isEan(l.c)) return '';
         if (dec[campKey(l.c)] === 'kampanje') return 'kampanje';
         var e = byKey[campKey(l.c)];
+        if (e && e.status === 'auto') return 'kampanje';
         return e && e.possible ? 'mulig' : '';
       },
       entry: function (l) { return discRate(l) === null ? null : byKey[campKey(l.c)] || null; }
@@ -2172,7 +2185,7 @@
     var matrixRows = Object.keys(matrix).sort(numCmp).map(function (id) { return { id: id, counts: matrix[id] }; });
     var campRows = Object.keys(camps).map(function (k) { return camps[k]; }).sort(function (a, b) { return b.n - a.n || String(a.id).localeCompare(String(b.id)); });
     return { rows: rows, total: { n: tot.n, withDisc: tot.withDisc, disc: round2(tot.disc), withW: tot.withW, withNR: tot.withNR, nr: round2(tot.nr), withCpn: tot.withCpn, cpn: tot.cpn, cpnSum: round2(tot.cpnSum), share: storeShare },
-      camp: { items: camp.itemRows, days: camp.dayRows, skipped: skipped, pending: camp.itemRows.filter(function (e) { return !e.status; }).length, confirmed: camp.itemRows.filter(function (e) { return e.status === 'kampanje'; }).length, denied: camp.itemRows.filter(function (e) { return e.status === 'ikke'; }).length }, watch: watch, campaigns: campRows, reasons: reasonRows, matrix: { cols: cols, rows: matrixRows }, findings: findings, coverage: sales ? scannedSales / sales : 1, sales: sales, scanned: scannedSales };
+      camp: { items: camp.itemRows, days: camp.dayRows, skipped: skipped, pending: camp.itemRows.filter(function (e) { return !e.status; }).length, confirmed: camp.itemRows.filter(function (e) { return e.status === 'kampanje'; }).length, auto: camp.itemRows.filter(function (e) { return e.status === 'auto'; }).length, denied: camp.itemRows.filter(function (e) { return e.status === 'ikke'; }).length }, watch: watch, campaigns: campRows, reasons: reasonRows, matrix: { cols: cols, rows: matrixRows }, findings: findings, coverage: sales ? scannedSales / sales : 1, sales: sales, scanned: scannedSales };
   }
 
   // ---- medlemsnummer, pris per vare, kjøpeutbytte og hendelsesord ----------------------------
@@ -2375,17 +2388,43 @@
 
   // Ord som annullert, makulert, parkert, manuell og spør pris på tekstlinjer. Ikke observert ennå.
   // covered: bonger som allerede er flagget av «spør pris» eller «manuell kvittering»; ordene deres telles ikke to ganger.
+  // Ord og tekst sammenlignes uten store/små bokstaver, med æøå som ae/o/a og doble bokstaver som én («anull» treffer «Annullert»).
+  function evNorm(t) {
+    return String(t || '').toLowerCase().replace(/æ/g, 'ae').replace(/[øö]/g, 'o').replace(/[åä]/g, 'a').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, ' ').replace(/([a-z])\1+/g, '$1').trim();
+  }
+  var EV_RE = {};
+  // Tekstlinjene på bongen (ikke varenavn): lagrede tekstlinjer (tx), ellers hendelseslinjer, ukjente linjer og topp/bunn fra eldre skanninger.
+  function eventHits(sc, words) {
+    var hits = [];
+    if (!sc || !words || !words.length) return hits;
+    var lines = (sc.tx && sc.tx.length ? sc.tx : (sc.ev || []).map(function (e) { return e.t; }).concat(sc.unk || [], sc.bu || []))
+      .concat(Object.keys(sc.pay || {}).map(function (k) { return k + ':'; }));
+    // ett treff per ord og per linje: «kansell» og «kanseller» på samme linje gir ett treff
+    var seen = {}, used = {}, norm = lines.map(evNorm);
+    words.forEach(function (w) {
+      var nw = evNorm(w);
+      if (!nw || seen[nw]) return;
+      seen[nw] = true;
+      var re = EV_RE[nw] || (EV_RE[nw] = new RegExp('(^| )' + nw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+      for (var i = 0; i < norm.length; i++) if (re.test(norm[i])) { if (!used[i]) { used[i] = true; hits.push({ k: w, t: lines[i].slice(0, 80) }); } break; }
+    });
+    return hits;
+  }
+
   function eventWords(items, scanMap, cfg, covered) {
-    var res = { findings: [], scanned: 0, hits: 0, covered: 0 };
+    var res = { findings: [], scanned: 0, hits: 0, covered: 0, words: wordList(cfg.evWords) };
+    var words = res.words;
     items.forEach(function (it) {
       var sc = scanMap && scanMap[it.transactionId];
       if (!hasV4(sc)) return;
       res.scanned++;
-      if (!sc.ev || !sc.ev.length) return;
+      var all = eventHits(sc, words);
+      if (!all.length) return;
       res.hits++;
       if (!hasNum(cfg.evOn)) return;
       var own = covered && covered[it.transactionId];
-      var evs = sc.ev.filter(function (e) { return !(own && /manuell|sp[øo]r\s*pris/i.test(e.k)); });
+      var evs = all.filter(function (e) { return !(own && /manuell|sp[øo]r\s*pris/i.test(e.k)); });
       if (!evs.length) { res.covered++; return; }
       res.findings.push({ kind: 'Hendelse', code: 'event', title: 'Hendelsesord på bong', flag: true,
         detail: whereText(it) + ': ' + evs.map(function (e) { return '«' + e.t + '»'; }).join(', '), ids: [it.transactionId] });
@@ -2882,7 +2921,7 @@
   }
 
   // Samler ukjente linjer og hendelsesord fra alle skanninger, til diagnostikk-dialogen.
-  function diagnostics(scanMap) {
+  function diagnostics(scanMap, words) {
     var d = { total: 0, v4: 0, v7: 0, unk: {}, ev: {}, bu: {}, hdr: 0, ft: { term: 0, auth: 0, modes: {} }, ku: { with: 0, without: 0 }, types: {} };
     Object.keys(scanMap || {}).forEach(function (id) {
       var sc = scanMap[id];
@@ -2896,7 +2935,7 @@
         (sc.bu || []).forEach(function (t) { var e = d.bu[t] || (d.bu[t] = { t: t, n: 0, id: id }); e.n++; });
       }
       (sc.unk || []).forEach(function (t) { var e = d.unk[t] || (d.unk[t] = { t: t, n: 0, id: id }); e.n++; });
-      (sc.ev || []).forEach(function (x) { var e = d.ev[x.t] || (d.ev[x.t] = { k: x.k, t: x.t, n: 0, id: id }); e.n++; });
+      (words ? eventHits(sc, words) : (sc.ev || [])).forEach(function (x) { var e = d.ev[x.t] || (d.ev[x.t] = { k: x.k, t: x.t, n: 0, id: id }); e.n++; });
       if (sc.ku) d.ku.with++; else d.ku.without++;
     });
     var list = function (o) { return Object.keys(o).map(function (k) { return o[k]; }).sort(function (a, b) { return b.n - a.n || String(a.t).localeCompare(String(b.t)); }); };
@@ -3429,6 +3468,9 @@
     campAsk: campAsk,
     wordList: wordList,
     DEFAULT_SPECIAL: DEFAULT_SPECIAL,
+    DEFAULT_EV: DEFAULT_EV, WORDS_MAX: WORDS_MAX,
+    eventHits: eventHits,
+    evNorm: evNorm,
     ledger: ledger,
     diagnostics: diagnostics,
     channelStats: channelStats,

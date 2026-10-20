@@ -115,7 +115,8 @@ const E1 = '7038010000010', E2 = '7038010000027', E3 = '7038010000034', E4 = '70
   rows.tl = ['Coop Mega Kolbotn', 'Butikk: 1003, Kassenr: 4, Kasserer: 12', 'Medlemsnr.: 123456', 'Kvittering: 2371 02.10.2026 22:04:15'];
   rows.bl = ['Terminal: T123456', 'Aut.kode: A1B2C3', 'Kontaktløs', 'Visa', 'Takk for besøket'];
   const r = L.parseReceipt(rows);
-  assert.strictEqual(r.v, 7);
+  assert.strictEqual(r.v, 8);
+  assert.ok(r.tx.includes('Takk for besøket') && r.tx.includes('Kontaktløs'), 'tekstlinjer tas vare på for hendelsesord');
   assert.deepStrictEqual(r.hdr, { s: '1003', w: '4', c: '12', m: '123456' });
   assert.deepStrictEqual(r.ft, { t: 'T123456', a: 'A1B2C3', e: ['kontaktløs'] });
   assert.ok(r.bu.includes('Takk for besøket') && r.bu.includes('Coop Mega Kolbotn'));

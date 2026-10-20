@@ -1539,6 +1539,7 @@
   function campTable(list) {
     return tbl(['Vare', 'Rabatt', 'Bonger', 'Kasserere', 'Butikker', 'Dager', 'Svar'], list.map(function (c) {
       var ans = !c.status ? el('span', { class: 'kvr-row' }, [btn('Ja', function () { setCamp(c.key, 'kampanje', c.n); }, 'kvr-sm kvr-primary'), btn('Nei', function () { setCamp(c.key, 'ikke', c.n); }, 'kvr-sm')])
+        : c.status === 'auto' ? el('span', {}, [document.createTextNode('Kampanjevare (automatisk) '), btn('Ikke kampanje', function () { setCamp(c.key, 'ikke', c.n); }, 'kvr-sm')])
         : el('span', {}, [document.createTextNode((c.status === 'kampanje' ? 'Kampanje ' : 'Ikke kampanje ')), btn('Angre', function () { setCamp(c.key, '', c.n); }, 'kvr-sm')]);
       return [{ node: el('span', { title: 'EAN ' + c.c }, [document.createTextNode(c.name || c.c)]) }, c.rateText || '–', c.n, c.cashierN, c.storeN, c.dayN, { node: ans }];
     }));
@@ -1585,11 +1586,12 @@
       box.appendChild(tbl(['Kupong-id', 'Navn', 'Bonger', 'Sum kr'], D.campaigns.slice(0, 10).map(function (c) { return [c.id, c.name, c.n, fmt(c.sum)]; })));
     }
     if (D.camp && (D.camp.items.length || D.camp.days.length)) {
-      box.appendChild(el('b', { class: 'kvr-subh', text: 'Mulige sentrale kampanjer' }));
+      box.appendChild(el('b', { class: 'kvr-subh', text: ctlCfg.campAuto ? 'Kampanjevarer' : 'Mulige sentrale kampanjer' }));
       if (D.camp.pending) box.appendChild(el('div', { class: 'kvr-notice' }, [el('span', { text: D.camp.pending + (D.camp.pending === 1 ? ' vare venter' : ' varer venter') + ' på svar: er det en kampanje fra sentralt hold?' }), btn('Svar nå', openCampDialog, 'kvr-sm kvr-primary')]));
       if (D.camp.items.length) box.appendChild(campTable(D.camp.items.slice(0, 12)));
       if (D.camp.days.length) box.appendChild(tbl(['Kampanjedag', 'Butikk', 'Dag', 'Andel', 'Bonger'], D.camp.days.slice(0, 8).map(function (d) { return ['Mange bonger med rabatt', sLabel(d.store), d.day, pct(d.share), d.withDisc + ' av ' + d.n]; })));
-      box.appendChild(hintEl('Samme vare med rabatt på minst ' + (ctlCfg.campBongs || '–') + ' bonger hos minst ' + ctlCfg.campCashiers + ' kasserere (over alle dager og butikker) kan være en kampanje fra sentralt hold. Bongene tas med i analysen med et notat, og du blir spurt. Svaret gjelder varen, uansett rabattprosent. Svar Ja: rabatten flagges ikke lenger og telles ikke mot kassereren (' + D.camp.confirmed + ' bekreftet). Svar Nei: flagges som vanlig (' + D.camp.denied + ' avvist). En dag der minst ' + (ctlCfg.campDay || '–') + ' % av minst 30 salg har rabatt får bare notat.'));
+      if (ctlCfg.campAuto) box.appendChild(hintEl(D.camp.auto + ' varer er klassifisert som kampanjevare: flere enn én kasserer (minst ' + ctlCfg.campCashiers + ') har solgt varen med rabatt på flere enn to ulike bonger (minst ' + (ctlCfg.campBongs || '–') + '). Rabatten på dem flagges ikke. Trykk «Ikke kampanje» for å flagge som vanlig. Slå av under Innstillinger → Rabatt for å bli spurt i stedet.'));
+      box.appendChild(hintEl('Samme vare med rabatt på minst ' + (ctlCfg.campBongs || '–') + ' bonger hos minst ' + ctlCfg.campCashiers + ' kasserere (over alle dager og butikker) kan være en kampanje fra sentralt hold. Uten automatisk kampanjevare tas bongene med i analysen med et notat, og du blir spurt. Svaret gjelder varen, uansett rabattprosent. Svar Ja: rabatten flagges ikke lenger og telles ikke mot kassereren (' + D.camp.confirmed + ' bekreftet). Svar Nei: flagges som vanlig (' + D.camp.denied + ' avvist). En dag der minst ' + (ctlCfg.campDay || '–') + ' % av minst 30 salg har rabatt får bare notat.'));
     }
     box.appendChild(hintEl('Rabatt = linjen «Rabatt: Kr x (y %)» på en vare med årsak 1 Datovare, 2 Feil pris, 3 Prisløfte, 4 Reserveløsning kupong, 5 Annen rabattårsak eller 6 Best før (tom = ingen årsak valgt). Klikk en årsak for å filtrere listen. Kupong = linjen «Kupong (id - navn)», antatt lagt inn sentralt (CN/VPI); beløpet er ofte 0,00, så den viser at kampanjen er knyttet til bongen, ikke at den er innløst. Rødt = andel bonger med rabatt uten årsak er minst ' + ctlCfg.profFactor + '× butikkens (minst ' + ctlCfg.profMin + ' bonger). Funn «Rabatt uten årsak» krever minst ' + (ctlCfg.discPct || '–') + ' % rabatt. «Høy rabattprosent» flagger ' + (ctlCfg.discHiFrom ? ctlCfg.discHiFrom + '–' + ctlCfg.discHiTo + ' %' : 'ingenting (av)') + '. «Rabatt uten treff» krever minst ' + (ctlCfg.discMatchPct || '–') + ' % og at ingen andre bonger samme dag har varen med samme rabatt. Søk på rabatt-prosent under Skann.'));
   }
@@ -1943,7 +1945,7 @@
   }
 
   function openDiag() {
-    var D = L.diagnostics(scanMap);
+    var D = L.diagnostics(scanMap, L.wordList(ctlCfg.evWords));
     var body = el('div', { class: 'kvr-secbody' });
     var TC = L.timeCheck(recs.map(function (r) { return r.item; }), scanMap);
     body.appendChild(el('b', { class: 'kvr-subh', text: 'Klokkeslett: liste mot bong' }));
@@ -2510,6 +2512,8 @@
     if (L.memberKey(it)) box.appendChild(el('div', { class: 'kvr-rc-meta', text: 'Medlemsnr. ' + L.memberKey(it) }));
     sep();
     // linje og motlinje med samme kode og beløp er slettet; de k første positive og negative linjene per nøkkel merkes
+    var camp = {};
+    ((ctlRes && ctlRes.disc && ctlRes.disc.camp && ctlRes.disc.camp.items) || []).forEach(function (e) { if (e.status === 'kampanje' || e.status === 'auto') camp[e.key] = true; });
     var pos = {}, neg = {}, cx = L.cancelled(sc);
     cx.items.concat(cx.pant).forEach(function (c) { var k = c.c + '|' + Math.round(c.a * 100); pos[k] = c.k; neg[k] = c.k; });
     (sc.items || []).forEach(function (l) {
@@ -2519,11 +2523,12 @@
       if (del) { cls = 'kvr-rc-del'; tags.push(tag('slettet')); if (kind === 'mach' && l.a < 0) cls += ' kvr-rc-hit'; }
       if (kind === 'man' && l.a < 0) { cls += ' kvr-rc-hit'; tags.push(tag('manuell 99')); }
       if (!del && l.a < 0 && !kind && !/PANT/i.test(l.n)) tags.push(tag('retur'));
+      if (l.d && camp[L.campKey(l.c)]) tags.push(tag('kampanjevare'));
       row(l.n, fmt(l.a), cls.trim(), tags, l.c + ' ' + l.n);
       if (typeof l.q === 'number' && typeof l.p === 'number') sub(String(l.q).replace('.', ',') + ' à ' + fmt(l.p), '');
       if (l.d) {
         sub('Rabatt' + (typeof l.dp === 'number' ? ' ' + String(l.dp).replace('.', ',') + ' %' : ''), '−' + fmt(l.d));
-        sub(l.dr ? 'Årsak: ' + L.reasonName(l.dr) : 'Uten årsak', '', l.dr ? '' : 'kvr-rc-hit');
+        sub(l.dr ? 'Årsak: ' + L.reasonName(l.dr) : camp[L.campKey(l.c)] ? 'Kampanjevare' : 'Uten årsak', '', l.dr || camp[L.campKey(l.c)] ? '' : 'kvr-rc-hit');
       }
     });
     if (sc.trunc) box.appendChild(el('div', { class: 'kvr-rc-meta', text: '… ' + sc.trunc + ' linjer til er ikke lest' }));
@@ -2545,7 +2550,7 @@
       if (sc.ft.a) sub('Autorisasjon ' + sc.ft.a, '');
       if (sc.ft.e) sub(sc.ft.e.join(', '), '');
     }
-    (sc.ev || []).forEach(function (e) { sub(e.t, '', 'kvr-rc-hit'); });
+    L.eventHits(sc, L.wordList(ctlCfg.evWords)).forEach(function (e) { sub(e.t, '', 'kvr-rc-hit'); });
     return box;
   }
 
@@ -3244,6 +3249,32 @@
     var right = el('div', { class: 'kvr-set-c' });
     var row = el('div', { class: 'kvr-set-row' + (isDef() ? '' : ' kvr-changed') }, [left, right]);
     var put = function (v) { cfgOf(src)[f.k] = v; saveCfg(src); row.classList.toggle('kvr-changed', !isDef()); markStale(); refresh(); };
+    if (f.kind === 'words') {
+      // ordliste: hvert ord som en brikke med ×, og et felt for å legge til (komma gir flere på en gang)
+      row.classList.add('kvr-set-words');
+      var wrap = el('div', { class: 'kvr-words' });
+      var draw = function () {
+        wrap.innerHTML = '';
+        var list = L.wordList(cur());
+        if (!list.length) wrap.appendChild(el('span', { class: 'kvr-set-h', text: 'Tom liste: testen gir ingen treff.' }));
+        list.forEach(function (w, i) {
+          wrap.appendChild(el('span', { class: 'kvr-word' }, [document.createTextNode(w), el('button', { type: 'button', class: 'kvr-word-x', 'aria-label': 'Fjern ' + w, title: 'Fjern', text: '×', onclick: function () { var l = L.wordList(cur()); l.splice(i, 1); put(l.join(', ')); draw(); } })]));
+        });
+        var add = el('input', { type: 'text', 'aria-label': f.label + ': nytt ord', placeholder: 'nytt ord' });
+        var doAdd = function () {
+          var l = L.wordList(cur());
+          L.wordList(add.value).forEach(function (w) { if (l.indexOf(w) === -1) l.push(w); });
+          if (l.join(', ').length > L.WORDS_MAX) { add.value = ''; add.placeholder = 'listen er full'; return; }
+          put(l.join(', ')); draw();
+          var n = wrap.querySelector('input'); if (n) n.focus();
+        };
+        add.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); doAdd(); } });
+        wrap.appendChild(el('span', { class: 'kvr-row' }, [add, btn('Legg til', doAdd, 'kvr-sm')]));
+      };
+      draw();
+      right.appendChild(wrap);
+      return row;
+    }
     if (f.kind === 'flag') {
       var fb = el('input', { type: 'checkbox' });
       fb.checked = src === 'anom' ? !!cur() : cur() !== '';
@@ -4321,7 +4352,7 @@
       if (db) {
         mem = await readAll(db, 'kv');
         var raw = await readAll(db, 'scan');
-        Object.keys(raw).forEach(function (k) { if (raw[k] && (raw[k].v >= 2 && raw[k].v <= 7)) scanMap[k] = raw[k]; });
+        Object.keys(raw).forEach(function (k) { if (raw[k] && (raw[k].v >= 2 && raw[k].v <= 8)) scanMap[k] = raw[k]; });
       }
       migrateLocal();
       rules = L.sanitizeRules(store(K.rules));

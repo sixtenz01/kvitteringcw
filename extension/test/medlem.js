@@ -108,7 +108,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   await page.click('[data-sec=misc] button:text-is("Diagnostikk: ukjente linjer…")');
   const dlg = await txt('.kvr-dlg');
   assert.match(dlg, /29 av 29 skannede bonger har ny skanningsdata/);
-  assert.match(dlg, /annull 1 Linje annullert av kasserer 1005-1-29/);
+  assert.match(dlg, /anull 1 Linje annullert av kasserer 1005-1-29/);
   assert.match(dlg, /Linje annullert av kasserer 1 1005-1-29/);
   await page.click('.kvr-dlg button:text-is("Lukk")');
 

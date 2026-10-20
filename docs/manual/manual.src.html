@@ -277,7 +277,7 @@
 <ul>
   <li><strong>Bongen flagges</strong> når en rabattlinje uten årsak har en rabattprosent på minst 30 % (Innstillinger → Rabatt, «Rabatt uten årsak fra»; tom = av). Rabatter under grensen flagges ikke. Testen bruker prosenten som er trykt på rabattlinjen. En linje uten trykt prosent vurderes i stedet av «Høy rabattprosent» og «Rabatt uten treff», som regner prosenten ut fra beløpene.</li>
   <li><strong>Kassereren markeres</strong> (ikke bongen) når andelen av hans eller hennes bonger med rabatt uten årsak er minst 1,5 ganger butikkens andel, med minst 5 bonger og minst 2 bonger med rabatt uten årsak. Det står i kassererprofilen som «Mange rabatter uten årsak», og kan slås av med «Sammenlign kasserere».</li>
-  <li><strong>Mulig sentral kampanje:</strong> er samme vare solgt med rabatt hos flere kasserere, får bongen et notat og du blir spurt (under). Svarer du Ja, flagges ikke varen, og den teller ikke mot kassereren.</li>
+  <li><strong>Kampanjevare:</strong> selger flere enn én kasserer samme vare med rabatt på flere enn to ulike bonger, klassifiseres varen automatisk som kampanjevare. Rabatten flagges ikke, og den teller ikke mot kassereren (under).</li>
   <li><strong>Bonger som ikke er skannet</strong> ses ikke. Dekningsgraden i kortet Rabatter og kuponger viser hvor mange salg som er vurdert.</li>
 </ul>
 <h3>Høy rabatt, rabatt uten treff og kampanje</h3>
@@ -287,11 +287,16 @@
   <tbody>
     <tr><td>Høy rabattprosent</td><td>Rabattlinjer mellom to grenser (standard 70 til 100 %), med eller uten årsak. Overvåker rabatter som nesten gir varen bort.</td></tr>
     <tr><td>Rabatt uten treff på andre salg</td><td>En vare med minst 30 % rabatt der ingen andre bonger i butikken samme dag har samme vare med samme rabatt. Samme rabatt på andre dager står i forklaringen. Kan være feil eller underslag. Standard er bare rabatt uten årsak.</td></tr>
-    <tr><td>Mulig sentral kampanje</td><td>Samme vare med rabatt (hvilken som helst prosent) på minst 3 bonger hos minst 2 kasserere, over alle dager og butikker. Bongene tas med i analysen, men får et notat, og du blir spurt om det er en kampanje fra sentralt hold.</td></tr>
+    <tr><td>Kampanjevare</td><td>Samme vare med rabatt (hvilken som helst prosent) på minst 3 ulike bonger hos minst 2 kasserere, over alle dager og butikker. Standard: varen klassifiseres automatisk som kampanjevare, og rabatten flagges ikke. Slår du av «Klassifiser automatisk som kampanjevare», tas bongene med i analysen med et notat, og du blir spurt.</td></tr>
 
   </tbody></table></div>
-<h3>Kan det være en sentral kampanje?</h3>
-<p>Rabatt uten årsak kan skyldes en kampanje fra sentralt hold. Er samme vare solgt med rabatt på flere bonger hos flere kasserere, er det trolig en kampanje og ikke én person som gir rabatt. Pluginen gjør slik:</p>
+<h3>Kampanjevare</h3>
+<p>Rabatt uten årsak kan skyldes en kampanje fra sentralt hold. Er samme vare solgt med rabatt på flere bonger hos flere kasserere, er det trolig en kampanje og ikke én person som gir rabatt.</p>
+<ul>
+  <li><strong>Automatisk (standard):</strong> selger flere enn én kasserer samme vare med rabatt på flere enn to ulike bonger, er varen en <em>kampanjevare</em>. Rabatten flagges ikke, telles ikke mot kassereren, og linjen merkes «kampanjevare» i kvitteringsvisningen. Bare salg med rabatt telles. Grensene er «Mulig kampanje: … bonger» (3) og «… kasserere» (2) under Innstillinger → Rabatt.</li>
+  <li><strong>Ikke kampanje:</strong> i tabellen «Kampanjevarer» i kortet Rabatter og kuponger står «Kampanjevare (automatisk)» med knappen <em>Ikke kampanje</em>. Da flagges rabatten som vanlig. Svaret huskes, og <em>Angre</em> setter varen tilbake.</li>
+</ul>
+<p>Slår du av «Klassifiser automatisk som kampanjevare», spør pluginen i stedet:</p>
 <ul>
   <li><strong>Bongen tas med.</strong> Rabatten flagges som vanlig, men får et notat: «Kan være sentral kampanje: «Kaffe» med 40 % og 33 % rabatt er på 14 bonger hos 5 kasserere».</li>
   <li><strong>Du blir spurt.</strong> Under bongen i Sjekk først står <em>Ja, kampanje</em> og <em>Nei, ikke kampanje</em>. Et varsel i Analyse-kortet og kortet Rabatter og kuponger har knappen <em>Svar nå</em>, som åpner en liste med alle mulige kampanjer.</li>
@@ -340,7 +345,7 @@
 {{shotw:d-misc}}
 <p>Annullert bong, manuell pris, parkert bong og spør pris er ikke observert i ekte data ennå, og vi vet ikke om Lindbak viser dem på bongen. Pluginen setter derfor ut to feller:</p>
 <ul>
-  <li><strong>Hendelsesord:</strong> tekstlinjer (ikke varenavn) med ord som annullert, makulert, parkert, på vent, manuell, spør pris, overstyr, prisendring eller kansell flagges. Ordene «manuell» og «spør pris» telles ikke her på bonger som allerede er flagget av «Spør pris» eller «Manuell kvittering».</li>
+  <li><strong>Hendelsesord:</strong> tekstlinjer (ikke varenavn), betalingslinjer, topptekst og bunntekst med et ord fra ordlisten flagges. Standardlisten er anull, makul, makulert, storn, parker, på vent, manuell, spør pris, overstyr, prisendring, kansell, kanseller og avbrutt. Under Innstillinger → Hendelsesord fjerner du et ord med × og legger til et nytt med Enter eller «Legg til». Ordet treffer på starten av et ord, uavhengig av store og små bokstaver, æøå og doble bokstaver: «anull» treffer «Annullert». Ordene «manuell» og «spør pris» telles ikke her på bonger som allerede er flagget av «Spør pris» eller «Manuell kvittering».</li>
   <li><strong>Ukjente linjer:</strong> linjer pluginen ikke kjenner igjen samles opp, med tall byttet mot #.</li>
 </ul>
 <p>Åpne <strong>Diagnostikk</strong> fra kortet «Pris, kjøpeutbytte og hendelser» eller fra Innstillinger → Generelt. Der ser du først en sammenligning av klokkeslettet i listen og på bongen, så en kanaltabell (saleChannel) med antall bonger, typer, butikker, kasser, snittbeløp, medlemsandel og returer per kanal, med rådata for tid (type og ulike verdier), så betalingsmåtene på bongene (sammenlignet med navnene i CWs filter hvis listen er lastet), hva som er lest av topptekst og bunn (terminal-ID, autorisasjonskode, inngangsmåte) med linjer utenfor tabellene pluginen ikke kjenner igjen, og til slutt hendelsesord og ukjente linjer med antall og et eksempel på bongnummer. Betydningen av kanalkodene er ikke bekreftet; tabellen inneholder ingen kasserer- eller medlemsnumre. «Kopier som tekst» gir en liste du kan dele, slik at testene kan utvides med det Lindbak faktisk viser. Listen inneholder ingen varenavn eller beløp, men bongnummer.</p>
@@ -581,14 +586,14 @@
   <dt>Pantelapp 99 og 399</dt><dd>Kode 99 er en pantelapp lagt inn manuelt av kassereren. Kode 399 kommer fra pantemaskinen.</dd>
   <dt>Motlinje</dt><dd>En linje med samme kode og beløp, men motsatt fortegn, som sletter en tidligere linje på samme bong.</dd>
   <dt>Kampanjedag</dt><dd>En dag og butikk der minst 40 % av minst 30 salg har rabatt. Rabattene flagges fortsatt, men får et notat om mulig kampanjedag.</dd>
-  <dt>Mulig sentral kampanje</dt><dd>Samme vare med rabatt på minst 3 bonger hos minst 2 kasserere. Bongen tas med, får et notat, og du svarer Ja eller Nei. Svaret gjelder varen på alle bonger.</dd>
+  <dt>Kampanjevare</dt><dd>Samme vare med rabatt på minst 3 ulike bonger hos minst 2 kasserere. Klassifiseres automatisk, og rabatten flagges ikke. Uten automatikk får bongen et notat, og du svarer Ja eller Nei. Svaret gjelder varen på alle bonger.</dd>
   <dt>Samme forhold</dt><dd>Tester som måler det samme (for eksempel kontant tilbake uten salg og slettede linjer). Bare den høyeste teller i poengene; de andre vises overstrøket.</dd>
   <dt>Nivå og avdelingsnummer</dt><dd>Butikknummer med mer enn fire siffer: de fire siste sifrene er avdelingsnummeret, resten er nivået (1311003 er nivå 131, avdeling 1003).</dd>
   <dt>Spesialbetaling</dt><dd>Betaling eller linje merket eget forbruk, internt forbruk, utbetaling, finansiering eller sjekk.</dd>
   <dt>Spør pris</dt><dd>Vare lagt inn uten fast pris, der kassereren spør. Prisen sammenlignes med dagens øvrige salg av samme vare.</dd>
   <dt>Til gode-lapp / manuell kvittering</dt><dd>Kvittering skrevet for hånd eller en lapp som gir kunden tilgode. Sammenlignes med andre bonger i butikken.</dd>
   <dt>Kjøpeutbytte</dt><dd>Tabellen med Grunnlag, Kjøpeutbytte og MVA bonus på medlemsbonger.</dd>
-  <dt>Hendelsesord</dt><dd>Ord på tekstlinjer som tyder på annullert, parkert, manuell pris eller spør pris.</dd>
+  <dt>Hendelsesord</dt><dd>Ord fra en ordliste du kan endre, på tekstlinjer som tyder på annullert, parkert, manuell pris eller spør pris.</dd>
   <dt>Diagnostikk</dt><dd>Oversikt over klokkeslett, kanaltabell, betalingsmåter, topptekst og bunn, linjer pluginen ikke kjenner igjen og hendelsesord, til å dele slik at testene kan utvides.</dd>
   <dt>Omfang</dt><dd>Perioden, butikkene, kassererne og kassene du velger at analysen skal gjelde.</dd>
   <dt>Datagrunnlag</dt><dd>Alle innlastede bonger i valgte butikker. Tester som må se hele bildet bruker det.</dd>

@@ -2,7 +2,8 @@ const { chromium } = require('playwright');
 const path = require('path');
 const assert = require('assert');
 
-// Mulig sentral kampanje: samme vare og rabatt hos flere kasserere. Bongene tas med med notat, og brukeren blir spurt.
+// Kampanjevare: samme vare med rabatt hos flere kasserere. Standard: klassifiseres automatisk.
+// Uten automatikk: bongene tas med med notat, og brukeren blir spurt.
 const f2 = (n) => n.toFixed(2);
 const TR = (a, c) => `<tr><td>${a}</td><td></td><td>${c}</td></tr>`;
 const E1 = '7038010000010';
@@ -69,6 +70,27 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   const flagged = async () => (await page.$$eval('[data-sec=chk-list] .kvr-reason', (n) => n.map((x) => x.textContent))).filter((t) => t === 'Rabatt uten årsak').length;
   const note = /Kan være sentral kampanje: «KAMPANJEVARE» med 40 % og 33 % rabatt er på 6 bonger hos 6 kasserere/;
 
+  await analyse();
+  // automatisk kampanjevare (standard): flere enn én kasserer, flere enn to ulike bonger
+  assert.strictEqual(await flagged(), 0, 'kampanjevare flagges ikke');
+  assert.ok(!/venter på svar/.test(await txt('[data-sec=chk-top]')), 'ingen spørsmål');
+  await go('Analyse', 'Detaljer');
+  await page.click('button:text-is("Åpne alle")');
+  assert.match(await txt('[data-sec=disc]'), /Kampanjevarer .*KAMPANJEVARE 40 % og 33 % 6 6 1 1 Kampanjevare \(automatisk\) Ikke kampanje/);
+  assert.match(await txt('[data-sec=disc]'), /1 varer er klassifisert som kampanjevare/);
+  await page.click('[data-sec=disc] button:text-is("Ikke kampanje")');
+  await page.waitForFunction(() => /Ikke kampanje\s*Angre/.test(document.querySelector('[data-sec=disc]').innerText), null, { timeout: 30000 });
+  await go('Analyse', 'Sjekk først');
+  assert.strictEqual(await flagged(), 6, '«Ikke kampanje» flagger som vanlig');
+  await go('Analyse', 'Detaljer');
+  await page.click('[data-sec=disc] button:text-is("Angre")');
+  await page.waitForFunction(() => /Kampanjevare \(automatisk\)/.test(document.querySelector('[data-sec=disc]').innerText), null, { timeout: 30000 });
+  await go('Analyse', 'Sjekk først');
+  assert.strictEqual(await flagged(), 0);
+  // slå av automatikken: du blir spurt i stedet
+  await go('Mer', 'Innstillinger');
+  if (!(await page.$eval('[data-sec=set-disc]', d => d.open))) await page.click('[data-sec=set-disc] summary');
+  await page.uncheck('[data-sec=set-disc] .kvr-set-row:has-text("Klassifiser automatisk som kampanjevare") input[type=checkbox]');
   await analyse();
   // bongene tas med, med notat og spørsmål
   assert.strictEqual(await flagged(), 6, 'alle seks bongene er flagget, også de med annen prosent');
