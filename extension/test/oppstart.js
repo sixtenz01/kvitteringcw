@@ -35,15 +35,22 @@ const page0 = `<!doctype html><html><head><meta charset="utf-8"></head><body><in
     return { ctx, page };
   };
 
-  // 1. ingen liste: boksen sier at pluginen venter, og forsvinner når panelet kommer
+  // 1. ingen liste ennå: panelet kommer likevel, sier at det venter, og kobles til listen når den kommer
   {
     const { ctx, page } = await open(null);
-    await page.waitForSelector('#kvr-boot', { timeout: 5000 });
-    assert.match(await page.innerText('#kvr-boot'), /Kvitteringshenter \d+\.\d+\.\d+ er lastet og venter på listen i CW/);
-    assert.strictEqual(await page.$('#kvr-panel'), null);
-    await page.evaluate(() => window.addGrid());
     await page.waitForSelector('#kvr-panel', { timeout: 5000 });
-    await page.waitForFunction(() => !document.getElementById('kvr-boot'));
+    await page.waitForFunction(() => /Venter på listen i CW/.test(document.getElementById('kvr-panel').innerText));
+    await page.waitForTimeout(700);
+    assert.strictEqual(await page.$('#kvr-boot'), null, 'ingen venteboks når panelet er der');
+    await page.evaluate(() => window.addGrid());
+    await page.waitForFunction(() => document.querySelectorAll('#g td.kvr-cb-cell').length === 2, null, { timeout: 5000 });
+    await page.waitForFunction(() => !/Venter på listen i CW/.test(document.getElementById('kvr-panel').innerText));
+    // CW bytter ut hele listen (nytt søk lager et nytt grid): panelet blir stående og kobles til det nye
+    await page.evaluate(() => { document.getElementById('g').remove(); });
+    await page.waitForFunction(() => /Venter på listen i CW/.test(document.getElementById('kvr-panel').innerText), null, { timeout: 5000 });
+    await page.evaluate(() => window.addGrid());
+    await page.waitForFunction(() => document.querySelectorAll('#g td.kvr-cb-cell').length === 2, null, { timeout: 5000 });
+    assert.strictEqual(await page.$$eval('#kvr-panel', (n) => n.length), 1, 'ett panel');
     await ctx.close();
   }
 
@@ -55,6 +62,11 @@ const page0 = `<!doctype html><html><head><meta charset="utf-8"></head><body><in
     assert.match(t, /Kvitteringshenter \d+\.\d+\.\d+ fikk en feil: testfeil i oppstart/);
     assert.match(t, /Kopier feilen/);
     assert.match(await page.evaluate(() => window.__kvBootErr), /testfeil i oppstart/);
+    // «Nullstill visning» fjerner bare plassering, størrelse og faner, og laster siden på nytt
+    await page.evaluate(() => new Promise((res) => { const rq = indexedDB.open('kvr-store', 1); rq.onupgradeneeded = () => { rq.result.createObjectStore('kv'); rq.result.createObjectStore('scan'); }; rq.onsuccess = () => { const tx = rq.result.transaction('kv', 'readwrite'); tx.objectStore('kv').put(2, 'kvr.wide.v1'); tx.objectStore('kv').put({ a: 1 }, 'kvr.notes.v1'); tx.oncomplete = res; }; }));
+    await Promise.all([page.waitForNavigation(), page.click('#kvr-boot button:text-is("Nullstill visning")')]);
+    const kv = await page.evaluate(() => new Promise((res) => { const rq = indexedDB.open('kvr-store', 1); rq.onsuccess = () => { const out = {}; const st = rq.result.transaction('kv').objectStore('kv'); const g1 = st.get('kvr.wide.v1'), g2 = st.get('kvr.notes.v1'); g2.onsuccess = () => { out.wide = g1.result; out.notes = g2.result; res(out); }; }; }));
+    assert.deepStrictEqual(kv, { wide: undefined, notes: { a: 1 } }, 'visningen er nullstilt, notatene er beholdt');
     await ctx.close();
   }
 

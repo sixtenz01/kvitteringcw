@@ -162,7 +162,13 @@
     var t = document.createElement('div'); t.textContent = text; t.style.marginBottom = '6px'; b.appendChild(t);
     var mk = function (label, fn) { var x = document.createElement('button'); x.type = 'button'; x.textContent = label; x.style.cssText = 'margin-right:6px;font:12px system-ui;padding:3px 8px;border:1px solid #bccac3;border-radius:6px;background:#f0faf5;cursor:pointer'; x.addEventListener('click', fn); b.appendChild(x); };
     if (isError) mk('Kopier feilen', function () { try { navigator.clipboard.writeText(text); } catch (e) { /* ingen utklippstavle */ } });
+    mk('Nullstill visning', resetLayout);
     mk('Lukk', function () { b.remove(); });
+  }
+  // Plassering, størrelse, faner og sammenfolding nullstilles; skanninger, notater og innstillinger beholdes. Siden lastes på nytt.
+  function resetLayout() {
+    [K.pos, K.pos2, K.size, K.wide, K.collapsed, K.tab, K.sub, K.sub2, K.sec, K.layout].forEach(function (k) { try { store(k, null); } catch (e) { /* lagring utilgjengelig */ } });
+    setTimeout(function () { location.reload(); }, 300);
   }
   function showBootError(e) {
     var msg = (e && e.message) || String(e), at = String((e && e.stack) || '').split('\n').slice(1, 3).map(function (x) { return x.trim(); }).join(' ');
@@ -882,6 +888,11 @@
     syncChecks();
     ui.dup = dup;
     ui.visible = visible;
+    if (ui.hideAll) {
+      var hides = recs.length > 0 && visible === 0 && L.activeCount(filters) > 0;
+      ui.hideAll.style.display = hides ? 'flex' : 'none';
+      if (hides) ui.hideAllTxt.textContent = 'Filtrene i pluginen skjuler alle ' + recs.length + ' kvitteringene i CW-listen. Søket i CW er i orden.';
+    }
     refreshOptions();
     renderDerived();
     summary();
@@ -1005,6 +1016,13 @@
     ui.cwCount.textContent = '0 butikker valgt';
     renderCwStores();
     cwReset();
+  }
+
+  // Bare filtrene i pluginen; CW-søket, valg og analysen røres ikke.
+  function resetFilters() {
+    filters = L.defaultFilters();
+    writeForm();
+    apply();
   }
 
   function resetAll() {
@@ -3705,7 +3723,10 @@
       btn('Åpne', openHelp, 'kvr-sm kvr-primary'),
       btn('✕', function () { store(K.help, 1); ui.firstRun.style.display = 'none'; }, 'kvr-sm')]);
     ui.firstRun.lastChild.title = 'Skjul';
-    var stats = el('div', { class: 'kvr-stats' }, [ui.firstRun, el('div', { class: 'kvr-tiles' }, [t1.node, t2.node, t3.node, t4.node]), ui.chips, ui.scanRow, ui.scanWarn, ui.pantLine, ui.opRow, ui.barWrap]);
+    ui.waitNote = el('div', { class: 'kvr-notice', role: 'status', style: 'display:none' }, [el('span', { text: 'Venter på listen i CW. Hent kvitteringer i Lindbak (Oppdater), så kobles pluginen til listen.' })]);
+    ui.hideAllTxt = el('span', {});
+    ui.hideAll = el('div', { class: 'kvr-notice', role: 'status', style: 'display:none' }, [ui.hideAllTxt, btn('Vis alle', function () { resetFilters(); say('Filtrene i pluginen er nullstilt. CW-søket er ikke endret.'); }, 'kvr-sm kvr-primary')]);
+    var stats = el('div', { class: 'kvr-stats' }, [ui.firstRun, ui.waitNote, ui.hideAll, el('div', { class: 'kvr-tiles' }, [t1.node, t2.node, t3.node, t4.node]), ui.chips, ui.scanRow, ui.scanWarn, ui.pantLine, ui.opRow, ui.barWrap]);
 
     // --- Søk i CW
     var cwFrom = el('input', { type: 'date' }), cwTo = el('input', { type: 'date' });
@@ -4269,7 +4290,14 @@
   function attachGrid() {
     ensureVisible();
     var g = getGrid();
-    if (!g) { showWaiting(); return; }
+    if (!g) {
+      // Panelet kommer med en gang på journalsidene; det kobles til listen når CW viser den
+      if (/\/Journal/i.test(location.pathname) && !document.getElementById('kvr-panel')) buildPanel();
+      if (ui.waitNote) ui.waitNote.style.display = 'flex';
+      showWaiting();
+      return;
+    }
+    if (ui.waitNote) ui.waitNote.style.display = 'none';
     if (g.__kvBound) {
       if (refreshStoreMap()) { optsKey = ''; renderCwStores(); }
       var tb = g.tbody && g.tbody[0];

@@ -101,6 +101,15 @@ setRows(FIRST);
   await page.locator('[data-sec=chk-list] .kvr-acts button:text-is("Sjekket")').first().click();
   assert.match(await txt('[data-sec=chk-list]'), /sjekk først \(2\)/i);
 
+  // filtrene i pluginen skjuler alle radene etter et nytt søk: melding og «Vis alle» som bare nullstiller pluginens filtre
+  await go('Filtrer');
+  await page.fill('input[placeholder="ord, EAN, beløp, kortnr, referanse …"]', 'finnes-ikke');
+  await page.waitForFunction(() => /Filtrene i pluginen skjuler alle 3 kvitteringene i CW-listen/.test(document.getElementById('kvr-panel').innerText));
+  assert.strictEqual(await page.$$eval('#g tbody tr', (t) => t.filter((x) => x.style.display !== 'none').length), 0);
+  await page.click('#kvr-panel .kvr-notice button:text-is("Vis alle")');
+  assert.strictEqual(await page.$$eval('#g tbody tr', (t) => t.filter((x) => x.style.display !== 'none').length), 3);
+  assert.ok(!/Filtrene i pluginen skjuler alle/.test(await page.innerText('#kvr-panel')));
+
   // Tøm cache fjerner også analysen
   await go('Skann');
   await page.click('button:text-is("Tøm cache")');
