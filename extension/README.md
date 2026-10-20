@@ -224,6 +224,7 @@ NODE_PATH=<global node_modules> node test/avdeling.js  # butikknummer = nivå + 
 NODE_PATH=<global node_modules> node test/butikk.js    # butikknavn fra BUTIKK-kolonnen, redigering, filter samlet under Filtrer
 NODE_PATH=<global node_modules> node test/linjer.js    # samme funn i panelet: kort, søk på spesialbetaling og rabatt-%
 node test/innhold.test.js                              # tempo, overvåkede varer, retur uten kjøp, topptekst/bunn (v7), betalingsmåter, fulltekstsøk
+NODE_PATH=<global node_modules> node test/analyse.js    # analysen står fast når listen byttes, Hent i CW, skanning tåler listebytte
 NODE_PATH=<global node_modules> node test/synlig.js     # panelet er alltid synlig: lagret plassering utenfor skjermen, fjernet fra siden, dekket
 NODE_PATH=<global node_modules> node test/innhold.js    # samme i panelet: skanning av topptekst/bunn, funn, kort, Diagnostikk, søk og betalingsfilter
 NODE_PATH=<global node_modules> node test/stor.js  # panelstørrelse: Vanlig/Stor/Full, dokking, kolonner, husking
@@ -239,3 +240,5 @@ TOUR=<mappe> NODE_PATH=<global node_modules> node test/tour.js  # skjermbilder a
 - `receiptType 11` er uavklart og vises som «PDA-operasjon (uavklart)».
 
 Versjon 3.21.1: panelet hentes fram av seg selv hvis det ligger utenfor skjermen (lagret plassering fra et annet vindu eller med verktøylinjer åpne), er fjernet fra siden eller er dekket av noe i CW. Det må alltid være minst 200 px av høyden synlig (48 px når det er sammenfoldet), og z-index er satt til høyeste verdi. Test: `test/synlig.js`.
+
+Versjon 3.22.0: **analysen står fast når CW-listen byttes.** Etter en analyse vises Sjekk først, kasserere og periodesammenligning fra et øyeblikksbilde (`ctlRes.snap`), ikke fra listen i CW. En melding forteller hvor mange analyserte bonger som ikke ligger i listen, «Hent i CW» henter dag og butikk for én bong uten å røre analysen, og notat/status virker på bonger utenfor listen. Endret omfang etter analysen gir en melding. «Tøm cache» og «Nullstill alt» fjerner analysen. Skanningen hopper over bonger som forsvinner fra listen (i stedet for å vente på tidsavbrudd) og advarer når fanen er skjult. Test: `test/analyse.js`.

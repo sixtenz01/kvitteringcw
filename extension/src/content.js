@@ -358,10 +358,15 @@
     ui.scanBtn.disabled = true; ui.anomBtn.disabled = true; ui.stopBtn.disabled = false; ui.stopTop.style.display = ''; ui.retryBtn.disabled = true; if (ui.retryBtn2) ui.retryBtn2.disabled = true;
     var prev = grid.select();
     var prevTr = prev && prev[0];
-    var done = 0, failed = 0, mism = 0, t0 = Date.now();
+    var done = 0, failed = 0, mism = 0, gone = 0, t0 = Date.now();
     failedRecs = [];
     for (var i = 0; i < todo.length && !cancelScan; i++) {
       progress(i, todo.length, t0, 'Skanner', failed);
+      // CW-listen kan ha skiftet (nytt søk): bruk raden som står der nå, eller hopp over bongen uten å vente på tidsavbrudd
+      if (!todo[i].tr.isConnected) {
+        var lv = recById(todo[i].item.transactionId);
+        if (lv) todo[i] = lv; else { gone++; continue; }
+      }
       var rows = null, chk = 'unknown';
       try {
         for (var attempt = 0; attempt < 2; attempt++) {
@@ -385,10 +390,10 @@
     lastRetry = failedRecs.length ? retryScan : null;
     syncRetry();
     gcache = {};
-    if (prevTr) grid.select(prevTr); else if (typeof grid.clearSelection === 'function') grid.clearSelection();
+    if (prevTr && prevTr.isConnected) grid.select(prevTr); else if (typeof grid.clearSelection === 'function') grid.clearSelection();
     scanning = false;
     ui.scanBtn.disabled = false; ui.anomBtn.disabled = false; ui.stopBtn.disabled = true;
-    say((cancelScan ? 'Stoppet. ' : 'Ferdig. ') + 'Skannet ' + done + (failed ? ', feilet ' + failed : '') + (mism ? ' (' + mism + ' med feil bong i visningsfeltet)' : '') + '.');
+    say((cancelScan ? 'Stoppet. ' : 'Ferdig. ') + 'Skannet ' + done + (failed ? ', feilet ' + failed : '') + (mism ? ' (' + mism + ' med feil bong i visningsfeltet)' : '') + (gone ? '. ' + gone + ' lå ikke lenger i CW-listen og ble hoppet over' : '') + '.');
     return { done: done, failed: failed };
   }
 
@@ -404,7 +409,7 @@
     var rem = i > 0 ? Math.round(elapsed / i * (total - i)) : 0;
     var pct = Math.round(i / total * 100);
     setProgress(Math.max(pct, 2));
-    var msg = label + ' ' + (i + 1) + ' av ' + total + ' (' + pct + '%)' + etaText(rem) + (failed ? ' · feilet: ' + failed : '');
+    var msg = label + ' ' + (i + 1) + ' av ' + total + ' (' + pct + '%)' + etaText(rem) + (failed ? ' · feilet: ' + failed : '') + (document.hidden ? ' · fanen er skjult, Chrome bremser skanningen' : '');
     say(msg);
   }
 
@@ -966,6 +971,7 @@
     filters = L.defaultFilters();
     selected = {};
     anomMap = {};
+    ctlRes = null; checkState.at = null;
     if (cwActive()) clearCw();
     writeForm();
     apply();
@@ -2428,7 +2434,7 @@
   }
 
   function checkRow(rk, first) {
-    var it = rk.item, rec = recById(rk.id), id = rk.id, n = notes[id];
+    var it = rk.item, live = recById(rk.id), rec = live || { item: it, tr: null }, id = rk.id, n = notes[id];
     var open = expanded[id] !== undefined ? expanded[id] : first;
     var head = el('button', { type: 'button', class: 'kvr-ck-h', 'aria-expanded': String(open) }, [
       riskBadge(rk.score),
@@ -2472,7 +2478,7 @@
     acts.push(btn('Til oppfølging', function () { setStatus(rec, 'oppfolging'); }));
     acts.push(btn('Notat…', function () { openNote(rec); }));
     acts.push(btn(selected[id] ? 'Fjern valg' : 'Velg', function () { if (selected[id]) delete selected[id]; else selected[id] = it; apply(); }));
-    acts.push(btn('Vis i listen', function () { jumpTo(rec); }));
+    acts.push(btn(live ? 'Vis i listen' : 'Hent i CW', function () { showInList(it); }, live ? '' : 'kvr-primary'));
     body.appendChild(el('div', { class: 'kvr-acts' }, acts));
     body.appendChild(entsFor(it));
     card.appendChild(body);
@@ -2533,20 +2539,53 @@
     refreshOptions();
   }
 
+  // Etter en analyse vises resultatet fra øyeblikksbildet, ikke fra CW-listen som står der akkurat nå.
+  // Søk eller ny periode i CW bytter listen, men skal ikke fjerne det analysen har funnet.
+  function checkSource() {
+    if (ctlRes && ctlRes.snap) return { items: ctlRes.snap.items, frozen: true };
+    return { items: analysisItems(lastMode), frozen: false };
+  }
+
+  // Henter dagen og butikken til en bong inn i CW-listen igjen, uten å røre analysen.
+  async function fetchBong(it) {
+    if (scanning || !grid) return null;
+    var d = L.parseDT(it.endDateTime).date;
+    if (!d) return null;
+    cw.dateFrom = d; cw.dateTo = d;
+    ui.cwFrom.value = d; ui.cwTo.value = d;
+    cw.members = cw.loyal = cw.free = cw.bong = '';
+    [ui.cwMem, ui.cwLoy, ui.cwFree, ui.cwBong].forEach(function (n) { if (n) n.value = ''; });
+    cw.stores = {}; cw.stores[String(it.storeNumber)] = true;
+    renderCwStores();
+    ui.cwCount.textContent = '1 butikk valgt';
+    var before = boundCount;
+    say('Henter ' + d + ' for ' + sLabel(it.storeNumber) + ' fra CW…');
+    cwSearch();
+    await waitFor(function () { return boundCount > before; }, 30000);
+    await wait(400);
+    apply();
+    return recById(it.transactionId);
+  }
+
+  async function showInList(it) {
+    var r = recById(it.transactionId) || await fetchBong(it);
+    if (r) jumpTo(r); else say('Fant ikke bongen i CW-listen. Sjekk at dag og butikk finnes i CW.');
+  }
+
   function renderCheck() {
     if (!ui.checkBody) return;
     var body = ui.checkBody;
     body.innerHTML = '';
     ui.checkTop.innerHTML = '';
     renderScopeInfo();
-    var items = analysisItems(lastMode);
+    var src = checkSource(), items = src.items;
     var all = L.rankReceipts(items, anomMap, weights);
     var checked = all.filter(function (r) { return notes[r.id] && notes[r.id].status === 'sjekket'; }).length;
     var vis = all.filter(function (r) { return checkState.showChecked || !(notes[r.id] && notes[r.id].status === 'sjekket'); });
     var high = vis.filter(function (r) { return L.riskLevel(r.score) === 'høy'; }).length;
     var nNew = vis.filter(function (r) { return checkState.newIds[r.id]; }).length;
-    var base = analysisRecs(lastMode).filter(function (r) { return r.item.receiptType === 1 || r.item.receiptType === 2; });
-    var done = base.filter(function (r) { return scanMap[r.item.transactionId]; }).length;
+    var base = items.filter(function (it) { return it.receiptType === 1 || it.receiptType === 2; });
+    var done = base.filter(function (it) { return scanMap[it.transactionId]; }).length;
 
     var top = [
       el('div', { class: 'kvr-scoperow' }, [el('span', { text: 'Omfang: ' + scopeSummary() + ' · ' + items.length + ' bonger' }), btn('Endre', function () { ui.scopeCard.open = true; ui.scopeCard.scrollIntoView({ block: 'nearest' }); }, 'kvr-sm')]),
@@ -2557,6 +2596,13 @@
     if (settingsStale && checkState.at) top.push(el('div', { class: 'kvr-notice', role: 'status' }, [el('span', { text: 'Innstillingene er endret siden sist. Kjør analysen på nytt for å bruke dem.' }), btn('Innstillinger', function () { openSettings(); }, 'kvr-sm')]));
     var pend = ctlRes && ctlRes.disc && ctlRes.disc.camp ? ctlRes.disc.camp.pending : 0;
     if (checkState.at && pend) top.push(el('div', { class: 'kvr-notice', role: 'status' }, [el('span', { text: pend + (pend === 1 ? ' mulig sentral kampanje venter' : ' mulige sentrale kampanjer venter') + ' på svar.' }), btn('Svar nå', openCampDialog, 'kvr-sm kvr-primary')]));
+    if (src.frozen) {
+      var live = {}, outside = 0;
+      recs.forEach(function (r) { live[r.item.transactionId] = true; });
+      items.forEach(function (it) { if (!live[it.transactionId]) outside++; });
+      if (outside) top.push(el('div', { class: 'kvr-notice', role: 'status' }, [el('span', { text: 'Resultatet står fast fra analysen ' + new Date(checkState.at || ctlRes.at).toLocaleTimeString('nb-NO') + ' selv om CW-listen er endret: ' + outside + ' av ' + items.length + ' analyserte bonger ligger ikke i listen nå. «Hent i CW» på en bong henter den fram uten å røre analysen.' })]));
+      if (ctlRes.snap.mode === 'scope' && ctlRes.snap.scopeText !== scopeSummary()) top.push(el('div', { class: 'kvr-notice', role: 'status' }, [el('span', { text: 'Omfanget er endret siden analysen (' + ctlRes.snap.scopeText + '). Kjør analysen på nytt for å bruke det nye omfanget.' })]));
+    }
     if (vis.length) top.push(el('div', { class: 'kvr-ctlsum', text: vis.length + ' å sjekke · ' + high + ' høy risiko' + (nNew ? ' · ' + nNew + ' nye siden sist' : '') }));
     else if (checkState.at) top.push(el('div', { class: 'kvr-ctlsum', text: all.length ? 'Alt er sjekket.' : 'Ingen avvik funnet i dette utvalget.' }));
     else top.push(hintEl('Analysen skanner det som mangler, kjører avvik og kontroller, og lager en prioritert liste. Under kan du velge omfang: periode, butikk, kasserer, kasse eller periode mot periode.'));
@@ -3634,9 +3680,9 @@
     var secScan = section('scan', 'Skanning', [
       el('div', { class: 'kvr-row' }, [ui.scanBtn, ui.stopBtn]),
       el('div', { class: 'kvr-row' }, [ui.retryBtn, btn('Tøm cache', function () {
-        clearScan(); anomMap = {}; failedRecs = []; lastRetry = null; syncRetry(); say('Cache tømt.'); apply();
+        clearScan(); anomMap = {}; ctlRes = null; checkState.at = null; failedRecs = []; lastRetry = null; syncRetry(); say('Cache tømt.'); apply(); renderControl();
       })]),
-      el('div', { class: 'kvr-hint', text: 'Hver kvittering åpnes i CWs visningsfelt (ca. 1 s) og leses derfra. Pluginen sender aldri egne kall mot CWs API.' })
+      el('div', { class: 'kvr-hint', text: 'Hver kvittering åpnes i CWs visningsfelt (ca. 1 s) og leses derfra. Pluginen sender aldri egne kall mot CWs API. Ikke bruk CWs søk eller liste mens skanningen går. Chrome bremser faner som er skjult, så la Lindbak stå i et eget vindu ved siden av det du jobber i.' })
     ], true);
 
     // --- Varegrupper
