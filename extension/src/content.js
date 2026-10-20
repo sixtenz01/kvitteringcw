@@ -3,6 +3,10 @@
   if (window.__kvRewamp) return;
   window.__kvRewamp = true;
 
+  // Feil i pluginen skal synes på siden, ikke bare i Console: en liten boks nederst til venstre sier hva som gikk galt.
+  window.addEventListener('error', function (ev) { if (ev && /\/src\/(content|logic|report)\.js/.test(ev.filename || '')) showBootError(ev.error || ev.message); });
+  window.addEventListener('unhandledrejection', function (ev) { var r = ev && ev.reason; if (r && /\/src\/(content|logic|report)\.js/.test(String(r.stack || ''))) showBootError(r); });
+
   var L = window.KvLogic;
   var K = {
     saved: 'kvr.saved.v1', collapsed: 'kvr.collapsed.v1', scan: 'kvr.scan.v2', pos: 'kvr.pos.v1',
@@ -140,6 +144,42 @@
     document.body.appendChild(a);
     a.click();
     setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  }
+
+  // ---- oppstart: feil og venting vises på siden ------------------------------
+  var bootShown = '', waitSince = Date.now();
+  function bootBox(text, isError) {
+    var b = document.getElementById('kvr-boot');
+    if (!b) {
+      b = document.createElement('div');
+      b.id = 'kvr-boot';
+      b.setAttribute('role', isError ? 'alert' : 'status');
+      b.style.cssText = 'position:fixed;left:12px;bottom:12px;z-index:2147483647;max-width:560px;background:#fff;color:#1b2a24;border:2px solid #00704a;border-radius:10px;padding:10px 12px;font:13px/1.4 system-ui,sans-serif;box-shadow:0 8px 24px rgba(0,0,0,.25)';
+      (document.body || document.documentElement).appendChild(b);
+    }
+    b.style.borderColor = isError ? '#d93025' : '#00704a';
+    b.innerHTML = '';
+    var t = document.createElement('div'); t.textContent = text; t.style.marginBottom = '6px'; b.appendChild(t);
+    var mk = function (label, fn) { var x = document.createElement('button'); x.type = 'button'; x.textContent = label; x.style.cssText = 'margin-right:6px;font:12px system-ui;padding:3px 8px;border:1px solid #bccac3;border-radius:6px;background:#f0faf5;cursor:pointer'; x.addEventListener('click', fn); b.appendChild(x); };
+    if (isError) mk('Kopier feilen', function () { try { navigator.clipboard.writeText(text); } catch (e) { /* ingen utklippstavle */ } });
+    mk('Lukk', function () { b.remove(); });
+  }
+  function showBootError(e) {
+    var msg = (e && e.message) || String(e), at = String((e && e.stack) || '').split('\n').slice(1, 3).map(function (x) { return x.trim(); }).join(' ');
+    var txt = 'Kvitteringshenter ' + ((window.KvReport && window.KvReport.VERSION) || '') + ' fikk en feil: ' + msg + (at ? ' (' + at + ')' : '') + '. Last siden på nytt (F5). Hjelper ikke det, kopier feilen og send den.';
+    window.__kvBootErr = txt;
+    try { console.error('[Kvitteringshenter]', e); } catch (x) { /* ingen konsoll */ }
+    if (bootShown === msg) return;
+    bootShown = msg;
+    bootBox(txt, true);
+  }
+  // Ingen liste ennå: vis hvorfor panelet ikke er der, etter en stund.
+  function showWaiting() {
+    if (bootShown || document.getElementById('kvr-panel') || Date.now() - waitSince < (window.__kvrWait || 15000)) return;
+    var why = !document.querySelector('[data-role=grid]') ? 'venter på listen i CW. Hent kvitteringer (Oppdater i Lindbak), så kommer panelet.'
+      : !jq() ? 'finner ikke jQuery på siden, så gridet kan ikke leses.' : 'finner listen, men ikke Kendo-gridet bak den.';
+    if (document.getElementById('kvr-boot')) return;
+    bootBox('Kvitteringshenter ' + ((window.KvReport && window.KvReport.VERSION) || '') + ' er lastet og ' + why, false);
   }
 
   // ---- grid ---------------------------------------------------------------
@@ -4223,9 +4263,13 @@
   }
 
   function attach() {
+    try { attachGrid(); } catch (e) { showBootError(e); }
+  }
+
+  function attachGrid() {
     ensureVisible();
     var g = getGrid();
-    if (!g) return;
+    if (!g) { showWaiting(); return; }
     if (g.__kvBound) {
       if (refreshStoreMap()) { optsKey = ''; renderCwStores(); }
       var tb = g.tbody && g.tbody[0];
@@ -4233,8 +4277,10 @@
       return;
     }
     grid = g;
-    g.__kvBound = true;
     if (!document.getElementById('kvr-panel')) buildPanel();
+    g.__kvBound = true;
+    var wb = document.getElementById('kvr-boot');
+    if (wb && !bootShown) wb.remove();
     installGridClicks();
     g.bind('dataBound', function () { boundCount++; setTimeout(apply, 0); });
     apply();
@@ -4242,35 +4288,37 @@
   }
 
   openDb().then(async function (d) {
-    db = d;
-    if (db) {
-      mem = await readAll(db, 'kv');
-      var raw = await readAll(db, 'scan');
-      Object.keys(raw).forEach(function (k) { if (raw[k] && (raw[k].v >= 2 && raw[k].v <= 7)) scanMap[k] = raw[k]; });
-    }
-    migrateLocal();
-    rules = L.sanitizeRules(store(K.rules));
-    anomCfg = L.sanitizeAnom(store(K.anom));
-    manualStores = store(K.stores) || '';
-    campDec = L.sanitizeCamp(store(K.camp));
-    customRules = L.sanitizeCustom(store(K.arules));
-    notes = store(K.notes) || {};
-    loadNoteLog();
-    tasksCustom = Array.isArray(store(K.tasks)) ? store(K.tasks) : [];
-    ctlCfg = L.sanitizeControl(store(K.ctl));
-    if (!store(K.pantmig)) {
-      // 3.23.0: pant gir bare reaksjon på manuell pantelapp (99) og slettet pantelapp fra maskinen (399). Eldre lagrede innstillinger legges om én gang.
-      anomCfg.bigReturn = ''; anomCfg.manyLapper = ''; anomCfg.cashNoSale = false;
-      ctlCfg.cashNoSaleN = ''; ctlCfg.lappReuseMin = ''; ctlCfg.voidCashOn = '';
-      if (store(K.anom)) store(K.anom, anomCfg);
-      if (store(K.ctl)) store(K.ctl, ctlCfg);
-      store(K.pantmig, 1);
-    }
-    keyNav = store(K.keynav) !== false;
-    timeShift = Number(store(K.tshift)) || 0;
-    weights = L.sanitizeWeights(store(K.weights));
-    scope = sanitizeScope(store(K.scope));
-    setInterval(attach, 1500);
-    attach();
+    try {
+      db = d;
+      if (db) {
+        mem = await readAll(db, 'kv');
+        var raw = await readAll(db, 'scan');
+        Object.keys(raw).forEach(function (k) { if (raw[k] && (raw[k].v >= 2 && raw[k].v <= 7)) scanMap[k] = raw[k]; });
+      }
+      migrateLocal();
+      rules = L.sanitizeRules(store(K.rules));
+      anomCfg = L.sanitizeAnom(store(K.anom));
+      manualStores = store(K.stores) || '';
+      campDec = L.sanitizeCamp(store(K.camp));
+      customRules = L.sanitizeCustom(store(K.arules));
+      notes = store(K.notes) || {};
+      loadNoteLog();
+      tasksCustom = Array.isArray(store(K.tasks)) ? store(K.tasks) : [];
+      ctlCfg = L.sanitizeControl(store(K.ctl));
+      if (!store(K.pantmig)) {
+        // 3.23.0: pant gir bare reaksjon på manuell pantelapp (99) og slettet pantelapp fra maskinen (399). Eldre lagrede innstillinger legges om én gang.
+        anomCfg.bigReturn = ''; anomCfg.manyLapper = ''; anomCfg.cashNoSale = false;
+        ctlCfg.cashNoSaleN = ''; ctlCfg.lappReuseMin = ''; ctlCfg.voidCashOn = '';
+        if (store(K.anom)) store(K.anom, anomCfg);
+        if (store(K.ctl)) store(K.ctl, ctlCfg);
+        store(K.pantmig, 1);
+      }
+      keyNav = store(K.keynav) !== false;
+      timeShift = Number(store(K.tshift)) || 0;
+      weights = L.sanitizeWeights(store(K.weights));
+      scope = sanitizeScope(store(K.scope));
+      setInterval(attach, 1500);
+      attach();
+    } catch (e) { showBootError(e); }
   });
 })();
