@@ -325,8 +325,9 @@ assert.strictEqual(L.riskScore(['Avvikende pris på vare', 'Spør pris avviker f
 assert.strictEqual(L.riskScore(['Kassadifferanse', 'Gjentatte kassadifferanser'], W), 5);
 assert.strictEqual(L.riskScore(['Medlemsnr flere ganger samme dag', 'Medlemsnr brukt svært mye'], W), 4, 'ulike signaler summeres');
 assert.strictEqual(L.riskScore(['Retur uten salg', 'Kortkjøp refundert kontant'], W), 8, 'ulike familier summeres');
-assert.strictEqual(L.riskScore(['Kontant tilbake uten salg', 'Rabatt uten årsak', 'Linjer stemmer ikke med totalen'], W), 11, 'ulike familier summeres');
-const bd = L.scoreBreakdown(['Rabatt uten årsak', 'Høy rabattprosent', 'Rundt beløp (500 kr)'], W);
+assert.strictEqual(L.riskScore(['Kontant tilbake uten salg', 'Rabatt uten årsak', 'Linjer stemmer ikke med totalen'], W), 8, 'ulike familier summeres; rabatt uten årsak gir 0 poeng');
+assert.deepStrictEqual([W['Rabatt uten årsak'], L.riskScore(['Rabatt uten årsak'], W)], [0, 0], '«Rabatt uten årsak» gir ikke poeng (3.33.0)');
+const bd = L.scoreBreakdown(['Rabatt uten årsak', 'Høy rabattprosent', 'Rundt beløp (500 kr)'], Object.assign({}, W, { 'Rabatt uten årsak': 3 }));
 assert.deepStrictEqual(bd.map((x) => [x.counts, x.by]), [[true, null], [false, 'Rabatt uten årsak'], [true, null]], 'lik vekt: den første teller');
 assert.strictEqual(L.reasonFamily('Stor panteretur (256 kr)'), 'kontant');
 assert.strictEqual(L.reasonFamily('Rundt beløp'), null);
@@ -604,7 +605,7 @@ assert.deepStrictEqual(wf({ discWatchN: '' }), ['w-1', 'w-2', 'w-3', 'w-5', 'w-6
 assert.deepStrictEqual(wf({ discWatch: '' }), []);
 assert.deepStrictEqual(wf({ discWatch: '1' }), ['w-4']);
 assert.ok(L.RISK_WEIGHTS['Rabatt med overvåket årsak'] > 0 && L.reasonWeight('Mange rabatter med overvåket årsak', W) > 0);
-assert.ok(L.reasonWeight('Rabatt uten årsak', W) > 0 && L.RISK_WEIGHTS['Mange rabatter uten årsak'] > 0);
+assert.ok(L.reasonWeight('Rabatt uten årsak', W) === 0 && L.RISK_WEIGHTS['Mange rabatter uten årsak'] > 0);
 // innstillingsgrupper: hver terskel, avviksgrense og vekt ligger i nøyaktig én gruppe
 const sgFields = L.SETTING_GROUPS.flatMap(g => g.fields.map(f => f.src + ':' + f.k));
 assert.strictEqual(new Set(sgFields).size, sgFields.length, 'ingen felt i to grupper');

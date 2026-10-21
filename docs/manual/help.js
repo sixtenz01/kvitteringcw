@@ -202,7 +202,7 @@ const weights = {
   'Gjentatte kassadifferanser': 'Bongen er et kassaoppgjør i en serie med minus.',
   'Avvikende sifferfordeling': 'Kasserer har avvikende første-siffer-fordeling (poeng til kassereren).',
   'Mange runde beløp': 'Kasserer har uvanlig høy andel hele kroner (poeng til kassereren).',
-  'Rabatt uten årsak': 'Bongen har en rabattlinje uten årsak over prosentgrensen.',
+  'Rabatt uten årsak': 'Bongen har en rabattlinje uten årsak over prosentgrensen. 0 poeng som standard: funnet vises, men teller ikke i risikoscoren.',
   'Mange rabatter uten årsak': 'Kasserer har uvanlig mange bonger med rabatt uten årsak (poeng til kassereren).',
   'Rabatt med overvåket årsak': 'Bongen har rabatt med en overvåket årsak.',
   'Mange rabatter med overvåket årsak': 'Kasserer har mange bonger med overvåket rabattårsak (poeng til kassereren).',

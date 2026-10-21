@@ -11,7 +11,7 @@
   var K = {
     saved: 'kvr.saved.v1', collapsed: 'kvr.collapsed.v1', scan: 'kvr.scan.v2', pos: 'kvr.pos.v1',
     size: 'kvr.size.v1', sec: 'kvr.sec.v1', rules: 'kvr.rules.v1', anom: 'kvr.anom.v1',
-    stores: 'kvr.stores.v1', tab: 'kvr.tab.v1', layout: 'kvr.layout.v1', arules: 'kvr.arules.v1', notes: 'kvr.notes.v1', tasks: 'kvr.tasks.v1', ctl: 'kvr.ctl.v1', keynav: 'kvr.keynav.v1', tshift: 'kvr.tshift.v1', nlog: 'kvr.nlog.v1', wide: 'kvr.wide.v1', sub: 'kvr.sub.v1', weights: 'kvr.weights.v1', camp: 'kvr.camp.v1', lastrun: 'kvr.lastrun.v1', scope: 'kvr.scope.v1', help: 'kvr.help.v1', sub2: 'kvr.sub2.v1', reports: 'kvr.reports.v1', repopts: 'kvr.repopts.v1', pantmig: 'kvr.pantmig.v1', pos2: 'kvr.pos2.v1', campmig: 'kvr.campmig.v1', folder: 'kvr.folder.v1', folderAt: 'kvr.folderat.v1'
+    stores: 'kvr.stores.v1', tab: 'kvr.tab.v1', layout: 'kvr.layout.v1', arules: 'kvr.arules.v1', notes: 'kvr.notes.v1', tasks: 'kvr.tasks.v1', ctl: 'kvr.ctl.v1', keynav: 'kvr.keynav.v1', tshift: 'kvr.tshift.v1', nlog: 'kvr.nlog.v1', wide: 'kvr.wide.v1', sub: 'kvr.sub.v1', weights: 'kvr.weights.v1', camp: 'kvr.camp.v1', lastrun: 'kvr.lastrun.v1', scope: 'kvr.scope.v1', help: 'kvr.help.v1', sub2: 'kvr.sub2.v1', reports: 'kvr.reports.v1', repopts: 'kvr.repopts.v1', pantmig: 'kvr.pantmig.v1', pos2: 'kvr.pos2.v1', campmig: 'kvr.campmig.v1', discmig: 'kvr.discmig.v1', folder: 'kvr.folder.v1', folderAt: 'kvr.folderat.v1'
   };
   var sayTimer = null;
   var failedRecs = [];
@@ -4573,6 +4573,12 @@
       keyNav = store(K.keynav) !== false;
       timeShift = Number(store(K.tshift)) || 0;
       weights = L.sanitizeWeights(store(K.weights));
+      if (!store(K.discmig)) {
+        // 3.33.0: «Rabatt uten årsak» gir ikke poeng. Lagret gammel standard (3) legges om én gang; egne verdier beholdes.
+        var sw = store(K.weights);
+        if (sw && sw['Rabatt uten årsak'] === 3) { weights['Rabatt uten årsak'] = 0; store(K.weights, weights); }
+        store(K.discmig, 1);
+      }
       scope = sanitizeScope(store(K.scope));
       folder.handle = store(K.folder);
       if (!folder.handle || typeof folder.handle.queryPermission !== 'function') folder.handle = null;
