@@ -11,7 +11,7 @@
   var K = {
     saved: 'kvr.saved.v1', collapsed: 'kvr.collapsed.v1', scan: 'kvr.scan.v2', pos: 'kvr.pos.v1',
     size: 'kvr.size.v1', sec: 'kvr.sec.v1', rules: 'kvr.rules.v1', anom: 'kvr.anom.v1',
-    stores: 'kvr.stores.v1', tab: 'kvr.tab.v1', layout: 'kvr.layout.v1', arules: 'kvr.arules.v1', notes: 'kvr.notes.v1', tasks: 'kvr.tasks.v1', ctl: 'kvr.ctl.v1', keynav: 'kvr.keynav.v1', tshift: 'kvr.tshift.v1', nlog: 'kvr.nlog.v1', wide: 'kvr.wide.v1', sub: 'kvr.sub.v1', weights: 'kvr.weights.v1', camp: 'kvr.camp.v1', lastrun: 'kvr.lastrun.v1', scope: 'kvr.scope.v1', help: 'kvr.help.v1', sub2: 'kvr.sub2.v1', reports: 'kvr.reports.v1', repopts: 'kvr.repopts.v1', pantmig: 'kvr.pantmig.v1', pos2: 'kvr.pos2.v1', campmig: 'kvr.campmig.v1'
+    stores: 'kvr.stores.v1', tab: 'kvr.tab.v1', layout: 'kvr.layout.v1', arules: 'kvr.arules.v1', notes: 'kvr.notes.v1', tasks: 'kvr.tasks.v1', ctl: 'kvr.ctl.v1', keynav: 'kvr.keynav.v1', tshift: 'kvr.tshift.v1', nlog: 'kvr.nlog.v1', wide: 'kvr.wide.v1', sub: 'kvr.sub.v1', weights: 'kvr.weights.v1', camp: 'kvr.camp.v1', lastrun: 'kvr.lastrun.v1', scope: 'kvr.scope.v1', help: 'kvr.help.v1', sub2: 'kvr.sub2.v1', reports: 'kvr.reports.v1', repopts: 'kvr.repopts.v1', pantmig: 'kvr.pantmig.v1', pos2: 'kvr.pos2.v1', campmig: 'kvr.campmig.v1', folder: 'kvr.folder.v1', folderAt: 'kvr.folderat.v1'
   };
   var sayTimer = null;
   var failedRecs = [];
@@ -82,6 +82,17 @@
     if (value === undefined) return mem[key] === undefined ? null : mem[key];
     if (value === null) delete mem[key]; else mem[key] = value;
     put('kv', key, value);
+    if (isSettingsKey(key)) folderChanged();
+  }
+
+  // Som put, men en verdi som ikke kan lagres (for eksempel et mappevalg nettleseren ikke tillater) slår ikke av databasen.
+  function putSafe(key, val) {
+    if (!db) return false;
+    try {
+      var tx = db.transaction('kv', 'readwrite');
+      if (val === null || val === undefined) tx.objectStore('kv').delete(key); else tx.objectStore('kv').put(val, key);
+      return true;
+    } catch (e) { return false; }
   }
 
   // Skannecachen har hard grense både i antall og byte. Eldste skanninger går først.
@@ -3417,10 +3428,117 @@
     return d;
   }
 
+  function settingsText() {
+    return JSON.stringify({ app: 'kvitteringshenter', v: 1, ctl: ctlCfg, anom: anomCfg, weights: weights, customRules: customRules, groups: rules, stores: manualStores, camp: campDec, keynav: keyNav }, null, 2) + '\n';
+  }
+
   function exportSettings() {
-    var data = { app: 'kvitteringshenter', v: 1, ctl: ctlCfg, anom: anomCfg, weights: weights, customRules: customRules, groups: rules, stores: manualStores, camp: campDec, keynav: keyNav };
-    download(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }), 'kvitteringshenter-innstillinger.json');
+    download(new Blob([settingsText()], { type: 'application/json' }), FOLDER_FILE);
     say('Innstillingene er lastet ned.');
+  }
+
+  // ---- innstillinger i en mappe du velger (File System Access). Pluginen skriver bare filen FOLDER_FILE i den mappen.
+  // Chrome krever et klikk for tilgang til mappen etter omstart. Er filen endret etter vår siste lagring (annen PC), skrives den ikke over før brukeren har valgt.
+  var FOLDER_FILE = 'kvitteringshenter-innstillinger.json';
+  var folder = { handle: null, state: '', at: 0, err: '', newer: 0, ready: false, timer: null };
+  function isSettingsKey(k) { return [K.ctl, K.anom, K.weights, K.arules, K.rules, K.stores, K.camp, K.keynav].indexOf(k) !== -1; }
+  function folderChanged() {
+    if (!folder || !folder.ready || !folder.handle || folder.newer) return;
+    clearTimeout(folder.timer);
+    folder.timer = setTimeout(writeFolder, 800);
+  }
+  async function folderPerm(ask) {
+    if (!folder.handle) return '';
+    try {
+      var p = await folder.handle.queryPermission({ mode: 'readwrite' });
+      if (p !== 'granted' && ask) p = await folder.handle.requestPermission({ mode: 'readwrite' });
+      folder.state = p;
+    } catch (e) { folder.state = 'error'; folder.err = e && e.message ? e.message : String(e); }
+    return folder.state;
+  }
+  async function readFolderFile() {
+    var fh = await folder.handle.getFileHandle(FOLDER_FILE);
+    var f = await fh.getFile();
+    return { text: await f.text(), mod: f.lastModified || 0 };
+  }
+  async function writeFolder() {
+    if (!folder.handle) return;
+    if (await folderPerm(false) !== 'granted') { renderFolder(); return; }
+    try {
+      var fh = await folder.handle.getFileHandle(FOLDER_FILE, { create: true });
+      var w = await fh.createWritable();
+      await w.write(settingsText());
+      await w.close();
+      folder.at = Date.now(); folder.newer = 0; folder.err = '';
+      store(K.folderAt, folder.at);
+    } catch (e) { folder.err = 'Kunne ikke skrive til mappen: ' + (e && e.message ? e.message : e); }
+    renderFolder();
+  }
+  // Ved oppstart og når tilgang gis: er filen i mappen endret etter vår siste lagring?
+  async function checkFolderNewer() {
+    if (await folderPerm(false) !== 'granted') return;
+    try {
+      var f = await readFolderFile(), last = Number(store(K.folderAt)) || 0;
+      folder.newer = f.mod > last + 2000 && f.text !== settingsText() ? f.mod : 0;
+    } catch (e) { folder.newer = 0; }
+  }
+  async function chooseFolder() {
+    if (typeof window.showDirectoryPicker !== 'function') { say('Denne nettleseren kan ikke lagre i en mappe. Bruk «Eksporter innstillinger».'); return; }
+    var h;
+    try { h = await window.showDirectoryPicker({ id: 'kvitteringshenter', mode: 'readwrite' }); } catch (e) { return; }
+    folder.handle = h; folder.err = ''; folder.newer = 0; folder.ready = true; mem[K.folder] = h;
+    if (!putSafe(K.folder, h)) folder.err = 'Mappevalget huskes ikke etter omlasting; velg mappen på nytt neste gang.';
+    if (await folderPerm(true) !== 'granted') { renderFolder(); return; }
+    var have = null;
+    try { have = await readFolderFile(); } catch (e) { have = null; }
+    if (have && have.text !== settingsText()) {
+      folder.newer = have.mod || Date.now();
+      renderFolder();
+      openModal('Mappen har innstillinger fra før', el('div', { class: 'kvr-secbody' }, [hintEl('Filen ' + FOLDER_FILE + ' i mappen «' + h.name + '» har andre innstillinger enn nettleseren. Hvilke skal gjelde?')]),
+        [btn('Les inn fra mappen', function () { closeModal(); loadFromFolder(); }, 'kvr-primary'), btn('Skriv mine til mappen', function () { closeModal(); folder.newer = 0; writeFolder(); })]);
+      return;
+    }
+    await writeFolder();
+    say('Innstillingene lagres nå automatisk i mappen «' + h.name + '».');
+  }
+  async function grantFolder() {
+    if (await folderPerm(true) !== 'granted') { renderFolder(); return; }
+    await checkFolderNewer();
+    if (!folder.newer) await writeFolder(); else renderFolder();
+  }
+  async function loadFromFolder() {
+    if (await folderPerm(true) !== 'granted') { renderFolder(); return; }
+    var f;
+    try { f = await readFolderFile(); } catch (e) { say('Fant ikke ' + FOLDER_FILE + ' i mappen.'); return; }
+    folder.newer = 0;
+    importSettings(f.text);
+    store(K.folderAt, Date.now());
+    renderFolder();
+  }
+  function forgetFolder() {
+    folder.handle = null; folder.state = ''; folder.err = ''; folder.newer = 0;
+    delete mem[K.folder]; putSafe(K.folder, null);
+    renderFolder();
+    say('Mappen er glemt. Innstillingene ligger fortsatt i nettleseren.');
+  }
+  function renderFolder() {
+    if (!ui.folderInfo) return;
+    var h = folder.handle, t = function (ms) { return new Date(ms).toLocaleString('nb-NO', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); };
+    var txt, btns = [];
+    if (!h) { txt = 'Ingen mappe valgt. Innstillingene ligger bare i nettleseren på denne PC-en.'; btns = [btn('Velg mappe…', chooseFolder, 'kvr-primary')]; }
+    else if (folder.state !== 'granted') {
+      txt = 'Mappen «' + h.name + '» trenger tilgang på nytt (Chrome spør etter omstart). Endringer lagres ikke i mappen før du gir tilgang.';
+      btns = [btn('Gi tilgang', grantFolder, 'kvr-primary'), btn('Glem mappen', forgetFolder)];
+    } else if (folder.newer) {
+      txt = 'Filen i mappen «' + h.name + '» er endret ' + t(folder.newer) + ', etter din siste lagring (for eksempel fra en annen PC). Den skrives ikke over før du har valgt.';
+      btns = [btn('Les inn fra mappen', loadFromFolder, 'kvr-primary'), btn('Skriv mine til mappen', function () { folder.newer = 0; writeFolder(); }), btn('Glem mappen', forgetFolder)];
+    } else {
+      txt = 'Lagrer automatisk til mappen «' + h.name + '» (' + FOLDER_FILE + ').' + (folder.at ? ' Sist lagret ' + t(folder.at) + '.' : '');
+      btns = [btn('Les inn fra mappen', loadFromFolder), btn('Bytt mappe…', chooseFolder), btn('Glem mappen', forgetFolder)];
+    }
+    ui.folderInfo.textContent = txt + (folder.err ? ' ' + folder.err : '');
+    ui.folderBtns.innerHTML = '';
+    btns.forEach(function (b) { ui.folderBtns.appendChild(b); });
   }
 
   function importSettings(text) {
@@ -4167,7 +4285,11 @@
           confirmBox('Alt til standard', 'Sette alle terskler, avviksgrenser og poeng tilbake til standard? Egne regler, varegrupper og butikknavn beholdes.', 'Tilbakestill', resetAllSettings);
         })
       ]),
-      hintEl('Eksport tar med terskler, poeng, egne regler, varegrupper og butikknavn. Skannede kvitteringer og notater tas ikke med.')
+      hintEl('Eksport tar med terskler, poeng, egne regler, varegrupper og butikknavn. Skannede kvitteringer og notater tas ikke med.'),
+      el('b', { class: 'kvr-subh', text: 'Lagre i mappe' }),
+      (ui.folderInfo = hintEl('')),
+      (ui.folderBtns = el('div', { class: 'kvr-row' })),
+      hintEl('Velg en mappe (for eksempel på en fellesdisk), så skrives innstillingene til ' + FOLDER_FILE + ' der ved hver endring. Samme fil kan leses inn på en annen PC. Skannede kvitteringer og notater blir i nettleseren.')
     ]);
     ui.setBody = el('div', { class: 'kvr-pane' });
 
@@ -4378,6 +4500,7 @@
     renderControl();
     renderNotes();
     renderReportLog();
+    renderFolder();
     installKeys();
     setTimeout(ensureVisible, 300);
     window.addEventListener('load', function () { setTimeout(ensureVisible, 300); });
@@ -4450,6 +4573,10 @@
       timeShift = Number(store(K.tshift)) || 0;
       weights = L.sanitizeWeights(store(K.weights));
       scope = sanitizeScope(store(K.scope));
+      folder.handle = store(K.folder);
+      if (!folder.handle || typeof folder.handle.queryPermission !== 'function') folder.handle = null;
+      folder.at = Number(store(K.folderAt)) || 0;
+      (folder.handle ? checkFolderNewer() : Promise.resolve()).then(function () { folder.ready = true; renderFolder(); });
       setInterval(attach, 1500);
       attach();
     } catch (e) { showBootError(e); }
