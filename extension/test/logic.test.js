@@ -555,7 +555,8 @@ assert.strictEqual(L.discounts(ditems, dmm, Object.assign({}, dbase, { discPct: 
 const dcs = {}, dci = [];
 for (let k = 0; k < 10; k++) { dcs['x-' + k] = rcpt([['7000 V', '', '50.00'], ...(k < 4 ? [['Rabatt: Kr 5.00 (10.0%)'], ['Rabatt årsak:']] : [])]); dci.push(dmeta('x-' + k, { cashierNumber: 'Z', endDateTime: '2026-10-01 10:0' + k })); }
 for (let k = 0; k < 10; k++) { dcs['y-' + k] = rcpt([['7000 V', '', '50.00'], ...(k < 1 ? [['Rabatt: Kr 5.00 (10.0%)'], ['Rabatt årsak:']] : [])]); dci.push(dmeta('y-' + k, { cashierNumber: 'Y', endDateTime: '2026-10-01 11:0' + k })); }
-const dcdsc = L.discounts(dci, dcs, dbase);
+const dcdsc = L.discounts(dci, dcs, Object.assign({}, dbase, { campBongs: '' }));   // 7000 er en PLU: uten kampanjesjekk (ellers kampanjevare: 5 bonger hos 2 kasserere)
+assert.strictEqual(L.discounts(dci, dcs, dbase).camp.auto, 1, 'PLU 7000 blir kampanjevare med standard kampanjesjekk');
 assert.deepStrictEqual(dcdsc.findings.filter(f => f.code === 'discCash').map(f => [f.cashier, f.flag]), [['Z', false]]);
 assert.strictEqual(dcdsc.findings.filter(f => f.code === 'discNoReason').length, 0);
 // rabattårsaker (tekstnr 1–6 eller tekst)

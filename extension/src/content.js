@@ -1584,12 +1584,28 @@
       box.appendChild(el('b', { class: 'kvr-subh', text: 'Kuponger (flest først)' }));
       box.appendChild(tbl(['Kupong-id', 'Navn', 'Bonger', 'Sum kr'], D.campaigns.slice(0, 10).map(function (c) { return [c.id, c.name, c.n, fmt(c.sum)]; })));
     }
-    if (D.camp && (D.camp.items.length || D.camp.days.length)) {
+    if (D.camp) {
       box.appendChild(el('b', { class: 'kvr-subh', text: ctlCfg.campAuto ? 'Kampanjevarer' : 'Mulige sentrale kampanjer' }));
       if (D.camp.pending) box.appendChild(el('div', { class: 'kvr-notice' }, [el('span', { text: D.camp.pending + (D.camp.pending === 1 ? ' vare venter' : ' varer venter') + ' på svar: er det en kampanje fra sentralt hold?' }), btn('Svar nå', openCampDialog, 'kvr-sm kvr-primary')]));
-      if (D.camp.items.length) box.appendChild(campTable(D.camp.items.slice(0, 12)));
+      if (D.camp.items.length) box.appendChild(campTable(D.camp.items.slice(0, 30)));
       if (D.camp.days.length) box.appendChild(tbl(['Kampanjedag', 'Butikk', 'Dag', 'Andel', 'Bonger'], D.camp.days.slice(0, 8).map(function (d) { return ['Mange bonger med rabatt', sLabel(d.store), d.day, pct(d.share), d.withDisc + ' av ' + d.n]; })));
       if (ctlCfg.campAuto) box.appendChild(hintEl(D.camp.auto + ' varer er klassifisert som kampanjevare: flere enn én kasserer (minst ' + ctlCfg.campCashiers + ') har solgt varen med rabatt på flere enn to ulike bonger (minst ' + (ctlCfg.campBongs || '–') + '). Rabatten på dem flagges ikke. Trykk «Ikke kampanje» for å flagge som vanlig. Slå av under Innstillinger → Rabatt for å bli spurt i stedet.'));
+      var S = D.camp.scan, popTodo = popScanTodo();
+      box.appendChild(hintEl('Kampanjesjekken ser ' + S.scanned + ' av ' + S.sales + ' salg i grunnlaget (' + S.cashiers + ' av ' + S.cashiersAll + ' kasserere har skannede bonger). En vare blir bare kampanjevare når de skannede bongene viser den hos flere kasserere.' +
+        (ctlCfg.campCoupon ? ' ' + D.camp.coupon + ' rabattlinjer står i en kupong på samme bong og regnes som kampanje.' : '')));
+      if (popTodo.length) box.appendChild(el('div', { class: 'kvr-row' }, [btn('Skann hele grunnlaget (' + popTodo.length + ')', scanPopulation, 'kvr-sm')]));
+      if (D.camp.others.length) {
+        box.appendChild(el('b', { class: 'kvr-subh', text: 'Rabatt uten årsak på varer som ikke er kampanjevare' }));
+        var whyText = function (c) {
+          return c.why === 'bonger' ? 'bare ' + plur(c.n, 'bong', 'bonger') + ' (grense ' + ctlCfg.campBongs + ')'
+            : c.why === 'kasserere' ? 'bare ' + plur(c.cashierN, 'kasserer', 'kasserere') + ' (grense ' + ctlCfg.campCashiers + ')' : c.why === 'av' ? 'kampanjesjekken er av' : '';
+        };
+        box.appendChild(tbl(['Vare', 'Rabatt', 'Bonger', 'Uten årsak', 'Kasserere', 'Hvorfor ikke', ''], D.camp.others.map(function (c) {
+          return [{ node: el('span', { title: (L.isCampCode(c.c) && c.c.length < 8 ? 'PLU ' : 'EAN ') + c.c }, [document.createTextNode(c.name || c.c)]) }, c.rateText, c.n, c.nr, c.cashierN,
+            whyText(c), { node: btn('Kampanjevare', function () { setCamp(c.key, 'kampanje', c.n); }, 'kvr-sm') }];
+        })));
+        box.appendChild(hintEl((D.camp.otherN > D.camp.others.length ? 'Viser ' + D.camp.others.length + ' av ' + D.camp.otherN + ' varer, flest bonger uten årsak først. ' : '') + '«Kampanjevare» merker varen som kampanje uansett rabattprosent, og rabatten på den flagges ikke lenger. Valget huskes og kan angres i tabellen over.'));
+      }
       box.appendChild(hintEl('Samme vare med rabatt på minst ' + (ctlCfg.campBongs || '–') + ' bonger hos minst ' + ctlCfg.campCashiers + ' kasserere (over alle dager og butikker) kan være en kampanje fra sentralt hold. Uten automatisk kampanjevare tas bongene med i analysen med et notat, og du blir spurt. Svaret gjelder varen, uansett rabattprosent. Svar Ja: rabatten flagges ikke lenger og telles ikke mot kassereren (' + D.camp.confirmed + ' bekreftet). Svar Nei: flagges som vanlig (' + D.camp.denied + ' avvist). En dag der minst ' + (ctlCfg.campDay || '–') + ' % av minst 30 salg har rabatt får bare notat.'));
     }
     box.appendChild(hintEl('Rabatt = linjen «Rabatt: Kr x (y %)» på en vare med årsak 1 Datovare, 2 Feil pris, 3 Prisløfte, 4 Reserveløsning kupong, 5 Annen rabattårsak eller 6 Best før (tom = ingen årsak valgt). Klikk en årsak for å filtrere listen. Kupong = linjen «Kupong (id - navn)», antatt lagt inn sentralt (CN/VPI); beløpet er ofte 0,00, så den viser at kampanjen er knyttet til bongen, ikke at den er innløst. Rødt = andel bonger med rabatt uten årsak er minst ' + ctlCfg.profFactor + '× butikkens (minst ' + ctlCfg.profMin + ' bonger). Funn «Rabatt uten årsak» krever minst ' + (ctlCfg.discPct || '–') + ' % rabatt. «Høy rabattprosent» flagger ' + (ctlCfg.discHiFrom ? ctlCfg.discHiFrom + '–' + ctlCfg.discHiTo + ' %' : 'ingenting (av)') + '. «Rabatt uten treff» krever minst ' + (ctlCfg.discMatchPct || '–') + ' % og at ingen andre bonger samme dag har varen med samme rabatt. Søk på rabatt-prosent under Skann.'));
@@ -1646,6 +1662,18 @@
     var sec = Math.round(todo.length * 1.1), est = sec >= 60 ? Math.round(sec / 60) + ' min' : sec + ' s';
     confirmBox('Skann på nytt', todo.length + ' bonger har eldre skanning uten topptekst, bunn, kortdata, Totalt, MVA og betalingsreferanse. Skanner dem på nytt (ca. ' + est + '). Hver bong åpnes i CWs visningsfelt, ett oppslag per bong.', 'Skann på nytt', function () {
       scanList(todo).then(function () { apply(); });
+    });
+  }
+
+  // Kampanjesjekken trenger skannede bonger fra alle kasserere, ikke bare omfanget.
+  function popScanTodo() { return todoFor(recs.filter(function (r) { return storeOK(r.item) && r.item.receiptType === 1; })); }
+  function scanPopulation() {
+    var todo = popScanTodo();
+    if (!todo.length || scanning) return;
+    confirmBox('Skann hele grunnlaget', todo.length + ' salg i valgte butikker er ikke skannet. Kampanjesjekken ser da bare kassererne i omfanget. Skanner dem (ca. ' + Math.max(1, Math.round(todo.length * 1.1)) + ' s) og kjører analysen på nytt.', 'Skann', async function () {
+      await scanList(todo);
+      if (ctlRes) { await runChecks(lastMode); if (checkState.at) renderCheck(); }
+      apply();
     });
   }
 

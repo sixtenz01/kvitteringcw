@@ -13,6 +13,7 @@ const add = (o) => { n++; ROWS.push(Object.assign({ id: `1001-1-${n}`, cashier: 
 for (let i = 0; i < 6; i++) add({ cashier: 'B', tot: 50 + i, body: [TR(`70000000000${i} VARE`, f2(50 + i)), TR('Bank:', f2(50 + i))] });
 ['A', 'B', 'C', 'D'].forEach((c) => add({ cashier: c, tot: 12, body: [TR(`${E1} KAMPANJEVARE`, '12.00'), '<tr><td>Rabatt: Kr 8.00 (40 %)</td></tr>', TR('Bank:', '12.00')] }));
 ['E', 'F'].forEach((c) => add({ cashier: c, tot: 13.4, body: [TR(`${E1} KAMPANJEVARE`, '13.40'), '<tr><td>Rabatt: Kr 6.60 (33 %)</td></tr>', TR('Bank:', '13.40')] }));   // samme vare, annen prosent
+add({ cashier: 'G', time: '2026-10-02 15:55', tot: 10, body: [TR('7038010000027 SJOKOLADE', '10.00'), '<tr><td>Rabatt: Kr 10.00 (50 %)</td></tr>', TR('Bank:', '10.00')] });   // én bong: ikke kampanjevare
 const rows = ROWS.map((r) => ({ transactionId: r.id, endDateTime: r.time, storeNumber: 1001, workstationNumber: r.ws, cashierNumber: r.cashier, totalAmount: r.tot, receiptType: 1, memberNumber: null, journalSourceName: 'main' }));
 const receipts = {};
 ROWS.forEach((r) => {
@@ -67,7 +68,8 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
     await page.click('[data-sec=chk-top] button:text-is("Kjør analyse")');
     await page.waitForFunction(() => /Kontroller ferdig/.test(document.getElementById('kvr-panel').innerText), null, { timeout: 90000 });
   };
-  const flagged = async () => (await page.$$eval('[data-sec=chk-list] .kvr-reason', (n) => n.map((x) => x.textContent))).filter((t) => t === 'Rabatt uten årsak').length;
+  // bonger med «Rabatt uten årsak», utenom sjokoladebongen kl 15:55 (all = med)
+  const flagged = async (all) => page.$$eval('[data-sec=chk-list] .kvr-ck', (n, all) => n.filter((x) => (all || !/15:55/.test(x.querySelector('.kvr-ck-t').textContent)) && [...x.querySelectorAll('.kvr-reason')].some((r) => r.textContent === 'Rabatt uten årsak')).length, all);
   const note = /Kan være sentral kampanje: «KAMPANJEVARE» med 40 % og 33 % rabatt er på 6 bonger hos 6 kasserere/;
 
   await analyse();
@@ -78,6 +80,17 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   await page.click('button:text-is("Åpne alle")');
   assert.match(await txt('[data-sec=disc]'), /Kampanjevarer .*KAMPANJEVARE 40 % og 33 % 6 6 1 1 Kampanjevare \(automatisk\) Ikke kampanje/);
   assert.match(await txt('[data-sec=disc]'), /1 varer er klassifisert som kampanjevare/);
+  // dekning og varer som ikke er kampanjevare, med manuell merking
+  assert.match(await txt('[data-sec=disc]'), /Kampanjesjekken ser 13 av 13 salg i grunnlaget \(7 av 7 kasserere har skannede bonger\)/);
+  assert.match(await txt('[data-sec=disc]'), /Rabatt uten årsak på varer som ikke er kampanjevare Vare Rabatt Bonger Uten årsak Kasserere Hvorfor ikke SJOKOLADE 50 % 1 1 1 bare 1 bong \(grense 3\) Kampanjevare/);
+  assert.strictEqual(await flagged(true), 1, 'sjokoladen er flagget');
+  await page.click('[data-sec=disc] button:text-is("Kampanjevare")');
+  await page.waitForFunction(() => /SJOKOLADE 50 % 1 1 1 1 Kampanje\s*Angre/.test(document.querySelector('[data-sec=disc]').innerText.replace(/\s+/g, ' ')), null, { timeout: 30000 });
+  await go('Analyse', 'Sjekk først');
+  assert.strictEqual(await flagged(true), 0, 'merket som kampanjevare: ikke flagget');
+  await go('Analyse', 'Detaljer');
+  await page.click('[data-sec=disc] button:text-is("Angre")');
+  await page.waitForFunction(() => /bare 1 bong/.test(document.querySelector('[data-sec=disc]').innerText), null, { timeout: 30000 });
   await page.click('[data-sec=disc] button:text-is("Ikke kampanje")');
   await page.waitForFunction(() => /Ikke kampanje\s*Angre/.test(document.querySelector('[data-sec=disc]').innerText), null, { timeout: 30000 });
   await go('Analyse', 'Sjekk først');
@@ -95,7 +108,8 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   // bongene tas med, med notat og spørsmål
   assert.strictEqual(await flagged(), 6, 'alle seks bongene er flagget, også de med annen prosent');
   assert.match(await txt('[data-sec=chk-top]'), /1 mulig sentral kampanje venter på svar/);
-  assert.match(await txt('.kvr-ctlsum'), /6 å sjekke/);
+  assert.match(await txt('.kvr-ctlsum'), /7 å sjekke/);
+  if (!(await page.$('[data-sec=chk-list] .kvr-camp'))) await page.locator('[data-sec=chk-list] .kvr-ck').filter({ hasNotText: '15:55' }).first().locator('.kvr-ck-h').click();
   assert.match(await txt('[data-sec=chk-list] .kvr-camp'), /Kan være sentral kampanje: «KAMPANJEVARE» med 40 % og 33 % rabatt er på 6 bonger hos 6 kasserere\. Stemmer det\?/);
   assert.ok(!/\.\./.test(await txt('[data-sec=chk-list]')), 'forklaringen slutter ikke på to punktum');
   assert.ok(await page.$('[data-sec=chk-list] .kvr-camp button:text-is("Ja, kampanje")') && await page.$('[data-sec=chk-list] .kvr-camp button:text-is("Nei, ikke kampanje")'));
@@ -115,7 +129,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   await page.waitForFunction(() => /Kampanje\s*Angre/.test((document.querySelector('.kvr-dlg') || {}).innerText || ''), null, { timeout: 30000 });
   await page.click('.kvr-dlg button:text-is("Lukk")');
   assert.strictEqual(await flagged(), 0, 'bekreftet kampanje: alle seks bonger oppdateres, også de med 33 %');
-  assert.match(await txt('#kvr-panel'), /Merket som sentral kampanje, uansett rabattprosent\. Rabatten flagges ikke lenger\. Gjelder alle 6 bongene med varen \(6 → 0 flaggede bonger\)/);
+  assert.match(await txt('#kvr-panel'), /Merket som sentral kampanje, uansett rabattprosent\. Rabatten flagges ikke lenger\. Gjelder alle 6 bongene med varen \(7 → 1 flaggede bonger\)/);
   assert.ok(!/venter på svar/.test(await txt('[data-sec=chk-top]')));
 
   // svaret huskes etter omlasting

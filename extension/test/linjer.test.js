@@ -264,6 +264,34 @@ const mapOf = (pairs) => pairs.reduce((m, [it, s]) => (m[it.transactionId] = s, 
   assert.deepStrictEqual([atNo.camp.auto, atNo.camp.denied], [0, 1]);
   const minN = (n, cashiers) => { const b = Array.from({ length: n }, (_, i) => day('t-' + i, '14:' + (10 + i), 'K' + (i % cashiers), [dl('KAMPANJEVARE', 12, 8, 40)])); return L.discounts(b.map((x) => x[0]), mapOf(b), au).camp.auto; };
   assert.deepStrictEqual([minN(3, 2), minN(2, 2), minN(3, 1), minN(6, 1)], [1, 0, 0, 0], '3 bonger hos 2 kasserere ja; 2 bonger eller 1 kasserer nei');
+  // PLU-varer (4–6 siffer) kan også være kampanjevare
+  const plu = Array.from({ length: 3 }, (_, i) => { const x = day('p-' + i, '15:1' + i, 'P' + (i % 2), [{ c: '5712', n: 'APPELSIN', a: 6, d: 4, dp: 40 }]); return x; });
+  const pr = L.discounts(plu.map((x) => x[0]), mapOf(plu), au);
+  assert.deepStrictEqual([pr.camp.auto, pr.findings.filter((f) => f.code === 'discNoReason').length], [1, 0], 'PLU 5712 er kampanjevare');
+  assert.ok(L.isCampCode('5712') && L.isCampCode(EAN) && !L.isCampCode('399') && !L.isCampCode('99'));
+  assert.deepStrictEqual(L.sanitizeCamp({ '5712': 'kampanje', '399': 'kampanje' }), { '5712': 'kampanje' });
+  // varer som ikke er kampanjevare, med grunn, og manuell merking
+  const few = [day('f-1', '16:00', 'A', [dl('KAFFE', 6, 4, 40)]), day('f-2', '16:05', 'B', [dl('KAFFE', 6, 4, 40)]),
+    day('f-3', '16:10', 'A', [dl('SMØR', 15, 10, 40)]), day('f-4', '16:15', 'A', [dl('SMØR', 15, 10, 40)]), day('f-5', '16:20', 'A', [dl('SMØR', 15, 10, 40)])];
+  const fr = L.discounts(few.map((x) => x[0]), mapOf(few), au);
+  assert.deepStrictEqual(fr.camp.others.map((e) => [e.name, e.n, e.nr, e.cashierN, e.why]), [['SMØR', 3, 3, 1, 'kasserere'], ['KAFFE', 2, 2, 2, 'bonger']]);
+  assert.deepStrictEqual([fr.camp.otherN, fr.camp.scan.sales, fr.camp.scan.scanned, fr.camp.scan.cashiers, fr.camp.scan.cashiersAll], [2, 5, 5, 2, 2]);
+  const frYes = L.discounts(few.map((x) => x[0]), mapOf(few), au, few.map((x) => x[0]), { [CODES.SMØR]: 'kampanje' });
+  assert.deepStrictEqual([frYes.camp.others.map((e) => e.name), frYes.findings.filter((f) => f.code === 'discNoReason').length], [['KAFFE'], 2], 'merket som kampanjevare: SMØR flagges ikke');
+  // dekning: bonger som ikke er skannet telles i grunnlaget
+  const unscanned = bong({ cashierNumber: 'Z' });
+  assert.deepStrictEqual(L.discounts(few.map((x) => x[0]), mapOf(few), au, few.map((x) => x[0]).concat([unscanned])).camp.scan, { sales: 6, scanned: 5, cashiers: 2, cashiersAll: 3 });
+  // kupong på samme bong for samme vare: rabatten er kampanje
+  const cp = [day('k-1', '17:00', 'A', [{ c: '7038010000999', n: 'COOP FROKOSTEGG FRITTG. 12PK L', a: 30, d: 20, dp: 40 }]), day('k-2', '17:05', 'A', [{ c: '7038010000998', n: 'COOP KOPPNUDLER KYLLING 65G', a: 6, d: 4, dp: 40 }]), day('k-3', '17:10', 'A', [{ c: '7038010000997', n: 'COOP KAFFE', a: 30, d: 20, dp: 40 }])];
+  cp[0][1].coupons = [{ i: '1ESD2LJ54XDMBB6F', n: 'COOP FROKOSTEGG FRITTG. 12PK L', a: 0 }];
+  cp[1][1].coupons = [{ i: '1ESD2P6DRVPCCJY1', n: 'Gruppe - Coop koppnudler, 65 g', a: 0 }];
+  cp[2][1].coupons = [{ i: '1ESD2P6DRVPCCJY1', n: 'Gruppe - Coop koppnudler, 65 g', a: 0 }];
+  const cr = L.discounts(cp.map((x) => x[0]), mapOf(cp), au);
+  assert.deepStrictEqual([cr.camp.coupon, cr.findings.filter((f) => f.code === 'discNoReason').map((f) => f.ids[0])], [2, ['k-3']], 'eggene og nudlene har kupong; kaffen ikke');
+  assert.strictEqual(L.discounts(cp.map((x) => x[0]), mapOf(cp), cfgOf(Object.assign({ campBongs: '3', campCashiers: '2' }, three, { campAuto: '1', campCoupon: '' }))).findings.filter((f) => f.code === 'discNoReason').length, 3, 'kupongregelen kan slås av');
+  assert.strictEqual(L.discounts(cp.map((x) => x[0]), mapOf(cp), au, cp.map((x) => x[0]), { '7038010000999': 'ikke' }).findings.filter((f) => f.code === 'discNoReason').length, 2, '«Ikke kampanje» overstyrer kupongen');
+  assert.ok(!L.couponFor({ coupons: [{ n: 'Coop melk' }] }, { n: 'COOP SMØR' }), 'bare «Coop» felles er ikke treff');
+  assert.ok(L.couponFor({ coupons: [{ n: 'GRUPPE 240 - Coop knekkebrød 170-320 g' }] }, { n: 'COOP KNEKKEBRØD GROVT 190G' }), 'GRUPPE med nummer');
   assert.strictEqual(L.discounts(cit, cm, cfgOf(Object.assign({}, three, { campBongs: '', campAuto: '1' }))).camp.auto, 0, 'av når grensen for bonger er tom');
   // svar på vare som ikke finnes i dataene kan angres
   assert.deepStrictEqual(L.discounts([], {}, cfgOf({}), [], { [L.campKey(EAN2)]: 'kampanje' }).camp.items.map((e) => [e.c, e.status, e.n]), [[EAN2, 'kampanje', 0]]);
