@@ -277,7 +277,7 @@
 <ul>
   <li><strong>Bongen flagges</strong> når en rabattlinje uten årsak har en rabattprosent på minst 30 % (Innstillinger → Rabatt, «Rabatt uten årsak fra»; tom = av). Rabatter under grensen flagges ikke. Testen bruker prosenten som er trykt på rabattlinjen. En linje uten trykt prosent vurderes i stedet av «Høy rabattprosent» og «Rabatt uten treff», som regner prosenten ut fra beløpene.</li>
   <li><strong>Kassereren markeres</strong> (ikke bongen) når andelen av hans eller hennes bonger med rabatt uten årsak er minst 1,5 ganger butikkens andel, med minst 5 bonger og minst 2 bonger med rabatt uten årsak. Det står i kassererprofilen som «Mange rabatter uten årsak», og kan slås av med «Sammenlign kasserere».</li>
-  <li><strong>Kampanjevare:</strong> selger flere enn én kasserer samme vare med rabatt på flere enn to ulike bonger, klassifiseres varen automatisk som kampanjevare. Rabatten flagges ikke, og den teller ikke mot kassereren (under).</li>
+  <li><strong>Kampanjevare:</strong> selger minst to kasserere samme vare med rabatt (én bong hver er nok), klassifiseres varen automatisk som kampanjevare. Rabatten flagges ikke, og den teller ikke mot kassereren (under).</li>
   <li><strong>Bonger som ikke er skannet</strong> ses ikke. Dekningsgraden i kortet Rabatter og kuponger viser hvor mange salg som er vurdert.</li>
 </ul>
 <h3>Høy rabatt, rabatt uten treff og kampanje</h3>
@@ -287,13 +287,13 @@
   <tbody>
     <tr><td>Høy rabattprosent</td><td>Rabattlinjer mellom to grenser (standard 70 til 100 %), med eller uten årsak. Overvåker rabatter som nesten gir varen bort.</td></tr>
     <tr><td>Rabatt uten treff på andre salg</td><td>En vare med minst 30 % rabatt der ingen andre bonger i butikken samme dag har samme vare med samme rabatt. Samme rabatt på andre dager står i forklaringen. Kan være feil eller underslag. Standard er bare rabatt uten årsak.</td></tr>
-    <tr><td>Kampanjevare</td><td>Samme vare med rabatt (hvilken som helst prosent) på minst 3 ulike bonger hos minst 2 kasserere, over alle dager og butikker. Standard: varen klassifiseres automatisk som kampanjevare, og rabatten flagges ikke. Slår du av «Klassifiser automatisk som kampanjevare», tas bongene med i analysen med et notat, og du blir spurt.</td></tr>
+    <tr><td>Kampanjevare</td><td>Samme vare med rabatt (hvilken som helst prosent) hos minst 2 kasserere, minst 2 bonger til sammen (én bong hos hver er nok), over alle dager og butikker. Standard: varen klassifiseres automatisk som kampanjevare, og rabatten flagges ikke. Slår du av «Klassifiser automatisk som kampanjevare», tas bongene med i analysen med et notat, og du blir spurt.</td></tr>
 
   </tbody></table></div>
 <h3>Kampanjevare</h3>
 <p>Rabatt uten årsak kan skyldes en kampanje fra sentralt hold. Er samme vare solgt med rabatt på flere bonger hos flere kasserere, er det trolig en kampanje og ikke én person som gir rabatt.</p>
 <ul>
-  <li><strong>Automatisk (standard):</strong> selger flere enn én kasserer samme vare med rabatt på flere enn to ulike bonger, er varen en <em>kampanjevare</em>. Rabatten flagges ikke, telles ikke mot kassereren, og linjen merkes «kampanjevare» i kvitteringsvisningen. Bare salg med rabatt telles. Grensene er «Mulig kampanje: … bonger» (3) og «… kasserere» (2) under Innstillinger → Rabatt.</li>
+  <li><strong>Automatisk (standard):</strong> selger minst to kasserere samme vare med rabatt, er varen en <em>kampanjevare</em>. Én bong hos hver av to kasserere er nok. Rabatten flagges ikke, telles ikke mot kassereren, og linjen merkes «kampanjevare» i kvitteringsvisningen. Bare salg med rabatt telles. Grensene er «Mulig kampanje: … bonger» (2) og «… kasserere» (2) under Innstillinger → Rabatt.</li>
   <li><strong>Kupong på bongen:</strong> står varen i en kupong-linje på samme bong (for eksempel fra Coop-appen), regnes rabatten som kampanje. Kan slås av under Innstillinger → Rabatt.</li>
   <li><strong>Varer med strekkode og PLU</strong> (for eksempel «5712 APPELSIN») kan begge bli kampanjevare.</li>
   <li><strong>Skann hele grunnlaget:</strong> analysen skanner bare bongene i omfanget. Er omfanget én kasserer, ser kampanjesjekken bare den kassereren, og ingen vare blir kampanjevare. Kortet viser hvor mange salg og kasserere sjekken ser, og knappen «Skann hele grunnlaget» skanner resten av bongene i valgte butikker.</li>
@@ -581,7 +581,7 @@
 <details class="faq"><summary>Jeg endret en terskel, men ingenting skjedde</summary><p>Terskler gjelder fra neste analyse. Trykk Kjør analyse. Poeng gjelder med en gang.</p></details>
 <details class="faq"><summary>Bevisbildene mangler for noen bonger</summary><p>Bonger som ikke lenger er i listen, eller der tegningen feilet, får ikke bilde. Det står i rapportens dekningsdel. Hent bongene på nytt og lag rapporten igjen.</p></details>
 <details class="faq"><summary>Jeg svarte «Ja, kampanje», men bongen er fortsatt flagget</summary><p>Svaret gjelder rabatt på akkurat den varen. Andre rabatter på bongen, andre varer og andre tester (for eksempel pris eller spesialbetaling) flagges som før. Åpne bongen i «Sjekk først» for å se hva som er igjen. <strong>Angre</strong> finnes under bongen og i tabellen «Mulige sentrale kampanjer».</p></details>
-<details class="faq"><summary>Jeg får ikke spørsmålet om kampanje</summary><p>Spørsmålet vises bare når samme vare har rabatt på minst 3 bonger hos minst 2 kasserere i de innlastede bongene (over alle dager og butikker), og bongen er flagget for rabatt. Bongene må være skannet. Last inn flere dager, eller senk grensene under Innstillinger → Rabatt.</p></details>
+<details class="faq"><summary>Jeg får ikke spørsmålet om kampanje</summary><p>Spørsmålet vises bare når samme vare har rabatt på minst 2 bonger hos minst 2 kasserere i de innlastede bongene (over alle dager og butikker), og bongen er flagget for rabatt. Bongene må være skannet. Last inn flere dager, eller senk grensene under Innstillinger → Rabatt.</p></details>
 <details class="faq"><summary>Butikkene vises bare som tall</summary><p>Navnet hentes fra Lindbaks butikkliste, ellers fra BUTIKK-kolonnen i listen. Mangler begge, skriver du navnet under Filtrer → Butikk → «Gi butikken navn», eller under Innstillinger → Generelt. Nummer med mer enn fire siffer vises som avdelingsnummer med nivå i parentes, for eksempel «1003 (131)».</p></details>
 <details class="faq"><summary>Panelet dekker lista i Lindbak</summary><p>Trykk <strong>⤢</strong> i tittelfeltet og velg Stor. Panelet dokkes til høyre, og lista i Lindbak er synlig ved siden av. Full bruker hele skjermen. Valget huskes.</p></details>
 <details class="faq"><summary>Noe virker galt i Lindbak etter at jeg installerte tillegget</summary><p>Slå tillegget av under <code>chrome://extensions</code> og last siden på nytt. Pluginen skriver ikke til Lindbaks lagring, men kan skjule eller flytte rader med filtre. Fjern filtrene med «Nullstill alt».</p></details>
@@ -597,7 +597,7 @@
   <dt>Pantelapp 99 og 399</dt><dd>Kode 99 er en pantelapp lagt inn manuelt av kassereren. Kode 399 kommer fra pantemaskinen.</dd>
   <dt>Motlinje</dt><dd>En linje med samme kode og beløp, men motsatt fortegn, som sletter en tidligere linje på samme bong.</dd>
   <dt>Kampanjedag</dt><dd>En dag og butikk der minst 40 % av minst 30 salg har rabatt. Rabattene flagges fortsatt, men får et notat om mulig kampanjedag.</dd>
-  <dt>Kampanjevare</dt><dd>Samme vare med rabatt på minst 3 ulike bonger hos minst 2 kasserere. Klassifiseres automatisk, og rabatten flagges ikke. Uten automatikk får bongen et notat, og du svarer Ja eller Nei. Svaret gjelder varen på alle bonger.</dd>
+  <dt>Kampanjevare</dt><dd>Samme vare med rabatt hos minst 2 kasserere (én bong hver er nok). Klassifiseres automatisk, og rabatten flagges ikke. Uten automatikk får bongen et notat, og du svarer Ja eller Nei. Svaret gjelder varen på alle bonger.</dd>
   <dt>Samme forhold</dt><dd>Tester som måler det samme (for eksempel kontant tilbake uten salg og slettede linjer). Bare den høyeste teller i poengene; de andre vises overstrøket.</dd>
   <dt>Nivå og avdelingsnummer</dt><dd>Butikknummer med mer enn fire siffer: de fire siste sifrene er avdelingsnummeret, resten er nivået (1311003 er nivå 131, avdeling 1003).</dd>
   <dt>Spesialbetaling</dt><dd>Betaling eller linje merket eget forbruk, internt forbruk, utbetaling, finansiering eller sjekk.</dd>

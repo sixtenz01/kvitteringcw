@@ -264,6 +264,13 @@ const mapOf = (pairs) => pairs.reduce((m, [it, s]) => (m[it.transactionId] = s, 
   assert.deepStrictEqual([atNo.camp.auto, atNo.camp.denied], [0, 1]);
   const minN = (n, cashiers) => { const b = Array.from({ length: n }, (_, i) => day('t-' + i, '14:' + (10 + i), 'K' + (i % cashiers), [dl('KAMPANJEVARE', 12, 8, 40)])); return L.discounts(b.map((x) => x[0]), mapOf(b), au).camp.auto; };
   assert.deepStrictEqual([minN(3, 2), minN(2, 2), minN(3, 1), minN(6, 1)], [1, 0, 0, 0], '3 bonger hos 2 kasserere ja; 2 bonger eller 1 kasserer nei');
+  // standard (3.29.0): én bong hos hver av to kasserere er kampanjevare; to bonger hos samme kasserer er det ikke
+  const dflt = Object.assign(L.defaultControl(), { discMatchPct: '30', discPct: '30' });
+  const two = [day('t2-1', '18:00', 'A', [dl('KAFFE', 6, 4, 40)]), day('t2-2', '18:05', 'B', [dl('KAFFE', 6, 4, 40)])];
+  const tr2 = L.discounts(two.map((x) => x[0]), mapOf(two), dflt);
+  assert.deepStrictEqual([tr2.camp.auto, tr2.findings.filter((f) => /^disc(NoReason|NoMatch|High)$/.test(f.code)).length], [1, 0], 'én bong hos hver av to kasserere');
+  const same = [day('t1-1', '18:10', 'A', [dl('KAFFE', 6, 4, 40)]), day('t1-2', '18:15', 'A', [dl('KAFFE', 6, 4, 40)])];
+  assert.deepStrictEqual(L.discounts(same.map((x) => x[0]), mapOf(same), dflt).camp.others.map((e) => [e.n, e.cashierN, e.why]), [[2, 1, 'kasserere']], 'to bonger hos samme kasserer');
   // PLU-varer (4–6 siffer) kan også være kampanjevare
   const plu = Array.from({ length: 3 }, (_, i) => { const x = day('p-' + i, '15:1' + i, 'P' + (i % 2), [{ c: '5712', n: 'APPELSIN', a: 6, d: 4, dp: 40 }]); return x; });
   const pr = L.discounts(plu.map((x) => x[0]), mapOf(plu), au);
@@ -395,7 +402,7 @@ const mapOf = (pairs) => pairs.reduce((m, [it, s]) => (m[it.transactionId] = s, 
   assert.strictEqual(L.groupForReason('Pantelapp slettet'), 'lapp');
   assert.strictEqual(L.groupForReason('Høy rabattprosent'), 'disc');
   const dc = defaultControlOn();
-  assert.deepStrictEqual([dc.lappManualMin, dc.lappReuseMin, dc.voidResaleMin, dc.discHiFrom, dc.discHiTo, dc.campBongs, dc.campCashiers, dc.campDay, dc.campAuto, dc.askDevPct, dc.cardRetN], ['50', '60', '120', '70', '100', '3', '2', '40', '1', '5', '3']);
+  assert.deepStrictEqual([dc.lappManualMin, dc.lappReuseMin, dc.voidResaleMin, dc.discHiFrom, dc.discHiTo, dc.campBongs, dc.campCashiers, dc.campDay, dc.campAuto, dc.askDevPct, dc.cardRetN], ['50', '60', '120', '70', '100', '2', '2', '40', '1', '5', '3']);
   assert.strictEqual(dc.specialWords, 'eget forbruk, internt forbruk, utbetaling, finansiering, sjekk');
   assert.ok(L.rrs(L.riskScore(['Pantelapp slettet', 'Varelinjer slettet, pant utbetalt kontant'])) > 50);
 }

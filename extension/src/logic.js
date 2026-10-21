@@ -975,7 +975,7 @@
     ['specialWords', 'Spesialbetaling: ord (komma, tom = av)', DEFAULT_SPECIAL], ['specialN', 'Spesialbetaling: kasserer ved ≥ antall bonger (tom = av)', '3'],
     ['discHiFrom', 'Høy rabatt fra % (tom = av)', '70'], ['discHiTo', 'Høy rabatt til %', '100'],
     ['discMatchPct', 'Rabatt uten treff på andre salg: fra % (tom = av)', '30'], ['discMatchNR', 'Treff-test: bare rabatt uten årsak (tom = alle)', '1'],
-    ['campBongs', 'Mulig kampanje: samme vare med rabatt på ≥ antall bonger (tom = av)', '3'], ['campCashiers', 'Mulig kampanje: hos ≥ antall kasserere', '2'], ['campDay', 'Kampanjedag: andel bonger med rabatt ≥ % (tom = av)', '40'], ['campAuto', 'Kampanjevare automatisk (tom = spør)', '1'], ['campCoupon', 'Rabatt på vare med kupong på bongen er kampanje (tom = av)', '1'],
+    ['campBongs', 'Mulig kampanje: samme vare med rabatt på ≥ antall bonger (tom = av)', '2'], ['campCashiers', 'Mulig kampanje: hos ≥ antall kasserere', '2'], ['campDay', 'Kampanjedag: andel bonger med rabatt ≥ % (tom = av)', '40'], ['campAuto', 'Kampanjevare automatisk (tom = spør)', '1'], ['campCoupon', 'Rabatt på vare med kupong på bongen er kampanje (tom = av)', '1'],
     ['askDevPct', 'Spør pris avviker fra dagens salg ≥ % (tom = av)', '5'], ['askMinN', 'Spør pris: minst antall salg av varen samme dag', '3'], ['askN', 'Spør pris: kasserer ved ≥ antall bonger (tom = av)', '5'],
     ['cardRetN', 'Returer på samme kort ≥ antall (tom = av)', '3'], ['cardRetDays', 'Returer på samme kort innen dager', '30'],
     ['manualWords', 'Manuell kvittering: ord (komma, tom = av)', 'manuell kvittering, manuell bong, til gode, tilgode'], ['manualDays', 'Manuell kvittering: match innen dager', '3'],
@@ -1049,7 +1049,7 @@
       sf('discMatchNR', 'ctl', 'flag', 'Treff-testen gjelder bare rabatt uten årsak', '', 'Av = alle rabatter, også med årsak.'),
       sf('campBongs', 'ctl', 'num', 'Mulig kampanje: samme vare med rabatt på minst', 'bonger', 'Over alle innlastede dager og butikker. Bongen flagges med notat om mulig sentral kampanje, og du blir spurt om det stemmer.', true),
       sf('campCashiers', 'ctl', 'num', 'Mulig kampanje: hos minst', 'kasserere', 'Samme vare og rabatt hos flere kasserere tyder på kampanje fra sentralt hold, ikke på én person.'),
-      sf('campAuto', 'ctl', 'flag', 'Klassifiser automatisk som kampanjevare', '', 'Selger flere enn én kasserer samme vare med rabatt på flere enn to ulike bonger (grensene over), regnes varen som kampanjevare uten å spørre. Rabatten flagges ikke. Du kan merke en vare som «ikke kampanje».'),
+      sf('campAuto', 'ctl', 'flag', 'Klassifiser automatisk som kampanjevare', '', 'Selger minst to kasserere samme vare med rabatt (én bong hver er nok, grensene over), regnes varen som kampanjevare uten å spørre. Rabatten flagges ikke. Du kan merke en vare som «ikke kampanje».'),
       sf('campCoupon', 'ctl', 'flag', 'Rabatt på vare med kupong på samme bong er kampanje', '', 'Står varen i en «Kupong (id - navn)»-linje på samme bong (for eksempel fra Coop-appen), regnes rabatten som kampanje og flagges ikke.'),
       sf('campDay', 'ctl', 'num', 'Kampanjedag: andel bonger med rabatt over', '%', 'Minst 30 salg den dagen. Rabatter den dagen får notat om mulig kampanjedag.', true)
     ], weights: ['Rabatt uten årsak', 'Mange rabatter uten årsak', 'Rabatt med overvåket årsak', 'Mange rabatter med overvåket årsak', 'Høy rabattprosent', 'Rabatt uten treff på andre salg'] },
@@ -2023,7 +2023,7 @@
       e.n = Object.keys(e.bongs).length; e.cashierN = Object.keys(e.cashiers).length; e.storeN = Object.keys(e.stores).length; e.dayN = Object.keys(e.days).length; e.nr = Object.keys(e.nrBongs).length;
       delete e.rateBongs; delete e.bongs; delete e.cashiers; delete e.stores; delete e.days; delete e.nrBongs;
       e.possible = dec[k] !== 'ikke' && nB !== null && e.n >= nB && e.cashierN >= nC;
-      // 'auto' = kampanjevare uten å spørre: flere enn én kasserer, flere enn to bonger (grensene), og ikke avvist av brukeren
+      // 'auto' = kampanjevare uten å spørre: minst to kasserere og to bonger (grensene), og ikke avvist av brukeren
       e.status = dec[k] || (auto && e.possible ? 'auto' : '');
       // hvorfor varen ikke er kampanjevare: for få bonger eller for få kasserere
       e.why = e.possible || e.status ? '' : nB === null ? 'av' : e.n < nB ? 'bonger' : e.cashierN < nC ? 'kasserere' : '';

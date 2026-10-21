@@ -11,7 +11,7 @@
   var K = {
     saved: 'kvr.saved.v1', collapsed: 'kvr.collapsed.v1', scan: 'kvr.scan.v2', pos: 'kvr.pos.v1',
     size: 'kvr.size.v1', sec: 'kvr.sec.v1', rules: 'kvr.rules.v1', anom: 'kvr.anom.v1',
-    stores: 'kvr.stores.v1', tab: 'kvr.tab.v1', layout: 'kvr.layout.v1', arules: 'kvr.arules.v1', notes: 'kvr.notes.v1', tasks: 'kvr.tasks.v1', ctl: 'kvr.ctl.v1', keynav: 'kvr.keynav.v1', tshift: 'kvr.tshift.v1', nlog: 'kvr.nlog.v1', wide: 'kvr.wide.v1', sub: 'kvr.sub.v1', weights: 'kvr.weights.v1', camp: 'kvr.camp.v1', lastrun: 'kvr.lastrun.v1', scope: 'kvr.scope.v1', help: 'kvr.help.v1', sub2: 'kvr.sub2.v1', reports: 'kvr.reports.v1', repopts: 'kvr.repopts.v1', pantmig: 'kvr.pantmig.v1', pos2: 'kvr.pos2.v1'
+    stores: 'kvr.stores.v1', tab: 'kvr.tab.v1', layout: 'kvr.layout.v1', arules: 'kvr.arules.v1', notes: 'kvr.notes.v1', tasks: 'kvr.tasks.v1', ctl: 'kvr.ctl.v1', keynav: 'kvr.keynav.v1', tshift: 'kvr.tshift.v1', nlog: 'kvr.nlog.v1', wide: 'kvr.wide.v1', sub: 'kvr.sub.v1', weights: 'kvr.weights.v1', camp: 'kvr.camp.v1', lastrun: 'kvr.lastrun.v1', scope: 'kvr.scope.v1', help: 'kvr.help.v1', sub2: 'kvr.sub2.v1', reports: 'kvr.reports.v1', repopts: 'kvr.repopts.v1', pantmig: 'kvr.pantmig.v1', pos2: 'kvr.pos2.v1', campmig: 'kvr.campmig.v1'
   };
   var sayTimer = null;
   var failedRecs = [];
@@ -1589,7 +1589,7 @@
       if (D.camp.pending) box.appendChild(el('div', { class: 'kvr-notice' }, [el('span', { text: D.camp.pending + (D.camp.pending === 1 ? ' vare venter' : ' varer venter') + ' på svar: er det en kampanje fra sentralt hold?' }), btn('Svar nå', openCampDialog, 'kvr-sm kvr-primary')]));
       if (D.camp.items.length) box.appendChild(campTable(D.camp.items.slice(0, 30)));
       if (D.camp.days.length) box.appendChild(tbl(['Kampanjedag', 'Butikk', 'Dag', 'Andel', 'Bonger'], D.camp.days.slice(0, 8).map(function (d) { return ['Mange bonger med rabatt', sLabel(d.store), d.day, pct(d.share), d.withDisc + ' av ' + d.n]; })));
-      if (ctlCfg.campAuto) box.appendChild(hintEl(D.camp.auto + ' varer er klassifisert som kampanjevare: flere enn én kasserer (minst ' + ctlCfg.campCashiers + ') har solgt varen med rabatt på flere enn to ulike bonger (minst ' + (ctlCfg.campBongs || '–') + '). Rabatten på dem flagges ikke. Trykk «Ikke kampanje» for å flagge som vanlig. Slå av under Innstillinger → Rabatt for å bli spurt i stedet.'));
+      if (ctlCfg.campAuto) box.appendChild(hintEl(D.camp.auto + ' varer er klassifisert som kampanjevare: minst ' + ctlCfg.campCashiers + ' kasserere har solgt varen med rabatt, på minst ' + (ctlCfg.campBongs || '–') + ' bonger til sammen (én bong hos hver av to kasserere er nok). Rabatten på dem flagges ikke. Trykk «Ikke kampanje» for å flagge som vanlig. Slå av under Innstillinger → Rabatt for å bli spurt i stedet.'));
       var S = D.camp.scan, popTodo = popScanTodo();
       box.appendChild(hintEl('Kampanjesjekken ser ' + S.scanned + ' av ' + S.sales + ' salg i grunnlaget (' + S.cashiers + ' av ' + S.cashiersAll + ' kasserere har skannede bonger). En vare blir bare kampanjevare når de skannede bongene viser den hos flere kasserere.' +
         (ctlCfg.campCoupon ? ' ' + D.camp.coupon + ' rabattlinjer står i en kupong på samme bong og regnes som kampanje.' : '')));
@@ -4425,6 +4425,11 @@
         if (store(K.anom)) store(K.anom, anomCfg);
         if (store(K.ctl)) store(K.ctl, ctlCfg);
         store(K.pantmig, 1);
+      }
+      if (!store(K.campmig)) {
+        // 3.29.0: kampanjevare = samme vare med rabatt hos to kasserere, én bong hver er nok. Gammel standard (3 bonger) legges om én gang.
+        if (ctlCfg.campBongs === '3') { ctlCfg.campBongs = '2'; if (store(K.ctl)) store(K.ctl, ctlCfg); }
+        store(K.campmig, 1);
       }
       keyNav = store(K.keynav) !== false;
       timeShift = Number(store(K.tshift)) || 0;

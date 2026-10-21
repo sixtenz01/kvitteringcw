@@ -49,6 +49,12 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   const errors = [], apiCalls = [];
   page.on('pageerror', e => { errors.push(e.message); console.error('PAGEERROR', e.message); });
   await page.addInitScript(() => { window.__kvrScan = { settle: 0, poll: 10 }; });
+  // lagret innstilling fra før 3.29.0 med gammel standard (3 bonger) skal legges om til 2
+  await page.addInitScript(() => {
+    const rq = indexedDB.open('kvr-store', 1);
+    rq.onupgradeneeded = () => { rq.result.createObjectStore('kv'); rq.result.createObjectStore('scan'); };
+    rq.onsuccess = () => { const tx = rq.result.transaction('kv', 'readwrite'); const g = tx.objectStore('kv').get('kvr.campmig.v1'); g.onsuccess = () => { if (g.result === undefined) tx.objectStore('kv').put({ campBongs: '3', campCashiers: '2' }, 'kvr.ctl.v1'); }; };
+  });
   await page.route('https://chainweb.coop.no/**', r => {
     if (r.request().url().indexOf('/Api/') !== -1) { apiCalls.push(r.request().url()); return r.fulfill({ status: 404, body: '' }); }
     return r.fulfill({ contentType: 'text/html; charset=utf-8', body: html });
@@ -61,6 +67,10 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
     await page.waitForSelector('#kvr-panel');
   };
   await load();
+  const idb = (key) => page.evaluate((k) => new Promise((res) => { const rq = indexedDB.open('kvr-store', 1); rq.onsuccess = () => { const g = rq.result.transaction('kv').objectStore('kv').get(k); g.onsuccess = () => res(g.result === undefined ? null : g.result); }; }), key);
+  await page.waitForTimeout(300);
+  assert.strictEqual((await idb('kvr.ctl.v1')).campBongs, '2', 'gammel standard 3 er lagt om til 2');
+  assert.strictEqual(await idb('kvr.campmig.v1'), 1);
   const go = async (main, sub) => { await page.click(`.kvr-tab:has-text("${main}")`); if (sub) await page.click(`.kvr-sub:text-is("${sub}")`); };
   const txt = async (sel) => (await page.innerText(sel)).replace(/\s+/g, ' ');
   const analyse = async () => {
@@ -82,7 +92,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   assert.match(await txt('[data-sec=disc]'), /1 varer er klassifisert som kampanjevare/);
   // dekning og varer som ikke er kampanjevare, med manuell merking
   assert.match(await txt('[data-sec=disc]'), /Kampanjesjekken ser 13 av 13 salg i grunnlaget \(7 av 7 kasserere har skannede bonger\)/);
-  assert.match(await txt('[data-sec=disc]'), /Rabatt uten årsak på varer som ikke er kampanjevare Vare Rabatt Bonger Uten årsak Kasserere Hvorfor ikke SJOKOLADE 50 % 1 1 1 bare 1 bong \(grense 3\) Kampanjevare/);
+  assert.match(await txt('[data-sec=disc]'), /Rabatt uten årsak på varer som ikke er kampanjevare Vare Rabatt Bonger Uten årsak Kasserere Hvorfor ikke SJOKOLADE 50 % 1 1 1 bare 1 bong \(grense 2\) Kampanjevare/);
   assert.strictEqual(await flagged(true), 1, 'sjokoladen er flagget');
   await page.click('[data-sec=disc] button:text-is("Kampanjevare")');
   await page.waitForFunction(() => /SJOKOLADE 50 % 1 1 1 1 Kampanje\s*Angre/.test(document.querySelector('[data-sec=disc]').innerText.replace(/\s+/g, ' ')), null, { timeout: 30000 });
