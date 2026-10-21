@@ -136,15 +136,20 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   const csv = await r1.zip.file('data/kvitteringer.csv').async('string');
   assert.ok(rep1.includes(sha(Buffer.from(csv, 'utf8'))), 'datasettets kontrollsum står i rapporten');
   assert.strictEqual(csv.trim().split('\r\n').length, 12, '11 kvitteringer og overskrift');
-  for (const t of ['TEST-1', 'Rev Isor', 'Omfang', 'hele listen', 'Dekningsgrad', 'Skannet innhold: 8 av 8 salg (100 %)', 'Stor panteretur fra', 'Falsk retur', 'Salg etter kassaoppgjør', '1005-1-104', 'Til oppfølging', 'href="bevis/01_', 'sha256sum -c KONTROLLSUM.txt', 'Kvitteringshenter 3.30.0'])
+  for (const t of ['TEST-1', 'Rev Isor', 'Omfang', 'hele listen', 'Dekningsgrad', 'Skannet innhold: 8 av 8 salg (100 %)', 'Stor panteretur fra', 'Falsk retur', 'Salg etter kassaoppgjør', '1005-1-104', 'Til oppfølging', 'href="bevis/01_', 'sha256sum -c KONTROLLSUM.txt', 'Kvitteringshenter 3.31.0'])
     assert.ok(rep1.includes(t), 'rapporten mangler «' + t + '»');
   for (const p of pngs) assert.ok(rep1.includes('href="' + p + '"'), p + ' er lenket');
+  // bildene ligger inne i rapporten, så de vises også når rapport.html åpnes rett fra ZIP-filen
+  const imgs = [...rep1.matchAll(/<div class="ev" id="bevis-(\d+)"><img src="data:image\/png;base64,([A-Za-z0-9+\/=]+)"/g)];
+  assert.strictEqual(imgs.length, 3, 'tre innebygde bilder');
+  for (const im of imgs) assert.ok(Buffer.from(im[2], 'base64').equals(await r1.zip.file(pngs[Number(im[1]) - 1]).async('nodebuffer')), 'innebygd bilde ' + im[1] + ' er samme fil som i bevis/');
+  assert.ok(rep1.includes('<a href="#bevis-1">Se bilde 1</a>'), 'tabellen hopper til bildet');
   const exported = JSON.parse(await r1.zip.file('innstillinger.json').async('string'));
   assert.strictEqual(exported.app, 'kvitteringshenter');
   assert.strictEqual(exported.ctl.diffTotal, '100');
   assert.ok(exported.camp && typeof exported.camp === 'object', 'innstillinger.json har kampanjesvar');
   const flagged = await r1.zip.file('data/flaggede_bonger.csv').async('string');
-  assert.ok(flagged.split('\r\n')[1].startsWith('1;Høy;9;54;1005-1-101'), 'rangert etter risiko (1005-1-104 fikk 3 poeng for hull i bongnummer før 3.30.0)');
+  assert.ok(flagged.split('\r\n')[1].startsWith('1;Høy;9;54;1005-1-101'), 'rangert etter risiko (1005-1-104 fikk 3 poeng for hull i bongnummer før 3.31.0)');
   assert.ok(flagged.includes('oppfolging'), 'status fra notater er med');
 
   if (process.env.REPORT_OUT) {
@@ -155,7 +160,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   await go('Mer', 'Eksport');
   const logTxt = await page.innerText('[data-sec=auditrep]');
   assert.ok(logTxt.includes('TEST-1') && logTxt.includes(r1.zipHash.slice(0, 12)) && logTxt.includes('9 av 11'));
-  assert.deepStrictEqual(await page.evaluate(() => JSON.parse(JSON.stringify(window.KvReport.VERSION))), '3.30.0');
+  assert.deepStrictEqual(await page.evaluate(() => JSON.parse(JSON.stringify(window.KvReport.VERSION))), '3.31.0');
 
   // innstillinger endret etter analysen: rapporten viser verdiene som ble brukt
   await go('Mer', 'Innstillinger');

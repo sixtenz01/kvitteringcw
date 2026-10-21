@@ -111,6 +111,11 @@ assert.ok(html.includes('<div>Kassadifferanse fra: <b>1 kr</b></div>') && html.s
 assert.ok(html.includes('Kasse 1: salg 10:00 og retur 10:20, begge 100 kr'));
 assert.ok(html.includes('(kassererfunn, gir poeng på kassereren)'));
 assert.ok(html.includes('href="bevis/01_1005-1-101.png"') && html.includes('a'.repeat(64)));
+assert.ok(html.includes('<a href="#bevis-1">Se bilde 1</a>') && html.includes('<div class="ev" id="bevis-1"><img src="bevis/01_1005-1-101.png"'), 'uten innebygd bilde: lenke til filen');
+// bildet ligger inne i rapporten (data-URI); bare gyldig base64-PNG godtas
+const withSrc = (src) => R.build(Object.assign(model(), { evidence: Object.assign({}, model().evidence, { files: [Object.assign({}, model().evidence.files[0], { src })] }) })).files.find((f) => f.path === 'rapport.html').text;
+assert.ok(withSrc('data:image/png;base64,iVBORw0KGgo=').includes('<img src="data:image/png;base64,iVBORw0KGgo="'));
+assert.ok(withSrc('javascript:alert(1)').includes('<img src="bevis/01_1005-1-101.png"') && !withSrc('javascript:alert(1)').includes('javascript:'), 'ugyldig src brukes ikke');
 assert.ok(html.includes(out.hashes.receipts) && html.includes(out.hashes.content) && html.includes(out.hashes.settings));
 assert.ok(html.includes('sha256sum -c KONTROLLSUM.txt'));
 assert.ok(html.includes('Til oppfølging: Sjekk med &lt;script&gt;'));

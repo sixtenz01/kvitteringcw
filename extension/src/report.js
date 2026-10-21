@@ -2,7 +2,7 @@
   'use strict';
 
   var L = typeof module !== 'undefined' && module.exports ? require('./logic.js') : root.KvLogic;
-  var VERSION = '3.30.0';
+  var VERSION = '3.31.0';
 
   // ---- SHA-256 (ren JS, så rapporten ikke avhenger av crypto.subtle) -------------------
   var K256 = [
@@ -201,8 +201,8 @@
     'td.n,th.n{text-align:right;white-space:nowrap}.meta td:first-child{width:200px;color:#5f6f68}.hint{color:#5f6f68;font-size:12px}' +
     '.badge{display:inline-block;padding:1px 8px;border-radius:999px;font-weight:650;font-size:11px;white-space:nowrap}.flag td:nth-child(-n+3){white-space:nowrap}.cfg div{padding:1px 0}.cfg .chg{margin:1px 0;padding:1px 4px;border-radius:3px}.hi{background:#fde7e5;color:#a1170c}.mid{background:#fff3cd;color:#664d03}.lo{background:#e9f3ee;color:#00704a}' +
     '.chg{background:#fff8e1}.off{color:#8a9a93}.hash{font-family:Consolas,Menlo,monospace;font-size:11px;word-break:break-all}' +
-    '.warn{background:#fff8e1;border:1px solid #f0c75e;border-radius:6px;padding:6px 10px;margin:4px 0}.ev{display:inline-block;margin:6px 10px 6px 0;vertical-align:top;width:230px}' +
-    '.ev img{width:230px;border:1px solid #cfd4d1}.ev div{font-size:11px;color:#5f6f68}ul{margin:4px 0 8px;padding-left:20px}' +
+    '.warn{background:#fff8e1;border:1px solid #f0c75e;border-radius:6px;padding:6px 10px;margin:4px 0}.ev{display:inline-block;margin:6px 10px 6px 0;vertical-align:top;width:300px;max-width:100%}' +
+    '.ev img{width:100%;border:1px solid #cfd4d1}.ev:target{outline:3px solid #2e7d5b;outline-offset:3px}.ev div{font-size:11px;color:#5f6f68}ul{margin:4px 0 8px;padding-left:20px}' +
     '@media print{body{background:#fff}.page{padding:0;max-width:none}h2{break-after:avoid}tr,.ev{break-inside:avoid}}';
 
   function levelOf(score) { return L.riskLevel(score); }
@@ -295,6 +295,10 @@
         table(['Enhet', { t: 'Salg A', n: true }, { t: 'Salg B', n: true }, 'Returandel', 'Snitt kr', 'Risikoscore', 'Endring'], m.compare.map(function (r) { return { cells: [r.label, { t: r.nA, n: true }, { t: r.nB, n: true }, r.ret, r.avg, r.score, r.flags] }; })));
     }
 
+    // bildene ligger inne i rapporten (data-URI), så de vises også når rapporten åpnes rett fra ZIP-filen
+    var evNo = {};
+    m.evidence.files.forEach(function (e, i) { evNo[e.id] = i + 1; });
+    var evLink = function (id, path) { return '<a href="#bevis-' + evNo[id] + '">Se bilde ' + evNo[id] + '</a><br><a class="hash" href="' + esc(path) + '">' + esc(path.replace('bevis/', '')) + '</a>'; };
     P('<h2>6. Flaggede kvitteringer (rangert)</h2>');
     if (!ranked.length) P('<p>Ingen flaggede kvitteringer.</p>');
     else {
@@ -305,7 +309,7 @@
           it.bongnr || r.id, it.endDateTime || '', it.workstationNumber, it.cashierNumber, { t: typeof it.totalAmount === 'number' ? fmtNum(it.totalAmount) : '–', n: true },
           { html: '<ul>' + (m.explain[r.id] || r.reasons).map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>' },
           n ? (n.status === 'sjekket' ? 'Sjekket' : n.status === 'oppfolging' ? 'Til oppfølging' : '') + (n.note ? ': ' + n.note : '') : '',
-          ev ? { html: '<a href="' + esc(ev.path) + '">' + esc(ev.path.replace('bevis/', '')) + '</a>' } : '–'
+          ev && evNo[r.id] ? { html: evLink(r.id, ev.path) } : '–'
         ] };
       }), 'flag'));
     }
@@ -314,8 +318,11 @@
     var evs = m.evidence.files;
     if (!evs.length) P('<p>Ingen bevis-PNG er tatt med.</p>');
     else {
-      P('<p class="hint">Bildene er tegnet fra kvitteringsteksten i Lindbak ved eksport. Kontrollsum (SHA-256) står under hvert bilde og i KONTROLLSUM.txt.</p>');
-      evs.forEach(function (e) { P('<div class="ev"><a href="' + esc(e.path) + '"><img src="' + esc(e.path) + '" alt="' + esc(e.path) + '"></a><div>' + esc(bong(e.id)) + '<br><span class="hash">' + esc(e.hash) + '</span></div></div>'); });
+      P('<p class="hint">Bildene er tegnet fra kvitteringsteksten i Lindbak ved eksport og ligger både her og som egne filer i mappen bevis/. Kontrollsum (SHA-256) for filen står under hvert bilde og i KONTROLLSUM.txt.</p>');
+      evs.forEach(function (e, i) {
+        var src = /^data:image\/png;base64,[A-Za-z0-9+\/=]+$/.test(e.src || '') ? e.src : esc(e.path);
+        P('<div class="ev" id="bevis-' + (i + 1) + '"><img src="' + src + '" alt="Bevis ' + (i + 1) + ': ' + esc(bong(e.id)) + '"><div><b>' + (i + 1) + '.</b> ' + esc(bong(e.id)) + '<br><a href="' + esc(e.path) + '">' + esc(e.path) + '</a><br><span class="hash">' + esc(e.hash) + '</span></div></div>');
+      });
     }
 
     var nl = m.notelog && m.notelog.list && m.notelog.list.length ? logVerify(m.notelog) : null;

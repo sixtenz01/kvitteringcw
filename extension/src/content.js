@@ -196,6 +196,12 @@
     return $(node).data('kendoGrid') || null;
   }
 
+  function base64(bytes) {
+    var s = '';
+    for (var i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    return btoa(s);
+  }
+
   function plain(item) { return item && item.toJSON ? item.toJSON() : item; }
 
   function seqOf(tid) { return parseInt(String(tid).substr(String(tid).lastIndexOf('-') + 1), 10); }
@@ -3545,7 +3551,7 @@
           if (!rec) throw new Error('ikke i listen');
           var blob = await renderPngFor(rec, { layout: 'bong', header: true, member: false });
           var bytes = new Uint8Array(await blob.arrayBuffer());
-          files.push({ id: pick[i].id, path: 'bevis/' + String(i + 1).padStart(2, '0') + '_' + String(rec.item.bongnr).replace(/[^A-Za-z0-9_-]/g, '-') + '.png', hash: KvReport.sha256Bytes(bytes), blob: blob });
+          files.push({ id: pick[i].id, path: 'bevis/' + String(i + 1).padStart(2, '0') + '_' + String(rec.item.bongnr).replace(/[^A-Za-z0-9_-]/g, '-') + '.png', hash: KvReport.sha256Bytes(bytes), blob: blob, src: 'data:image/png;base64,' + base64(bytes) });
         } catch (e) { missing.push(pick[i].id); }
         }
       if (cancelScan) { say('Rapporten er avbrutt.'); return; }
@@ -3567,7 +3573,7 @@
         findings: C.findings, ranked: ranked, explain: explain, notes: noteSub,
         cashiers: L.rankCashiers(R.items, R.anom, weights, C.profile, C.cashierExtra).slice(0, 10),
         compare: compareForReport(R), failedScans: failedRecs.length,
-        evidence: { files: files.map(function (f) { return { id: f.id, path: f.path, hash: f.hash }; }), byId: byId, missing: missing, requested: pick.length, cappedFrom: ranked.length },
+        evidence: { files: files.map(function (f) { return { id: f.id, path: f.path, hash: f.hash, src: f.src }; }), byId: byId, missing: missing, requested: pick.length, cappedFrom: ranked.length },
         settingsJson: JSON.stringify({ app: 'kvitteringshenter', v: 1, ctl: R.ctl, anom: R.anomCfg, weights: weights, customRules: customRules, groups: rules, stores: manualStores, camp: campDec, keynav: keyNav }, null, 2) + '\n'
       };
       var built = KvReport.build(model);
