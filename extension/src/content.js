@@ -11,7 +11,7 @@
   var K = {
     saved: 'kvr.saved.v1', collapsed: 'kvr.collapsed.v1', scan: 'kvr.scan.v2', pos: 'kvr.pos.v1',
     size: 'kvr.size.v1', sec: 'kvr.sec.v1', rules: 'kvr.rules.v1', anom: 'kvr.anom.v1',
-    stores: 'kvr.stores.v1', tab: 'kvr.tab.v1', layout: 'kvr.layout.v1', arules: 'kvr.arules.v1', notes: 'kvr.notes.v1', tasks: 'kvr.tasks.v1', ctl: 'kvr.ctl.v1', keynav: 'kvr.keynav.v1', tshift: 'kvr.tshift.v1', nlog: 'kvr.nlog.v1', wide: 'kvr.wide.v1', sub: 'kvr.sub.v1', weights: 'kvr.weights.v1', camp: 'kvr.camp.v1', lastrun: 'kvr.lastrun.v1', scope: 'kvr.scope.v1', help: 'kvr.help.v1', sub2: 'kvr.sub2.v1', reports: 'kvr.reports.v1', repopts: 'kvr.repopts.v1', pantmig: 'kvr.pantmig.v1', pos2: 'kvr.pos2.v1', campmig: 'kvr.campmig.v1', discmig: 'kvr.discmig.v1', folder: 'kvr.folder.v1', folderAt: 'kvr.folderat.v1'
+    stores: 'kvr.stores.v1', tab: 'kvr.tab.v1', layout: 'kvr.layout.v1', arules: 'kvr.arules.v1', notes: 'kvr.notes.v1', tasks: 'kvr.tasks.v1', ctl: 'kvr.ctl.v1', keynav: 'kvr.keynav.v1', tshift: 'kvr.tshift.v1', nlog: 'kvr.nlog.v1', wide: 'kvr.wide.v1', sub: 'kvr.sub.v1', weights: 'kvr.weights.v1', camp: 'kvr.camp.v1', lastrun: 'kvr.lastrun.v1', scope: 'kvr.scope.v1', help: 'kvr.help.v1', sub2: 'kvr.sub2.v1', reports: 'kvr.reports.v1', repopts: 'kvr.repopts.v1', pantmig: 'kvr.pantmig.v1', pos2: 'kvr.pos2.v1', campmig: 'kvr.campmig.v1', discmig: 'kvr.discmig.v1', evmig: 'kvr.evmig.v1', folder: 'kvr.folder.v1', folderAt: 'kvr.folderat.v1'
   };
   var sayTimer = null;
   var failedRecs = [];
@@ -633,6 +633,7 @@
     anomMap = {};
     var n = 0;
     list.forEach(function (r) {
+      if (L.isCopy(scanMap[r.item.transactionId])) return;   // bongkopi: bare hendelsesord
       var reasons = L.anomalies(r.item, scanMap[r.item.transactionId], anomCfg, customRules, groupsOf(r.item.transactionId));
       if (reasons.length) { anomMap[r.item.transactionId] = reasons; n++; }
     });
@@ -870,7 +871,7 @@
     recs = collect();
     if (harvestGridStores()) refreshStoreMap();
     var items = recs.map(function (r) { return r.item; });
-    var dup = L.findDuplicates(items);
+    var dup = L.findDuplicates(L.splitCopies(items, scanMap).items);   // en bongkopi er ikke et duplikatkjøp
     var bf = Object.assign({}, filters, { pant: '', disc: '', discFrom: '', discTo: '', special: '', item: '', groups: [] });
     var ctx = { dupIds: dup.ids, scan: scanMap, groupsOf: groupsOf, anom: anomMap, notes: notes, specialWords: ctlCfg.specialWords };
     var visible = 0;
@@ -1473,11 +1474,14 @@
     items.forEach(function (i) { scopeIds[i.transactionId] = true; scopeCash[String(i.cashierNumber)] = true; });
     // grunnlag for tester som trenger hele bildet: alle innlastede bonger i valgte butikker
     var pop = mode === 'visible' ? items : recs.filter(function (r) { return storeOK(r.item); }).map(function (r) { return r.item; });
+    // bongkopier («Bong kopi») er ikke nye kjøp: bare hendelsesord ser dem, de andre testene får dem ikke
+    var allItems = items, allPop = pop, cs = L.splitCopies(items, scanMap);
+    items = cs.items; pop = L.splitCopies(pop, scanMap).items;
     var keep = function (f) { return f.ids.length ? f.ids.some(function (id) { return scopeIds[id]; }) : (f.cashier ? !!scopeCash[f.cashier] : true); };
     var ask = L.askPrice(items, pop, scanMap, ctlCfg), manual = L.manualReceipts(items, pop, scanMap, ctlCfg), covered = {};
     ask.findings.concat(manual.findings).forEach(function (f) { if (f.flag) f.ids.forEach(function (id) { covered[id] = true; }); });
     var res = {
-      at: new Date(), n: items.length, mode: mode,
+      at: new Date(), n: allItems.length, copies: cs.copies.length, mode: mode,
       profile: L.profiles(items, scanMap, ctlCfg),
       patterns: L.patterns(items, scanMap, ctlCfg),
       pant: L.pantCheck(items, scanMap, ctlCfg),
@@ -1492,7 +1496,7 @@
       member: L.memberChecks(items, pop, ctlCfg),
       price: L.priceDeviation(items, pop, scanMap, ctlCfg),
       ku: L.kuChecks(items, pop, scanMap, ctlCfg),
-      ev: L.eventWords(items, scanMap, ctlCfg, covered),
+      ev: L.eventWords(allItems, scanMap, ctlCfg, covered),
       ledger: L.ledger(items, pop, scanMap, ctlCfg),
       corr: L.retDiffCorr(items, scanMap, ctlCfg),
       lapp: L.lappChecks(items, pop, scanMap, ctlCfg),
@@ -1521,7 +1525,7 @@
         e.notes.push(f.title.toLowerCase());
       }
     });
-    res.snap = analysisSnapshot(res, mode, items, pop);
+    res.snap = analysisSnapshot(res, mode, allItems, allPop);
     ctlRes = res;
     apply();
     renderControl();
@@ -1653,7 +1657,8 @@
       (K.applicable ? 'Tabellen finnes på de fleste medlemsbonger, så fravær regnes som avvik.' : 'Tabellen finnes ikke på nok medlemsbonger (eller for få er skannet) til at fravær regnes som avvik.') +
       (K.ratio !== null ? ' Vanlig forhold grunnlag/varesum: ' + Math.round(K.ratio * 100) + ' %.' : '')));
     box.appendChild(el('b', { class: 'kvr-subh', text: 'Hendelsesord' }));
-    box.appendChild(hintEl(E.hits + ' av ' + E.scanned + ' skannede bonger har ord som annullert, parkert, manuell eller spør pris. Slike hendelser er ikke observert i ekte data ennå.' + (E.covered ? ' ' + E.covered + ' av dem har bare ord som allerede har egne tester (spør pris, manuell kvittering) og flagges der.' : '')));
+    box.appendChild(hintEl(E.hits + ' av ' + E.scanned + ' skannede bonger har ord som annullert, parkert, manuell eller spør pris. Slike hendelser er ikke observert i ekte data ennå.' + (E.covered ? ' ' + E.covered + ' av dem har bare ord som allerede har egne tester (spør pris, manuell kvittering) og flagges der.' : '') +
+      (R.copies ? ' ' + R.copies + ' bongkopier («Bong kopi») flagges bare her og er holdt utenfor de andre testene.' : '')));
     box.appendChild(el('div', { class: 'kvr-row' }, [btn('Diagnostikk: ukjente linjer…', openDiag)]));
   }
 
@@ -1786,7 +1791,7 @@
     box.appendChild(hintEl(E.bongs + ' bonger med ' + E.lines + ' returlinjer (' + fmt(E.sum) + ' kr) blant ' + E.scanned + ' skannede salg. ' +
       (E.words.length ? E.watched + ' bonger har overvåket årsak (' + E.words.join(', ') + ').' : 'Ingen overvåkede årsaker.') + oldTxt));
     box.appendChild(tbl(['Årsak', 'Bonger', 'Linjer', 'Kr', 'Kasserere'], E.reasons.slice(0, 15).map(function (r) {
-      var name = r.name === L.NO_RET_REASON ? { t: r.name } : { node: btn(r.name, function () { filters.text = r.name; writeForm(); apply(); say('Viser kvitteringer med «' + r.name + '».'); }, 'kvr-ent') };
+      var name = r.name === L.NO_RET_REASON ? { t: r.name } : { node: btn(r.name + (r.known ? '' : ' (ukjent årsak)'), function () { filters.text = r.name; writeForm(); apply(); say('Viser kvitteringer med «' + r.name + '».'); }, 'kvr-ent') };
       if (r.watched) name.bad = true;
       return [name, r.bongs, r.lines, fmt(r.sum), r.cashiers.slice(0, 4).map(function (c) { return c.id + ' ×' + c.n; }).join(', ') + (r.cashiers.length > 4 ? ' …' : '')];
     })));
@@ -3344,6 +3349,11 @@
         };
         add.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); doAdd(); } });
         wrap.appendChild(el('span', { class: 'kvr-row' }, [add, btn('Legg til', doAdd, 'kvr-sm')]));
+        // kjente verdier som ikke allerede er dekket av listen, kan legges til med ett klikk
+        var sug = (f.suggest || []).filter(function (w) { return !L.wordHit(w, L.wordList(cur())); });
+        if (sug.length) wrap.appendChild(el('span', { class: 'kvr-words-sug' }, [el('span', { class: 'kvr-set-h', text: 'Kjente:' })].concat(sug.map(function (w) {
+          return btn('+ ' + w, function () { var l = L.wordList(cur()); l.push(w.toLowerCase()); put(l.join(', ')); draw(); }, 'kvr-sm');
+        }))));
       };
       draw();
       right.appendChild(wrap);
@@ -4573,6 +4583,11 @@
       keyNav = store(K.keynav) !== false;
       timeShift = Number(store(K.tshift)) || 0;
       weights = L.sanitizeWeights(store(K.weights));
+      if (!store(K.evmig)) {
+        // 3.34.0: «bong kopi» er hendelsesord. Legges til i lagret ordliste én gang.
+        if (!L.wordHit('bong kopi', L.wordList(ctlCfg.evWords))) { ctlCfg.evWords = (String(ctlCfg.evWords || '').trim() ? ctlCfg.evWords + ', ' : '') + 'bong kopi'; if (store(K.ctl)) store(K.ctl, ctlCfg); }
+        store(K.evmig, 1);
+      }
       if (!store(K.discmig)) {
         // 3.33.0: «Rabatt uten årsak» gir ikke poeng. Lagret gammel standard (3) legges om én gang; egne verdier beholdes.
         var sw = store(K.weights);

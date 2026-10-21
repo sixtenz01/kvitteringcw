@@ -169,7 +169,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   // ordliste for hendelsesord: fjern og legg til ord, huskes
   await group('events');
   const words = () => page.$$eval('[data-sec=set-events] .kvr-word', n => n.map(w => w.firstChild.textContent));
-  assert.deepStrictEqual(await words(), ['anull', 'makul', 'makulert', 'storn', 'parker', 'på vent', 'manuell', 'spør pris', 'overstyr', 'prisendring', 'kansell', 'kanseller', 'avbrutt']);
+  assert.deepStrictEqual(await words(), ['anull', 'makul', 'makulert', 'storn', 'parker', 'på vent', 'manuell', 'spør pris', 'overstyr', 'prisendring', 'kansell', 'kanseller', 'avbrutt', 'bong kopi']);
   await page.click('[data-sec=set-events] button[aria-label="Fjern parker"]');
   const add = page.locator('[data-sec=set-events] input[aria-label="Ord som gir reaksjon: nytt ord"]');
   await add.fill('Retur kasse');
@@ -182,6 +182,14 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   await page.waitForTimeout(300);
   assert.match((await idbGet('kv', 'kvr.ctl.v1')).evWords, /retur kasse, tømt$/);
   assert.ok(!/parker/.test((await idbGet('kv', 'kvr.ctl.v1')).evWords));
+  // kjente returårsaker kan legges til med ett klikk
+  await group('retReason');
+  const rw = () => page.$$eval('[data-sec=set-retReason] .kvr-word', n => n.map(w => w.firstChild.textContent));
+  assert.deepStrictEqual(await rw(), ['matvaregaranti']);
+  assert.ok(!(await page.$('[data-sec=set-retReason] button:text-is("+ Coop Matvaregaranti")')), 'dekket av «matvaregaranti»');
+  await page.click('[data-sec=set-retReason] button:text-is("+ Gevinst")');
+  assert.deepStrictEqual(await rw(), ['matvaregaranti', 'gevinst']);
+  assert.ok(!(await page.$('[data-sec=set-retReason] button:text-is("+ Gevinst")')) && await page.$('[data-sec=set-retReason] button:text-is("+ Feilslag")'));
   await group('disc');
   assert.ok(await page.isChecked('[data-sec=set-disc] .kvr-set-row:has-text("Klassifiser automatisk som kampanjevare") input[type=checkbox]'), 'kampanjevare automatisk er på som standard');
 

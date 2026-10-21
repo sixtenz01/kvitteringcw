@@ -17,6 +17,8 @@ const add = (o) => {
 };
 // bakgrunn: 11 vanlige salg på kasse 3, fem minutter mellom hver, unike autorisasjonskoder
 for (let i = 0; i < 11; i++) add({ cashier: 'B', ws: 3, time: `10:${String(10 + i * 5).padStart(2, '0')}:00`, tot: 40 + i, lines: [[`70000000000${i}`, 'VARE', 40 + i]] });
+// bongkopi av den første: samme kasse, tid og beløp. Skal bare gi hendelsesord, ikke duplikat eller tempo-serie
+add({ cashier: 'B', ws: 3, time: '10:10:00', tot: 40, lines: ['*** Bong kopi ***', ['700000000000', 'VARE', 40]] });
 // serie: seks bonger på kasse 1 med 10 sekunder mellom hver, to av dem med samme autorisasjonskode
 for (let i = 0; i < 6; i++) add({ cashier: 'A', ws: 1, time: `09:00:${String(i * 10).padStart(2, '0')}`, tot: 20 + i, lines: [[`70000000010${i}`, 'SMÅVARE', 20 + i]], auth: i < 2 ? 'ZZ99' : 'AU' + (100 + i), term: i < 2 ? 'T111222' : 'T555111' });
 // topptekst som ikke stemmer med listen
@@ -119,6 +121,11 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   assert.match(lines, /Tempo: tid mellom bonger \d+ salg\. Listen viser sekunder \(100 %[^)]*\)\. 1 serier på 6 bonger/);
   assert.match(lines, /Overvåkede varer 2 av \d+ skannede salg har varene: marlbo\./);
   assert.match(lines, /Retur av vare uten kjøp \d+ returer med \d+ vare-linjer vurdert\. 1 uten kjøp av samme vare \(kort 1, medlem 0, samme dag 0\)/);
+  // bongkopi: bare hendelsesord
+  assert.match(fnd, /Hendelse: Hendelsesord på bong Kasse 3 10:10 kasserer B: «\*\*\* Bong kopi \*\*\*»/);
+  assert.ok(!/Kasse 3 2026-10-02 10:10/.test(fnd), 'ingen tempo-serie med kopien');
+  assert.strictEqual(await page.$$eval('tbody tr.kvr-dup', (t) => t.length), 0, 'kopien er ikke duplikat');
+  assert.match(await txt('[data-sec=misc]'), /1 bongkopier \(«Bong kopi»\) flagges bare her og er holdt utenfor de andre testene/);
   // returårsak
   assert.match(lines, /Retur per årsak 4 bonger med 4 returlinjer \(110[.,]00 kr\) blant \d+ skannede salg\. 4 bonger har overvåket årsak \(matvaregaranti\)/);
   assert.match(lines, /Coop Matvaregaranti 4 4 110[.,]00 G ×3, F ×1/);

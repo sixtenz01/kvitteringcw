@@ -749,7 +749,7 @@ assert.deepStrictEqual(dg.ku, { with: 0, without: 2 });
 assert.deepStrictEqual(['Annullert av kasserer', 'SPØR PRIS', 'På  Vent!', 'Kansellert'].map(L.evNorm), ['anulert av kaserer', 'spor pris', 'pa vent', 'kanselert']);
 const txSc = sc4([], { tx: ['Annullert av kasserer', 'SPØR PRIS', 'Bong på vent', 'Kansellert', 'Panull 3', 'Takk for besøket'] });
 assert.deepStrictEqual(L.eventHits(txSc, L.wordList(L.DEFAULT_EV)).map(h => [h.k, h.t]), [['anull', 'Annullert av kasserer'], ['på vent', 'Bong på vent'], ['spør pris', 'SPØR PRIS'], ['kansell', 'Kansellert']], 'kanseller på samme linje gir ikke nytt treff; «Panull» er ikke starten av et ord');
-assert.deepStrictEqual(L.wordList(L.DEFAULT_EV), ['anull', 'makul', 'makulert', 'storn', 'parker', 'på vent', 'manuell', 'spør pris', 'overstyr', 'prisendring', 'kansell', 'kanseller', 'avbrutt']);
+assert.deepStrictEqual(L.wordList(L.DEFAULT_EV), ['anull', 'makul', 'makulert', 'storn', 'parker', 'på vent', 'manuell', 'spør pris', 'overstyr', 'prisendring', 'kansell', 'kanseller', 'avbrutt', 'bong kopi']);
 const txIt = R4(1005, 1, '12', '2026-10-07', '09:10', 10, null), txMap = { [txIt.transactionId]: txSc };
 const own = L.wordList(L.DEFAULT_EV).filter(w => w !== 'anull' && w !== 'kansell' && w !== 'kanseller').concat(['takk']).join(', ');
 const ewOwn = L.eventWords([txIt], txMap, Object.assign(defaultControlOn(), { evWords: own }));

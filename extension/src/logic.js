@@ -330,7 +330,11 @@
 
   // Standard ordliste for hendelsesord. Kan endres under Innstillinger → Hendelsesord.
   var WORDS_MAX = 1000;
-  var DEFAULT_EV = 'anull, makul, makulert, storn, parker, på vent, manuell, spør pris, overstyr, prisendring, kansell, kanseller, avbrutt';
+  var DEFAULT_EV = 'anull, makul, makulert, storn, parker, på vent, manuell, spør pris, overstyr, prisendring, kansell, kanseller, avbrutt, bong kopi';
+  // «Bong kopi»: en kopi er ikke et nytt kjøp. Den flagges bare som hendelsesord og holdes utenfor de andre testene.
+  var COPY_WORDS = ['bong kopi', 'bongkopi'];
+  // Kjente returårsaker i Lindbak (teksten etter «RETUR VARE»).
+  var RET_REASONS = ['Coop Matvaregaranti', 'Annen returårsak', 'Angrerett', 'Gevinst', 'Feilslag', 'Prisløfte', 'Datovare'];
 
   // v6: kort (cd) fra tekstlinjer med maskert kortnummer og kortleverandør. Bare det som står på bongen lagres (utstedernr og siste fire).
   var CARD_SCHEME = /\b(visa|master\s*card|maestro|bank\s*axept|amex|american\s*express|diners|jcb|unionpay)\b/i;
@@ -1131,7 +1135,7 @@
       sf('retEanDay', 'ctl', 'flag', 'Uten kort og medlem: ingen salg samme dag', '', 'Svak indikasjon: kunden kan ha kjøpt varen en annen dag.')
     ], weights: ['Retur av vare uten kjøp på kortet', 'Retur av vare uten kjøp av medlemmet', 'Retur av vare uten salg samme dag'] },
     { id: 'retReason', title: 'Returårsak', text: 'Linjen «RETUR VARE» over en returnert vare kan ha en årsak, for eksempel «Coop Matvaregaranti». Returene samles per årsak og kasserer, og kasserere med mange returer med en overvåket årsak markeres. Pant telles ikke. Krever skanning på nytt (versjon 9).', fields: [
-      sf('retWatch', 'ctl', 'words', 'Overvåkede returårsaker', '', 'Treff på starten av et ord i årsaken, uavhengig av store og små bokstaver og æøå. «matvaregaranti» treffer «Coop Matvaregaranti».'),
+      Object.assign(sf('retWatch', 'ctl', 'words', 'Overvåkede returårsaker', '', 'Treff på starten av et ord i årsaken, uavhengig av store og små bokstaver og æøå. «matvaregaranti» treffer «Coop Matvaregaranti».'), { suggest: RET_REASONS }),
       sf('retWatchN', 'ctl', 'num', 'Marker kasserer ved', 'bonger', 'Andelen må også være minst «Avviker fra snittet» ganger andelen hos de andre kassererne.', true),
       sf('retWatchFlag', 'ctl', 'flag', 'Flagg hver bong med overvåket returårsak', '', 'Av som standard: én retur med matvaregaranti er vanlig. Slå på for å se hver retur i Sjekk først.')
     ], weights: ['Retur med overvåket årsak', 'Mange returer med overvåket årsak'] },
@@ -2475,6 +2479,20 @@
   // Returårsak: «RETUR VARE Coop Matvaregaranti» over returlinjen (skanning v9). Pant telles ikke.
   // Kasserer markeres når bonger med overvåket årsak ≥ grensen og andelen ≥ faktor × andelen hos de andre kassererne.
   var NO_RET_REASON = 'Uten årsak';
+  // Teksten etter «RETUR VARE» skrives som i RET_REASONS når den kjennes igjen.
+  function retReasonName(raw) {
+    var t = String(raw || '').replace(/\s+/g, ' ').trim();
+    if (!t) return NO_RET_REASON;
+    for (var i = 0; i < RET_REASONS.length; i++) if (wordHit(t, [RET_REASONS[i]]) || wordHit(RET_REASONS[i], [t])) return RET_REASONS[i];
+    return t;
+  }
+  function isCopy(sc) { return eventHits(sc, COPY_WORDS).length > 0; }
+  // Skiller ut bongkopier (skannet innhold med «Bong kopi»).
+  function splitCopies(items, scanMap) {
+    var keep = [], copies = [];
+    (items || []).forEach(function (it) { (isCopy(scanMap && scanMap[it.transactionId]) ? copies : keep).push(it); });
+    return { items: keep, copies: copies };
+  }
   // eldre skanning (før v9) med negative varelinjer (utenom pant): kan ha returårsak som ikke er lest
   function maybeReturn(sc) { return !!sc && !sc.settle && !(sc.v >= 9) && (sc.items || []).some(function (l) { return l.a < 0 && !PANT_LINE.test(l.c + ' ' + l.n); }); }
   function returnReasons(items, scanMap, cfg) {
@@ -2495,8 +2513,8 @@
       res.bongs++; x.ret++;
       var hitW = [];
       lines.forEach(function (l) {
-        var name = l.rr || NO_RET_REASON, key = name.toLowerCase();
-        var e = reasons[key] || (reasons[key] = { name: name, lines: 0, bongs: {}, sum: 0, cashiers: {}, watched: l.rr ? wordHit(l.rr, words) : '' });
+        var name = retReasonName(l.rr), key = name.toLowerCase();
+        var e = reasons[key] || (reasons[key] = { name: name, lines: 0, bongs: {}, sum: 0, cashiers: {}, watched: l.rr ? wordHit(l.rr, words) || wordHit(name, words) : '', known: RET_REASONS.indexOf(name) !== -1 });
         e.lines++; e.bongs[it.transactionId] = 1; e.sum = round2(e.sum - l.a); e.cashiers[cid] = (e.cashiers[cid] || 0) + 1;
         res.lines++; res.sum = round2(res.sum - l.a);
         if (e.watched) { hitW.push(l); x.by[e.watched] = (x.by[e.watched] || 0) + 1; }
@@ -2508,7 +2526,7 @@
     });
     res.reasons = Object.keys(reasons).map(function (k) {
       var e = reasons[k];
-      return { name: e.name, lines: e.lines, bongs: Object.keys(e.bongs).length, sum: e.sum, watched: e.watched,
+      return { name: e.name, lines: e.lines, bongs: Object.keys(e.bongs).length, sum: e.sum, watched: e.watched, known: e.known,
         cashiers: Object.keys(e.cashiers).sort(function (a, b) { return e.cashiers[b] - e.cashiers[a] || numCmp(a, b); }).map(function (c) { return { id: c, n: e.cashiers[c] }; }) };
     }).sort(function (a, b) { return (a.name === NO_RET_REASON) - (b.name === NO_RET_REASON) || b.bongs - a.bongs || a.name.localeCompare(b.name); });
     res.rows = Object.keys(acc).sort(numCmp).map(function (id) {
@@ -3562,7 +3580,7 @@
     campAsk: campAsk,
     wordList: wordList,
     DEFAULT_SPECIAL: DEFAULT_SPECIAL,
-    DEFAULT_EV: DEFAULT_EV, WORDS_MAX: WORDS_MAX, returnReasons: returnReasons, maybeReturn: maybeReturn, couponFor: couponFor, isCampCode: isCampCode, multiBuy: multiBuy, wordHit: wordHit, NO_RET_REASON: NO_RET_REASON,
+    DEFAULT_EV: DEFAULT_EV, WORDS_MAX: WORDS_MAX, returnReasons: returnReasons, maybeReturn: maybeReturn, RET_REASONS: RET_REASONS, retReasonName: retReasonName, isCopy: isCopy, splitCopies: splitCopies, COPY_WORDS: COPY_WORDS, couponFor: couponFor, isCampCode: isCampCode, multiBuy: multiBuy, wordHit: wordHit, NO_RET_REASON: NO_RET_REASON,
     eventHits: eventHits,
     evNorm: evNorm,
     ledger: ledger,

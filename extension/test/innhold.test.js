@@ -234,6 +234,23 @@ const E1 = '7038010000010', E2 = '7038010000027', E3 = '7038010000034', E4 = '70
   assert.strictEqual(L.maybeReturn(m[old.transactionId]), true);
   assert.strictEqual(L.wordHit('Coop Matvaregaranti', ['matvare']), 'matvare');
   assert.strictEqual(L.wordHit('Coop Matvaregaranti', ['garanti']), '', 'starten av et ord');
+  // kjente returårsaker skrives likt; ukjente beholdes
+  assert.deepStrictEqual(['Coop Matvaregaranti', 'matvaregaranti', 'ANGRERETT', 'Gevinst', 'feilslag', 'Prisløfte', 'Datovare', 'Annen returårsak', 'Noe annet', ''].map(L.retReasonName),
+    ['Coop Matvaregaranti', 'Coop Matvaregaranti', 'Angrerett', 'Gevinst', 'Feilslag', 'Prisløfte', 'Datovare', 'Annen returårsak', 'Noe annet', 'Uten årsak']);
+  const kr = [[bong({ cashierNumber: '20' }), P([['RETUR VARE GEVINST'], [E1 + ' LOTTO', '', '-50.00']])], [bong({ cashierNumber: '20' }), P([['RETUR VARE Rart'], [E1 + ' X', '', '-5.00']])]];
+  const krr = L.returnReasons(kr.map((x) => x[0]), mapOf(kr), Object.assign(CT(), { retWatch: 'gevinst' }));
+  assert.deepStrictEqual(krr.reasons.map((x) => [x.name, x.known, x.watched]), [['Gevinst', true, 'gevinst'], ['Rart', false, '']]);
+}
+// ---- bongkopi: bare hendelsesord
+{
+  const orig = bong({ totalAmount: 40 }), copy = bong({ totalAmount: 40 });
+  const m = mapOf([[orig, scan([{ c: E1, a: 40 }], { tx: ['Butikk 1005'] })], [copy, scan([{ c: E1, a: 40 }], { tx: ['*** BONG KOPI ***'] })]]);
+  assert.deepStrictEqual([L.isCopy(m[orig.transactionId]), L.isCopy(m[copy.transactionId]), L.isCopy(null)], [false, true, false]);
+  const sp = L.splitCopies([orig, copy], m);
+  assert.deepStrictEqual([sp.items.map((i) => i.transactionId), sp.copies.map((i) => i.transactionId)], [[orig.transactionId], [copy.transactionId]]);
+  assert.ok(L.wordList(L.DEFAULT_EV).includes('bong kopi'));
+  const ev = L.eventWords([orig, copy], Object.assign({}, m, { [copy.transactionId]: Object.assign({}, m[copy.transactionId], { v: 8 }) }), CT());
+  assert.deepStrictEqual(ev.findings.map((f) => [f.ids[0], /«\*\*\* BONG KOPI \*\*\*»/.test(f.detail)]), [[copy.transactionId, true]], 'kopien flagges som hendelsesord');
 }
 
 console.log('innhold: ok');
