@@ -1592,7 +1592,8 @@
       if (ctlCfg.campAuto) box.appendChild(hintEl(D.camp.auto + ' varer er klassifisert som kampanjevare: minst ' + ctlCfg.campCashiers + ' kasserere har solgt varen med rabatt, på minst ' + (ctlCfg.campBongs || '–') + ' bonger til sammen (én bong hos hver av to kasserere er nok). Rabatten på dem flagges ikke. Trykk «Ikke kampanje» for å flagge som vanlig. Slå av under Innstillinger → Rabatt for å bli spurt i stedet.'));
       var S = D.camp.scan, popTodo = popScanTodo();
       box.appendChild(hintEl('Kampanjesjekken ser ' + S.scanned + ' av ' + S.sales + ' salg i grunnlaget (' + S.cashiers + ' av ' + S.cashiersAll + ' kasserere har skannede bonger). En vare blir bare kampanjevare når de skannede bongene viser den hos flere kasserere.' +
-        (ctlCfg.campCoupon ? ' ' + D.camp.coupon + ' rabattlinjer står i en kupong på samme bong og regnes som kampanje.' : '')));
+        (ctlCfg.campCoupon ? ' ' + D.camp.coupon + ' rabattlinjer står i en kupong på samme bong og regnes som kampanje.' : '') +
+        (ctlCfg.campMulti ? ' ' + D.camp.multi + ' rabattlinjer er like varer med samme rabatt på samme bong (multipakk) og regnes som kampanje.' : '')));
       if (popTodo.length) box.appendChild(el('div', { class: 'kvr-row' }, [btn('Skann hele grunnlaget (' + popTodo.length + ')', scanPopulation, 'kvr-sm')]));
       if (D.camp.others.length) {
         box.appendChild(el('b', { class: 'kvr-subh', text: 'Rabatt uten årsak på varer som ikke er kampanjevare' }));
@@ -2577,12 +2578,14 @@
       if (kind === 'man' && l.a < 0) { cls += ' kvr-rc-hit'; tags.push(tag('manuell 99')); }
       if (l.rv) row('RETUR VARE' + (l.rr ? ' ' + l.rr : ''), '', 'kvr-rc-sub' + (l.rr && L.wordHit(l.rr, retWords) ? ' kvr-rc-hit' : ''));
       if (!del && l.a < 0 && !kind && !/PANT/i.test(l.n)) tags.push(tag('retur'));
-      if (l.d && camp[L.campKey(l.c)]) tags.push(tag('kampanjevare'));
+      // hvorfor rabatten regnes som kampanje: kampanjevare, kupong på bongen eller multipakk (ikke når brukeren har sagt «ikke kampanje»)
+      var cw = !l.d || campDec[L.campKey(l.c)] === 'ikke' ? '' : camp[L.campKey(l.c)] ? 'kampanjevare' : ctlCfg.campCoupon && L.couponFor(sc, l) ? 'kupong' : ctlCfg.campMulti && L.multiBuy(sc, l) ? 'multipakk' : '';
+      if (cw) tags.push(tag(cw));
       row(l.n, fmt(l.a), cls.trim(), tags, l.c + ' ' + l.n);
       if (typeof l.q === 'number' && typeof l.p === 'number') sub(String(l.q).replace('.', ',') + ' à ' + fmt(l.p), '');
       if (l.d) {
         sub('Rabatt' + (typeof l.dp === 'number' ? ' ' + String(l.dp).replace('.', ',') + ' %' : ''), '−' + fmt(l.d));
-        sub(l.dr ? 'Årsak: ' + L.reasonName(l.dr) : camp[L.campKey(l.c)] ? 'Kampanjevare' : 'Uten årsak', '', l.dr || camp[L.campKey(l.c)] ? '' : 'kvr-rc-hit');
+        sub(l.dr ? 'Årsak: ' + L.reasonName(l.dr) : cw ? 'Kampanje (' + cw + ')' : 'Uten årsak', '', l.dr || cw ? '' : 'kvr-rc-hit');
       }
     });
     if (sc.trunc) box.appendChild(el('div', { class: 'kvr-rc-meta', text: '… ' + sc.trunc + ' linjer til er ikke lest' }));

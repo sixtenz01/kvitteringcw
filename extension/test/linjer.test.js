@@ -298,6 +298,13 @@ const mapOf = (pairs) => pairs.reduce((m, [it, s]) => (m[it.transactionId] = s, 
   assert.strictEqual(L.discounts(cp.map((x) => x[0]), mapOf(cp), cfgOf(Object.assign({ campBongs: '3', campCashiers: '2' }, three, { campAuto: '1', campCoupon: '' }))).findings.filter((f) => f.code === 'discNoReason').length, 3, 'kupongregelen kan slås av');
   assert.strictEqual(L.discounts(cp.map((x) => x[0]), mapOf(cp), au, cp.map((x) => x[0]), { '7038010000999': 'ikke' }).findings.filter((f) => f.code === 'discNoReason').length, 2, '«Ikke kampanje» overstyrer kupongen');
   assert.ok(!L.couponFor({ coupons: [{ n: 'Coop melk' }] }, { n: 'COOP SMØR' }), 'bare «Coop» felles er ikke treff');
+  // multipakk: to linjer av samme vare med samme rabatt på samme bong er kampanje, også hos én kasserer
+  const mp = [day('m2-1', '19:00', 'A', [dl('KAFFE', 6, 4, 40), dl('KAFFE', 6, 4, 40)]), day('m2-2', '19:05', 'A', [dl('SMØR', 15, 10, 40), dl('SMØR', 12, 13, 52)])];
+  const mr = L.discounts(mp.map((x) => x[0]), mapOf(mp), au);
+  assert.deepStrictEqual([mr.camp.multi, mr.findings.filter((f) => f.code === 'discNoReason').map((f) => f.ids[0]), mr.camp.others.map((e) => e.name)], [2, ['m2-2'], ['SMØR']], 'KAFFE ×2 med 40 % er multipakk; SMØR med 40 % og 52 % er ikke');
+  assert.strictEqual(L.discounts(mp.map((x) => x[0]), mapOf(mp), cfgOf(Object.assign({ campBongs: '3', campCashiers: '2' }, three, { campAuto: '1', campMulti: '' }))).findings.filter((f) => f.code === 'discNoReason').length, 2, 'multipakk-regelen kan slås av');
+  assert.strictEqual(L.discounts(mp.map((x) => x[0]), mapOf(mp), au, mp.map((x) => x[0]), { [CODES.KAFFE]: 'ikke' }).findings.filter((f) => f.code === 'discNoReason').length, 2, '«Ikke kampanje» overstyrer multipakk');
+  assert.strictEqual(L.multiBuy({ items: [{ c: EAN, a: 6, d: 4, dp: 40 }, { c: EAN, a: -6, d: 4, dp: 40 }] }, { c: EAN, a: 6, d: 4, dp: 40 }), false, 'motlinje teller ikke');
   assert.ok(L.couponFor({ coupons: [{ n: 'GRUPPE 240 - Coop knekkebrød 170-320 g' }] }, { n: 'COOP KNEKKEBRØD GROVT 190G' }), 'GRUPPE med nummer');
   assert.strictEqual(L.discounts(cit, cm, cfgOf(Object.assign({}, three, { campBongs: '', campAuto: '1' }))).camp.auto, 0, 'av når grensen for bonger er tom');
   // svar på vare som ikke finnes i dataene kan angres

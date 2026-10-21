@@ -13,6 +13,7 @@ const add = (o) => { n++; ROWS.push(Object.assign({ id: `1001-1-${n}`, cashier: 
 for (let i = 0; i < 6; i++) add({ cashier: 'B', tot: 50 + i, body: [TR(`70000000000${i} VARE`, f2(50 + i)), TR('Bank:', f2(50 + i))] });
 ['A', 'B', 'C', 'D'].forEach((c) => add({ cashier: c, tot: 12, body: [TR(`${E1} KAMPANJEVARE`, '12.00'), '<tr><td>Rabatt: Kr 8.00 (40 %)</td></tr>', TR('Bank:', '12.00')] }));
 ['E', 'F'].forEach((c) => add({ cashier: c, tot: 13.4, body: [TR(`${E1} KAMPANJEVARE`, '13.40'), '<tr><td>Rabatt: Kr 6.60 (33 %)</td></tr>', TR('Bank:', '13.40')] }));   // samme vare, annen prosent
+add({ cashier: 'G', time: '2026-10-02 15:50', tot: 12, body: [TR('7038010000034 NØTTER', '6.00'), '<tr><td>Rabatt: Kr 4.00 (40 %)</td></tr>', TR('7038010000034 NØTTER', '6.00'), '<tr><td>Rabatt: Kr 4.00 (40 %)</td></tr>', TR('Bank:', '12.00')] });   // multipakk: ikke flagget
 add({ cashier: 'G', time: '2026-10-02 15:55', tot: 10, body: [TR('7038010000027 SJOKOLADE', '10.00'), '<tr><td>Rabatt: Kr 10.00 (50 %)</td></tr>', TR('Bank:', '10.00')] });   // én bong: ikke kampanjevare
 const rows = ROWS.map((r) => ({ transactionId: r.id, endDateTime: r.time, storeNumber: 1001, workstationNumber: r.ws, cashierNumber: r.cashier, totalAmount: r.tot, receiptType: 1, memberNumber: null, journalSourceName: 'main' }));
 const receipts = {};
@@ -91,7 +92,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   assert.match(await txt('[data-sec=disc]'), /Kampanjevarer .*KAMPANJEVARE 40 % og 33 % 6 6 1 1 Kampanjevare \(automatisk\) Ikke kampanje/);
   assert.match(await txt('[data-sec=disc]'), /1 varer er klassifisert som kampanjevare/);
   // dekning og varer som ikke er kampanjevare, med manuell merking
-  assert.match(await txt('[data-sec=disc]'), /Kampanjesjekken ser 13 av 13 salg i grunnlaget \(7 av 7 kasserere har skannede bonger\)/);
+  assert.match(await txt('[data-sec=disc]'), /Kampanjesjekken ser 14 av 14 salg i grunnlaget \(7 av 7 kasserere har skannede bonger\)\. .* 2 rabattlinjer er like varer med samme rabatt på samme bong \(multipakk\) og regnes som kampanje\./);
   assert.match(await txt('[data-sec=disc]'), /Rabatt uten årsak på varer som ikke er kampanjevare Vare Rabatt Bonger Uten årsak Kasserere Hvorfor ikke SJOKOLADE 50 % 1 1 1 bare 1 bong \(grense 2\) Kampanjevare/);
   assert.strictEqual(await flagged(true), 1, 'sjokoladen er flagget');
   await page.click('[data-sec=disc] button:text-is("Kampanjevare")');
