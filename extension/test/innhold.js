@@ -29,14 +29,16 @@ const card = '<tr><td>Kort: ************1234</td></tr>';
 add({ cashier: 'B', ws: 3, date: '2026-09-24', time: '12:00:00', tot: 15, lines: [['7000000000999', 'ANKER', 15]] });
 add({ cashier: 'F', ws: 6, date: '2026-09-28', time: '12:00:00', tot: 20, lines: [[E1, 'TINE MELK', 20]], pay: 'Visa', card });
 add({ cashier: 'F', ws: 6, time: '11:00:00', tot: 30, lines: [[E2, 'BRØD', 30]], pay: 'Visa', card });
-add({ cashier: 'F', ws: 6, time: '11:30:00', tot: -20, lines: [[E4, 'SKO', -20]], pay: 'Visa', card });
+add({ cashier: 'F', ws: 6, time: '11:30:00', tot: -20, lines: ['RETUR VARE Coop Matvaregaranti', [E4, 'SKO', -20]], pay: 'Visa', card });
+// returårsak: kasserer G har tre returer med matvaregaranti
+for (let i = 0; i < 3; i++) add({ cashier: 'G', ws: 7, time: `14:${i}5:00`, tot: -30, lines: ['RETUR VARE Coop Matvaregaranti', [E2, 'BRØD', -30]] });
 add({ cashier: 'F', ws: 6, time: '11:40:00', tot: -20, lines: [[E1, 'TINE MELK', -20]], pay: 'Visa', card });
 
 const rows = ROWS.map((r) => ({ transactionId: r.id, endDateTime: `${r.date} ${r.time}`, storeNumber: 1001, workstationNumber: r.ws, cashierNumber: r.cashier, totalAmount: r.tot, receiptType: 1, memberNumber: null, journalSourceName: 'main' }));
 const receipts = {};
 ROWS.forEach((r, i) => {
   n = i + 1;
-  const body = r.lines.map((l) => TR(`${l[0]} ${l[1]}`, f2(l[2]))).join('') + TR(r.pay + ':', f2(r.tot)) + (r.card || '');
+  const body = r.lines.map((l) => typeof l === 'string' ? `<tr><td>${l}</td></tr>` : TR(`${l[0]} ${l[1]}`, f2(l[2]))).join('') + TR(r.pay + ':', f2(r.tot)) + (r.card || '');
   receipts[r.id] = top(r.ws, r.hdrCash) + `<table>${body}</table><div>Terminal: ${r.term}</div><div>Aut.kode: ${r.auth}</div><div>Kontaktløs</div>`;
 });
 
@@ -107,7 +109,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   const fnd = await txt('[data-sec=findings]');
   assert.match(fnd, /Tempo: Bonger i rask rekkefølge Kasse 1 2026-10-02 09:00–09:00: 6 bonger på 50 s, høyst 10 s mellom \(grense 25 s\)/);
   assert.match(fnd, /Overvåket vare: Overvåket vare i retur .*«MARLBORO RED» \(7040913000011, 99\.00 kr\)/);
-  assert.match(fnd, /Retur av vare: Retur av vare uten kjøp på kortet .*«SKO» \(7038010000041, 20\.00 kr\) er ikke kjøpt med samme kort siste 7 dager, selv om kortet har 2 andre kjøp i perioden/);
+  assert.match(fnd, /Retur av vare: Retur av vare uten kjøp på kortet .*«SKO» \(7038010000041, 20\.00 kr, årsak: Coop Matvaregaranti\) er ikke kjøpt med samme kort siste 7 dager, selv om kortet har 2 andre kjøp i perioden/);
   assert.ok(!/«TINE MELK» \(7038010000010, 20\.00 kr\) er ikke kjøpt/.test(fnd), 'melk er kjøpt med samme kort');
   assert.match(fnd, /Topptekst: Topptekst stemmer ikke med listen .*bongen sier kasserer Z, listen sier kasserer D/);
   assert.match(fnd, /Topptekst: Samme autorisasjonskode på flere bonger Autorisasjon ZZ99 \(terminal T111222\) står på 2 bonger/);
@@ -117,6 +119,24 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   assert.match(lines, /Tempo: tid mellom bonger \d+ salg\. Listen viser sekunder \(100 %[^)]*\)\. 1 serier på 6 bonger/);
   assert.match(lines, /Overvåkede varer 2 av \d+ skannede salg har varene: marlbo\./);
   assert.match(lines, /Retur av vare uten kjøp \d+ returer med \d+ vare-linjer vurdert\. 1 uten kjøp av samme vare \(kort 1, medlem 0, samme dag 0\)/);
+  // returårsak
+  assert.match(lines, /Retur per årsak 4 bonger med 4 returlinjer \(110[.,]00 kr\) blant \d+ skannede salg\. 4 bonger har overvåket årsak \(matvaregaranti\)/);
+  assert.match(lines, /Coop Matvaregaranti 4 4 110[.,]00 G ×3, F ×1/);
+  assert.match(fnd, /Mange returer med overvåket årsak.*Kasserer G: 3 av 3 bonger har retur med overvåket årsak \(matvaregaranti 3; 100 % mot \d,\d % hos de andre kassererne, grense 3 bonger\)/);
+  assert.ok(await page.$eval('[data-sec=lines] td.kvr-bad button:text-is("Coop Matvaregaranti")', () => true), 'overvåket årsak er rød');
+  await page.click('[data-sec=lines] button:text-is("Coop Matvaregaranti")');
+  assert.match(await txt('#kvr-panel'), /Viser kvitteringer med «Coop Matvaregaranti»/);
+  assert.strictEqual(await page.$$eval('tbody tr', (t) => t.filter((r) => r.offsetParent !== null).length), 4, 'listen viser de fire returbongene');
+  await go('Filtrer');
+  await page.fill('#kvr-panel input[placeholder^="ord, EAN"]', '');
+  await page.press('#kvr-panel input[placeholder^="ord, EAN"]', 'Tab');
+  await page.waitForFunction((n) => [...document.querySelectorAll('tbody tr')].filter((r) => r.offsetParent !== null).length === n, rows.length, { timeout: 10000 });
+  // kvitteringen viser linjen «RETUR VARE …», markert når årsaken er overvåket
+  await go('Analyse', 'Sjekk først');
+  const nck = await page.$$eval('[data-sec=chk-list] .kvr-ck', (x) => x.length);
+  for (let i = 0; i < nck; i++) { const ck = page.locator('[data-sec=chk-list] .kvr-ck').nth(i); if (!(await ck.locator('.kvr-rcpt').count())) await ck.locator('.kvr-ck-h').click(); }
+  assert.ok(await page.$$eval('[data-sec=chk-list] .kvr-rcpt .kvr-rc-row.kvr-rc-hit', (x) => x.some((n) => /RETUR VARE Coop Matvaregaranti/.test(n.textContent))), 'RETUR VARE-linjen i kvitteringen');
+  await go('Analyse', 'Detaljer');
   const acct = await txt('[data-sec=acct]');
   assert.match(acct, /Topptekst og bunn \d+ av \d+ skannede salg har lest topptekst \(kasserer: 2\d av 2\d stemmer med listen \(9\d %\); kasse: 2\d av 2\d/);
   assert.ok(!/kasserer: [^;]*ikke kalibrert/.test(acct), 'kasserer er kalibrert');

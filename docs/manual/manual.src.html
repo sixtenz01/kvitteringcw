@@ -414,6 +414,15 @@
 <div class="callout"><b>Tolk med forsiktighet</b>
   <p>Raske serier kan være kø med få varer eller selvbetjening, og en retur kan gjelde et kjøp før perioden, kontant eller i en annen butikk. Resultatene er indikasjoner. Se på bongene før du konkluderer.</p>
 </div>
+<h3>Returårsak (matvaregaranti)</h3>
+<p>På bongen står linjen «RETUR VARE» over hver returnert vare, ofte med en årsak: «RETUR VARE Coop Matvaregaranti». Fra versjon 3.26.0 leser skanningen årsaken.</p>
+<ul>
+  <li><strong>Retur per årsak</strong> (Detaljer, sammen med retur uten kjøp): antall bonger, linjer og kroner per årsak, og hvilke kasserere som har dem. Klikk en årsak for å vise bongene i listen. Pant telles ikke.</li>
+  <li><strong>Overvåkede returårsaker</strong> (Innstillinger → Returårsak, standard «matvaregaranti»): en kasserer markeres når minst 3 bonger har retur med overvåket årsak, og andelen er minst «Avviker fra snittet» ganger andelen hos de andre kassererne. Markeringen gir poeng i kassererprofilen. Du legger til og fjerner årsaker som i ordlisten for hendelsesord.</li>
+  <li><strong>Flagg hver bong med overvåket returårsak</strong> er av som standard, fordi én retur med matvaregaranti er vanlig. Slå den på for å gå gjennom hver retur i Sjekk først.</li>
+  <li><strong>I kvitteringen</strong> står linjen «RETUR VARE …» over varen, markert når årsaken er overvåket. Årsaken står også i forklaringen til «Retur av vare uten kjøp», og fulltekstsøket finner den.</li>
+  <li><strong>Eldre skanninger</strong> har ikke årsaken. Knappen «Skann returbonger på nytt» tar bare bonger med negative varelinjer, ikke alle.</li>
+</ul>
 <h3>Topptekst og bunn</h3>
 <p>Fra versjon 7 leser skanningen også teksten utenfor tabellene på bongen: toppteksten (butikk, kasse, kasserer, medlemsnr) og bunnen med kortterminalens tekst (terminal-ID, autorisasjonskode, inngangsmåte som chip, kontaktløs eller tastet). Bare disse verdiene og ukjente linjer med tall byttet ut lagres, ikke hele teksten. Kasserer, kasse og medlem i toppteksten sammenlignes med listen; et felt kontrolleres bare når minst 90 % av minst ti bonger stemmer fra før, så et uventet format ikke gir falske treff. Samme autorisasjonskode på flere bonger i samme butikk og terminal flagges. Eldre skanninger tas på nytt fra kortet «Bongregnskap og referanser».</p>
 <div class="callout"><b>Skann på nytt</b>
@@ -593,6 +602,7 @@
   <dt>Spør pris</dt><dd>Vare lagt inn uten fast pris, der kassereren spør. Prisen sammenlignes med dagens øvrige salg av samme vare.</dd>
   <dt>Til gode-lapp / manuell kvittering</dt><dd>Kvittering skrevet for hånd eller en lapp som gir kunden tilgode. Sammenlignes med andre bonger i butikken.</dd>
   <dt>Kjøpeutbytte</dt><dd>Tabellen med Grunnlag, Kjøpeutbytte og MVA bonus på medlemsbonger.</dd>
+  <dt>Returårsak</dt><dd>Teksten etter «RETUR VARE» på bongen, for eksempel «Coop Matvaregaranti».</dd>
   <dt>Hendelsesord</dt><dd>Ord fra en ordliste du kan endre, på tekstlinjer som tyder på annullert, parkert, manuell pris eller spør pris.</dd>
   <dt>Diagnostikk</dt><dd>Oversikt over klokkeslett, kanaltabell, betalingsmåter, topptekst og bunn, linjer pluginen ikke kjenner igjen og hendelsesord, til å dele slik at testene kan utvides.</dd>
   <dt>Omfang</dt><dd>Perioden, butikkene, kassererne og kassene du velger at analysen skal gjelde.</dd>

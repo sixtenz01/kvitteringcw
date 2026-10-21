@@ -303,6 +303,8 @@
 
   var DEFAULT_SPECIAL = 'eget forbruk, internt forbruk, utbetaling, finansiering, sjekk';
   var PANT_LINE = /^\s*\d{1,4}\s+PANT(ELAPP)?\b/i;
+  // «RETUR VARE» står over hver returnert linje, ofte med årsak: «RETUR VARE Coop Matvaregaranti».
+  var RETUR_ROW = /^RETUR\s+VARE\b[\s:.\-]*(.*)$/i;
   var ITEM_ROW = /^\s*(\d{1,14})\s+(.+)$/;
   var QTY_ROW = /^Antall:\s*([\d.,]+)\s*\S*\s*à\s*Kr\s*([\d.,]+)/i;
 
@@ -351,7 +353,7 @@
   function parseReceipt(rows) {
     var items = [], pay = {}, payN = 0, last = null, coupons = [], ev = [], unk = [], ku = null, kuCols = null;
     var vat = [], vatCols = null, rf = [], tot = null, rnd = 0, hasRnd = false, trunc = 0, discItems = [];
-    var sale = 0, ret = 0, saleLines = 0, retLines = 0, np = 0, neg = 0, cards = [], scheme = '', tx = [];
+    var sale = 0, ret = 0, saleLines = 0, retLines = 0, np = 0, neg = 0, cards = [], scheme = '', tx = [], pendRet = null;
     var keepTx = function (t) { t = String(t || '').replace(/\s+/g, ' ').trim().slice(0, 80); if (t && tx.length < 15 && tx.indexOf(t) === -1) tx.push(t); };
     var note = function (c0) {
       var t = c0.replace(/\d+/g, '#').replace(/\s+/g, ' ').trim();
@@ -411,6 +413,8 @@
       if (cells.length >= 2 && ROUND_ROW.test(tl)) { var ra = lastAmount(cells); if (ra !== null) { rnd = round2(rnd + ra); hasRnd = true; return; } }
       var rm = REF_ROW.exec(cells.join(' ').replace(/\s+/g, ' ').trim());
       if (rm) { if (rf.length < 4) rf.push((/^R/i.test(rm[1]) ? 'R:' : 'T:') + rm[2].slice(0, 40)); return; }
+      var rr = RETUR_ROW.exec(cells.join(' ').replace(/\s+/g, ' ').trim());
+      if (rr && /^RETUR\s+VARE/i.test(c0)) { pendRet = { r: rr[1].trim().slice(0, 40) }; keepTx(rr[0]); return; }
       var q = QTY_ROW.exec(c0);
       if (q) { if (last) { last.q = parseAmount(q[1].replace(',', '.')); last.p = parseAmount(q[2].replace(',', '.')); } return; }
       var rb = RABATT_ROW.exec(c0);
@@ -452,6 +456,7 @@
       var m = ITEM_ROW.exec(c0);
       if (!m) { other(c0, cells); return; }
       last = { c: m[1], n: m[2].trim().slice(0, MAX_NAME), a: amount };
+      if (pendRet) { last.rv = 1; if (pendRet.r) last.rr = pendRet.r; pendRet = null; }
       if (items.length < MAX_ITEMS) items.push(last); else trunc++;
       if (PANT_LINE.test(c0)) {
         if (amount < 0) { ret += amount; retLines++; } else { sale += amount; saleLines++; }
@@ -476,7 +481,7 @@
     if (unk.length) out.unk = unk;
     if (rows && (rows.tl || rows.bl)) {
       var o2 = parseOutside(rows.tl, rows.bl);
-      out.v = 8;
+      out.v = 9;
       outsideLines(rows.tl).concat(outsideLines(rows.bl)).forEach(keepTx);
       (o2.ev || []).forEach(function (e) { if (ev.length < 6 && !ev.some(function (x) { return x.t === e.t; })) ev.push(e); });
       if (ev.length) out.ev = ev;
@@ -979,6 +984,7 @@
     ['watchItems', 'Overvåkede varer: EAN eller del av navn (komma, tom = av)', ''], ['watchRet', 'Overvåket vare i retur (tom = av)', '1'],
     ['watchDel', 'Overvåket vare slettet (tom = av)', '1'], ['watchN', 'Overvåkede varer: kasserer ved ≥ antall bonger (tom = av)', '10'],
     ['retEanDays', 'Retur av vare uten kjøp på kort eller medlem innen dager (tom = av)', '7'], ['retEanDay', 'Retur uten kort og medlem: ingen salg av varen samme dag (tom = av)', ''],
+    ['retWatch', 'Overvåkede returårsaker (komma, tom = av)', 'matvaregaranti'], ['retWatchN', 'Overvåket returårsak: kasserer ved ≥ antall bonger (tom = av)', '3'], ['retWatchFlag', 'Flagg hver bong med overvåket returårsak (tom = av)', ''],
     ['hdrOn', 'Topptekst mot listen (tom = av)', '1'], ['authDup', 'Samme autorisasjonskode på flere bonger (tom = av)', '1']
   ];
 
@@ -1123,6 +1129,11 @@
       sf('retEanDays', 'ctl', 'num', 'Se tilbake', 'dager', 'Minst så mange dager må være lastet, ellers vurderes ikke returen.', true),
       sf('retEanDay', 'ctl', 'flag', 'Uten kort og medlem: ingen salg samme dag', '', 'Svak indikasjon: kunden kan ha kjøpt varen en annen dag.')
     ], weights: ['Retur av vare uten kjøp på kortet', 'Retur av vare uten kjøp av medlemmet', 'Retur av vare uten salg samme dag'] },
+    { id: 'retReason', title: 'Returårsak', text: 'Linjen «RETUR VARE» over en returnert vare kan ha en årsak, for eksempel «Coop Matvaregaranti». Returene samles per årsak og kasserer, og kasserere med mange returer med en overvåket årsak markeres. Pant telles ikke. Krever skanning på nytt (versjon 9).', fields: [
+      sf('retWatch', 'ctl', 'words', 'Overvåkede returårsaker', '', 'Treff på starten av et ord i årsaken, uavhengig av store og små bokstaver og æøå. «matvaregaranti» treffer «Coop Matvaregaranti».'),
+      sf('retWatchN', 'ctl', 'num', 'Marker kasserer ved', 'bonger', 'Andelen må også være minst «Avviker fra snittet» ganger andelen hos de andre kassererne.', true),
+      sf('retWatchFlag', 'ctl', 'flag', 'Flagg hver bong med overvåket returårsak', '', 'Av som standard: én retur med matvaregaranti er vanlig. Slå på for å se hver retur i Sjekk først.')
+    ], weights: ['Retur med overvåket årsak', 'Mange returer med overvåket årsak'] },
     { id: 'hdr', title: 'Topptekst og bunn', text: 'Bongens topptekst (kasserer, kasse, medlem) mot CW-listen, og autorisasjonskoden fra kortterminalen. Krever skanning på nytt (versjon 7). Formatet er ikke bekreftet i ekte data; se Diagnostikk.', fields: [
       sf('hdrOn', 'ctl', 'flag', 'Topptekst mot listen', '', 'Gjelder bare felt der minst 90 % stemmer fra før (minst 10 bonger).'),
       sf('authDup', 'ctl', 'flag', 'Samme autorisasjonskode på flere bonger', '', 'Samme butikk, terminal og kode.')
@@ -1437,7 +1448,8 @@
     'Spør pris avviker fra dagens salg': 3, 'Mange spør pris': 2, 'Gjentatte returer på samme kort': 4, 'Manuell kvittering matcher annen bong': 4,
     'Bonger i rask rekkefølge': 2, 'Mange 0-kr-bonger': 2, 'Overvåket vare i retur': 3, 'Overvåket vare slettet': 3, 'Mange overvåkede varer hos kasserer': 2,
     'Retur av vare uten kjøp på kortet': 4, 'Retur av vare uten kjøp av medlemmet': 3, 'Retur av vare uten salg samme dag': 1,
-    'Topptekst stemmer ikke med listen': 3, 'Samme autorisasjonskode på flere bonger': 3, 'Makulert linje på bong': 2
+    'Topptekst stemmer ikke med listen': 3, 'Samme autorisasjonskode på flere bonger': 3, 'Makulert linje på bong': 2,
+    'Retur med overvåket årsak': 2, 'Mange returer med overvåket årsak': 3
   };
 
   function sanitizeWeights(raw) {
@@ -2432,6 +2444,71 @@
     return res;
   }
 
+  // Ord fra en liste mot en tekst, med samme regler som hendelsesord (starten av et ord, æøå, doble bokstaver).
+  function wordHit(text, words) {
+    var nt = evNorm(text);
+    for (var i = 0; i < (words || []).length; i++) {
+      var nw = evNorm(words[i]);
+      if (!nw) continue;
+      var re = EV_RE[nw] || (EV_RE[nw] = new RegExp('(^| )' + nw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+      if (re.test(nt)) return words[i];
+    }
+    return '';
+  }
+
+  // Returårsak: «RETUR VARE Coop Matvaregaranti» over returlinjen (skanning v9). Pant telles ikke.
+  // Kasserer markeres når bonger med overvåket årsak ≥ grensen og andelen ≥ faktor × andelen hos de andre kassererne.
+  var NO_RET_REASON = 'Uten årsak';
+  // eldre skanning (før v9) med negative varelinjer (utenom pant): kan ha returårsak som ikke er lest
+  function maybeReturn(sc) { return !!sc && !sc.settle && !(sc.v >= 9) && (sc.items || []).some(function (l) { return l.a < 0 && !PANT_LINE.test(l.c + ' ' + l.n); }); }
+  function returnReasons(items, scanMap, cfg) {
+    var words = wordList(cfg.retWatch), wN = cnum(cfg.retWatchN, null), flagOn = hasNum(cfg.retWatchFlag), fac = cnum(cfg.profFactor, 1.5);
+    var res = { findings: [], reasons: [], rows: [], words: words, sales: 0, scanned: 0, old: 0, bongs: 0, lines: 0, sum: 0, watched: 0 };
+    var reasons = {}, acc = {}, tot = { n: 0, withW: 0 };
+    items.forEach(function (it) {
+      if (it.receiptType !== 1) return;
+      res.sales++;
+      var sc = scanMap && scanMap[it.transactionId];
+      if (!sc || sc.settle) return;
+      if (!(sc.v >= 9)) { if (maybeReturn(sc)) res.old++; return; }
+      res.scanned++;
+      var cid = String(it.cashierNumber), x = acc[cid] || (acc[cid] = { n: 0, ret: 0, withW: 0, by: {} });
+      x.n++; tot.n++;
+      var lines = (sc.items || []).filter(function (l) { return l.rv && l.a < 0 && !PANT_LINE.test(l.c + ' ' + l.n); });
+      if (!lines.length) return;
+      res.bongs++; x.ret++;
+      var hitW = [];
+      lines.forEach(function (l) {
+        var name = l.rr || NO_RET_REASON, key = name.toLowerCase();
+        var e = reasons[key] || (reasons[key] = { name: name, lines: 0, bongs: {}, sum: 0, cashiers: {}, watched: l.rr ? wordHit(l.rr, words) : '' });
+        e.lines++; e.bongs[it.transactionId] = 1; e.sum = round2(e.sum - l.a); e.cashiers[cid] = (e.cashiers[cid] || 0) + 1;
+        res.lines++; res.sum = round2(res.sum - l.a);
+        if (e.watched) { hitW.push(l); x.by[e.watched] = (x.by[e.watched] || 0) + 1; }
+      });
+      if (!hitW.length) return;
+      res.watched++; x.withW++; tot.withW++;
+      if (flagOn) res.findings.push({ kind: 'Retur', code: 'retWatch', title: 'Retur med overvåket årsak', flag: true,
+        detail: whereText(it) + ': ' + hitW.map(function (l) { return l.n + ' ' + (-l.a).toFixed(2) + ' kr («' + l.rr + '»)'; }).join(', '), ids: [it.transactionId] });
+    });
+    res.reasons = Object.keys(reasons).map(function (k) {
+      var e = reasons[k];
+      return { name: e.name, lines: e.lines, bongs: Object.keys(e.bongs).length, sum: e.sum, watched: e.watched,
+        cashiers: Object.keys(e.cashiers).sort(function (a, b) { return e.cashiers[b] - e.cashiers[a] || numCmp(a, b); }).map(function (c) { return { id: c, n: e.cashiers[c] }; }) };
+    }).sort(function (a, b) { return (a.name === NO_RET_REASON) - (b.name === NO_RET_REASON) || b.bongs - a.bongs || a.name.localeCompare(b.name); });
+    res.rows = Object.keys(acc).sort(numCmp).map(function (id) {
+      var x = acc[id], on = tot.n - x.n, others = on > 0 ? (tot.withW - x.withW) / on : null;
+      var row = { id: id, n: x.n, ret: x.ret, withW: x.withW, share: x.n ? x.withW / x.n : 0, others: others, flag: false };
+      if (words.length && wN !== null && x.withW >= wN && (others === null || fac === null || row.share >= others * fac)) {
+        row.flag = true;
+        res.findings.push({ kind: 'Retur', code: 'retWatchCash', title: 'Mange returer med overvåket årsak', flag: false, cashier: id, ids: [],
+          detail: 'Kasserer ' + id + ': ' + x.withW + ' av ' + x.n + ' bonger har retur med overvåket årsak (' + Object.keys(x.by).map(function (w) { return w + ' ' + x.by[w]; }).join(', ') +
+            '; ' + String(Math.round(row.share * 1000) / 10).replace('.', ',') + ' % mot ' + (others === null ? '–' : String(Math.round(others * 1000) / 10).replace('.', ',') + ' %') + ' hos de andre kassererne, grense ' + wN + ' bonger)' });
+      }
+      return row;
+    }).filter(function (r) { return r.ret; });
+    return res;
+  }
+
   // ---- pantelapper, slettede linjer, spesialbetaling, spør pris, kort og manuelle bonger ---------
   function wordList(txt) { return String(txt || '').split(/[,;\n]+/).map(function (t) { return t.trim().toLowerCase(); }).filter(Boolean); }
   function inDay(d, n) { return d ? Date.parse(d + 'T00:00:00Z') / 86400000 + (n || 0) : null; }
@@ -3145,7 +3222,7 @@
       if (!why) return;
       res.flagged++;
       other = why.sales.slice(0, 3).map(function (r) { return r.id; });
-      var d = whereText(it) + ': ' + lines.slice(0, 3).map(function (l) { return '«' + l.n + '» (' + l.c + ', ' + money(Math.abs(l.a)) + ' kr)'; }).join(', ') + (lines.length > 3 ? ' og ' + (lines.length - 3) + ' til' : '') +
+      var d = whereText(it) + ': ' + lines.slice(0, 3).map(function (l) { return '«' + l.n + '» (' + l.c + ', ' + money(Math.abs(l.a)) + ' kr' + (l.rr ? ', årsak: ' + l.rr : '') + ')'; }).join(', ') + (lines.length > 3 ? ' og ' + (lines.length - 3) + ' til' : '') +
         (why.basis === 'dag' ? ' er solgt ingen steder i butikken samme dag før returen' : ' er ikke kjøpt ' + (why.basis === 'kort' ? 'med samme kort' : 'av samme medlem') + ' siste ' + days + ' dager, selv om ' + (why.basis === 'kort' ? 'kortet' : 'medlemmet') + ' har ' + why.sales.length + ' andre kjøp i perioden');
       res.findings.push({ kind: 'Retur av vare', code: 'retEan', title: why.t, flag: true, detail: d, ids: [it.transactionId].concat(other) });
       res.rows.push({ id: it.transactionId, cashier: String(it.cashierNumber), when: dayOf(it) + ' ' + parseDT(it.endDateTime).time, basis: why.basis, n: lines.length, amt: round2(lines.reduce(function (a, l) { return a + Math.abs(l.a); }, 0)) });
@@ -3289,6 +3366,7 @@
       if (typeof l.q === 'number') p.push(String(l.q));
       if (typeof l.p === 'number') p.push(Number(l.p).toFixed(2));
       if (l.dr) p.push(l.dr);
+      if (l.rr) p.push(l.rr);
     });
     Object.keys(sc.pay || {}).forEach(function (k) { p.push(k, Number(sc.pay[k]).toFixed(2)); });
     (sc.rf || []).forEach(function (r) { p.push(r.replace(/^[RT]:/, '')); });
@@ -3468,7 +3546,7 @@
     campAsk: campAsk,
     wordList: wordList,
     DEFAULT_SPECIAL: DEFAULT_SPECIAL,
-    DEFAULT_EV: DEFAULT_EV, WORDS_MAX: WORDS_MAX,
+    DEFAULT_EV: DEFAULT_EV, WORDS_MAX: WORDS_MAX, returnReasons: returnReasons, maybeReturn: maybeReturn, wordHit: wordHit, NO_RET_REASON: NO_RET_REASON,
     eventHits: eventHits,
     evNorm: evNorm,
     ledger: ledger,

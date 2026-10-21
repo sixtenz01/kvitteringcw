@@ -1,4 +1,4 @@
-// Enhetstester: tempo, overvåkede varer, retur uten kjøp av samme EAN, topptekst og bunn (v7), betalingsmåter og fulltekstsøk.
+// Enhetstester: tempo, overvåkede varer, retur uten kjøp av samme EAN, topptekst og bunn (v7), betalingsmåter, fulltekstsøk og returårsak (v9).
 const assert = require('assert');
 const L = require('../src/logic.js');
 
@@ -115,7 +115,7 @@ const E1 = '7038010000010', E2 = '7038010000027', E3 = '7038010000034', E4 = '70
   rows.tl = ['Coop Mega Kolbotn', 'Butikk: 1003, Kassenr: 4, Kasserer: 12', 'Medlemsnr.: 123456', 'Kvittering: 2371 02.10.2026 22:04:15'];
   rows.bl = ['Terminal: T123456', 'Aut.kode: A1B2C3', 'Kontaktløs', 'Visa', 'Takk for besøket'];
   const r = L.parseReceipt(rows);
-  assert.strictEqual(r.v, 8);
+  assert.strictEqual(r.v, 9);
   assert.ok(r.tx.includes('Takk for besøket') && r.tx.includes('Kontaktløs'), 'tekstlinjer tas vare på for hendelsesord');
   assert.deepStrictEqual(r.hdr, { s: '1003', w: '4', c: '12', m: '123456' });
   assert.deepStrictEqual(r.ft, { t: 'T123456', a: 'A1B2C3', e: ['kontaktløs'] });
@@ -194,6 +194,46 @@ const E1 = '7038010000010', E2 = '7038010000027', E3 = '7038010000034', E4 = '70
   // retur uten kjøp: bare det høyeste teller
   const bd = L.scoreBreakdown(['Retur av vare uten kjøp på kortet', 'Retur av vare uten kjøp av medlemmet']);
   assert.deepStrictEqual(bd.map((x) => x.counts), [true, false]);
+}
+
+// ---- returårsak (v9): «RETUR VARE Coop Matvaregaranti» over returlinjen
+{
+  const P = (rows) => { const r = rows.slice(); r.tl = ['Kvittering: 1 05.10.2026 12:00:00']; return L.parseReceipt(r); };
+  const r = P([['RETUR VARE Coop Matvaregaranti'], [E1 + ' KYLLINGFILET', '', '-89.90'], ['RETUR VARE'], ['399 PANTELAPP', '', '-20.00'], ['RETUR VARE', 'Feil vare'], [E2 + ' MELK', '', '-21.50'], [E3 + ' BRØD', '', '35.00'], ['', 'Totalt', '-96.40'], ['Kontant tilbake:', '', '96.40']]);
+  assert.strictEqual(r.v, 9);
+  assert.deepStrictEqual(r.items.map((l) => [l.n, l.rv || 0, l.rr || '']), [['KYLLINGFILET', 1, 'Coop Matvaregaranti'], ['PANTELAPP', 1, ''], ['MELK', 1, 'Feil vare'], ['BRØD', 0, '']]);
+  assert.ok(!r.unk, 'RETUR VARE er ikke en ukjent linje');
+  assert.ok(L.searchHit(r, L.searchTerms('matvaregaranti')), 'fulltekstsøket finner årsaken');
+  const MG = [['RETUR VARE Coop Matvaregaranti'], [E1 + ' KYLLINGFILET', '', '-89.90'], ['Kontant tilbake:', '', '89.90']];
+  const pairs = [];
+  for (let i = 0; i < 4; i++) pairs.push([bong({ cashierNumber: '12', totalAmount: -89.9 }), P(MG)]);
+  for (let i = 0; i < 20; i++) pairs.push([bong({ cashierNumber: i % 2 ? '13' : '14' }), P([[E2 + ' MELK', '', '21.50'], ['Bank:', '', '21.50']])]);
+  pairs.push([bong({ cashierNumber: '13', totalAmount: -89.9 }), P(MG)]);
+  pairs.push([bong({ cashierNumber: '14', totalAmount: -26.5 }), P([['RETUR VARE', 'Feil vare'], [E2 + ' MELK', '', '-21.50'], ['RETUR VARE'], ['399 PANTELAPP', '', '-5.00']])]);
+  const old = bong({ cashierNumber: '14', totalAmount: -10 });
+  pairs.push([old, scan([{ c: E3, n: 'BRØD', a: -10 }], { v: 8 })]);
+  const its = pairs.map((x) => x[0]), m = mapOf(pairs);
+  const rr = L.returnReasons(its, m, CT());
+  assert.deepStrictEqual([rr.scanned, rr.old, rr.bongs, rr.lines, rr.sum, rr.watched], [26, 1, 6, 6, 471, 5], 'pant telles ikke; eldre skanning med negativ linje telles som «old»');
+  assert.deepStrictEqual(rr.reasons.map((x) => [x.name, x.bongs, x.watched, x.cashiers.map((c) => c.id + '×' + c.n).join()]), [['Coop Matvaregaranti', 5, 'matvaregaranti', '12×4,13×1'], ['Feil vare', 1, '', '14×1']]);
+  assert.deepStrictEqual(rr.findings.map((f) => [f.code, f.flag, f.cashier]), [['retWatchCash', false, '12']], 'bare kassereren markeres som standard');
+  assert.match(rr.findings[0].detail, /Kasserer 12: 4 av 4 bonger har retur med overvåket årsak \(matvaregaranti 4; 100 % mot 4,5 % hos de andre kassererne, grense 3 bonger\)/);
+  assert.deepStrictEqual(rr.rows.map((x) => [x.id, x.withW, x.flag]), [['12', 4, true], ['13', 1, false], ['14', 0, false]]);
+  // flagg hver bong
+  const rf = L.returnReasons(its, m, Object.assign(CT(), { retWatchFlag: '1' }));
+  assert.strictEqual(rf.findings.filter((f) => f.code === 'retWatch' && f.flag).length, 5);
+  assert.match(rf.findings.find((f) => f.code === 'retWatch').detail, /KYLLINGFILET 89\.90 kr \(«Coop Matvaregaranti»\)/);
+  // egne årsaker, og av
+  assert.deepStrictEqual(L.returnReasons(its, m, Object.assign(CT(), { retWatch: 'feil vare' })).reasons.map((x) => x.watched), ['', 'feil vare']);
+  assert.strictEqual(L.returnReasons(its, m, Object.assign(CT(), { retWatch: '' })).findings.length, 0);
+  assert.strictEqual(L.returnReasons(its, m, Object.assign(CT(), { retWatchN: '' })).findings.length, 0);
+  // kasserer med samme andel som de andre markeres ikke
+  const even = [];
+  ['A', 'B'].forEach((c) => { for (let i = 0; i < 4; i++) even.push([bong({ cashierNumber: c }), P(MG)]); });
+  assert.strictEqual(L.returnReasons(even.map((x) => x[0]), mapOf(even), CT()).findings.length, 0);
+  assert.strictEqual(L.maybeReturn(m[old.transactionId]), true);
+  assert.strictEqual(L.wordHit('Coop Matvaregaranti', ['matvare']), 'matvare');
+  assert.strictEqual(L.wordHit('Coop Matvaregaranti', ['garanti']), '', 'starten av et ord');
 }
 
 console.log('innhold: ok');

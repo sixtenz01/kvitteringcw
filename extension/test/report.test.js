@@ -107,7 +107,7 @@ assert.ok(html.includes('begrenset til de 1 høyest rangerte av 2') && html.incl
 assert.ok(html.includes('<div class="chg">Eller minus totalt over: <b>60 kr</b></div>'), 'endret terskel er markert');
 assert.ok(html.includes('<div class="chg">Stor panteretur: <b>7</b></div>'), 'endret poeng er markert');
 assert.ok(html.includes('<div>Stengetid: <b>22:00</b></div>'), 'klokkeslett uten enhet');
-assert.ok(html.includes('<div>Kassadifferanse fra: <b>1 kr</b></div>') && html.split('<b><span class="off">av</span></b>').length === 10, 'av i standardoppsettet: ansattlisten, overvåkede varer, retur uten kort/medlem samme dag og de seks pant-testene som ikke er 99 eller 399 slettet');
+assert.ok(html.includes('<div>Kassadifferanse fra: <b>1 kr</b></div>') && html.split('<b><span class="off">av</span></b>').length === 11, 'av i standardoppsettet: ansattlisten, overvåkede varer, retur uten kort/medlem samme dag, flagg hver bong med overvåket returårsak og de seks pant-testene som ikke er 99 eller 399 slettet');
 assert.ok(html.includes('Kasse 1: salg 10:00 og retur 10:20, begge 100 kr'));
 assert.ok(html.includes('(kassererfunn, gir poeng på kassereren)'));
 assert.ok(html.includes('href="bevis/01_1005-1-101.png"') && html.includes('a'.repeat(64)));
