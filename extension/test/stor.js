@@ -129,16 +129,19 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   // minimert i Stor/Full: knappen skal ha plassering og ligge på skjermen, også når siden i CW er lang
   await page.evaluate(() => { const d = document.createElement('div'); d.style.height = '4000px'; document.body.insertBefore(d, document.body.firstChild); });
   const toggle = '#kvr-panel .kvr-head button[title^="Skjul"]';
-  const onScreen = async (what) => { const b = await box(); assert.ok(b.t >= 0 && b.t + b.h <= 900 && b.l >= 0 && b.l + b.w <= 1600, what + ' (' + JSON.stringify(b) + ')'); return b; };
+  // tittellinjen skal kunne nås: øverst innenfor skjermen og minst 120 px bredde synlig
+  const onScreen = async (what) => { const b = await box(); assert.ok(b.t >= 0 && b.t <= 900 - 40 && b.l + b.w >= 120 && b.l <= 1600 - 120, what + ' (' + JSON.stringify(b) + ')'); return b; };
   await page.click(toggle);
+  assert.ok((await onScreen('minimert')).h < 80);
+  // størrelsesknappen på et minimert panel åpner det i neste størrelse
   await page.click('button[aria-label="Panelstørrelse"]');
-  const pb = await onScreen('minimert og byttet til stor');
-  assert.ok(/kvr-collapsed/.test(pb.cls) && /kvr-big/.test(pb.cls) && pb.h < 80);
-  await page.click('button[aria-label="Panelstørrelse"]');
-  await onScreen('minimert og byttet til full');
+  const pb = await onScreen('minimert, trykket størrelse');
+  assert.ok(!/kvr-collapsed/.test(pb.cls) && /kvr-big/.test(pb.cls) && pb.h > 800, 'åpnet i stor (' + JSON.stringify(pb) + ')');
   await page.click(toggle);
+  assert.ok((await onScreen('minimert i stor')).h < 80);
+  await page.click('button[aria-label="Panelstørrelse"]');
   const fb = await onScreen('åpnet i full');
-  assert.ok(/kvr-full/.test(fb.cls) && fb.w >= 1550, 'full etter åpning');
+  assert.ok(/kvr-full/.test(fb.cls) && !/kvr-collapsed/.test(fb.cls) && fb.w >= 1550, 'full etter åpning');
   await page.click(toggle);
   await onScreen('full minimert');
   await load();

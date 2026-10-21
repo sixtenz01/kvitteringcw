@@ -4476,7 +4476,8 @@
     }
     function flip() { setCollapsed(!panel.classList.contains('kvr-collapsed')); }
     toggle.addEventListener('click', flip);
-    ui.wideBtn.addEventListener('click', function () { setSizeMode((sizeMode() + 1) % 3, true); });
+    // størrelsesknappen åpner også et minimert panel, ellers ser det ut som ingenting skjer
+    ui.wideBtn.addEventListener('click', function () { if (panel.classList.contains('kvr-collapsed')) setCollapsed(false); setSizeMode((sizeMode() + 1) % 3, true); });
     enableDrag(panel, head, function () { if (panel.classList.contains('kvr-collapsed')) flip(); });
     document.addEventListener('keydown', function (e) {
       if (e.altKey && !e.ctrlKey && !e.metaKey && (e.key === 'k' || e.key === 'K')) { e.preventDefault(); flip(); }
