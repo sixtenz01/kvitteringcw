@@ -125,6 +125,28 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   assert.ok(b3.l >= 0 && b3.l + b3.w <= 1600 && b3.t >= 0, 'panelet ligger innenfor skjermen');
   await load();
   assert.ok(!/kvr-big|kvr-full/.test((await box()).cls), 'vanlig huskes');
+
+  // minimert i Stor/Full: knappen skal ha plassering og ligge på skjermen, også når siden i CW er lang
+  await page.evaluate(() => { const d = document.createElement('div'); d.style.height = '4000px'; document.body.insertBefore(d, document.body.firstChild); });
+  const toggle = '#kvr-panel .kvr-head button[title^="Skjul"]';
+  const onScreen = async (what) => { const b = await box(); assert.ok(b.t >= 0 && b.t + b.h <= 900 && b.l >= 0 && b.l + b.w <= 1600, what + ' (' + JSON.stringify(b) + ')'); return b; };
+  await page.click(toggle);
+  await page.click('button[aria-label="Panelstørrelse"]');
+  const pb = await onScreen('minimert og byttet til stor');
+  assert.ok(/kvr-collapsed/.test(pb.cls) && /kvr-big/.test(pb.cls) && pb.h < 80);
+  await page.click('button[aria-label="Panelstørrelse"]');
+  await onScreen('minimert og byttet til full');
+  await page.click(toggle);
+  const fb = await onScreen('åpnet i full');
+  assert.ok(/kvr-full/.test(fb.cls) && fb.w >= 1550, 'full etter åpning');
+  await page.click(toggle);
+  await onScreen('full minimert');
+  await load();
+  await page.evaluate(() => { const d = document.createElement('div'); d.style.height = '4000px'; document.body.insertBefore(d, document.body.firstChild); });
+  await page.waitForTimeout(1700);
+  await onScreen('minimert i full etter omlasting');
+  await page.click(toggle);
+  assert.ok(/kvr-full/.test((await box()).cls) && !/kvr-collapsed/.test((await box()).cls));
   assert.deepStrictEqual(errors, []);
   await browser.close();
   console.log('stor: ok');

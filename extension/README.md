@@ -265,3 +265,5 @@ Versjon 3.29.0: **kampanjevare = samme vare med rabatt hos to kasserere, én bon
 Versjon 3.30.0: **multipakk er kampanje.** Minst to salgslinjer av samme vare med samme rabattprosent (hele prosent) på samme bong regnes som kampanje (`campMulti`, på; `multiBuy`), også hos én kasserer. «Ikke kampanje» overstyrer. Linjer dekket av kupong eller multipakk telles ikke i «Rabatt uten årsak på varer som ikke er kampanjevare». Kvitteringsvisningen merker rabatten med kampanjevare, kupong eller multipakk. En linje med «Antall: 2» telles ikke som to.
 
 Versjon 3.31.0: **bevisbildene vises i rapporten.** Bildene ligger inne i `rapport.html` (data-URI), i tillegg til filene i `bevis/` med kontrollsum. Tabellen over flaggede kvitteringer har «Se bilde N» som hopper til bildet. Rapporten blir større (omtrent 1,3 × summen av PNG-filene).
+
+Versjon 3.31.1: panelet forsvant når det ble minimert og så satt til Stor eller Full (eller minimert i Stor/Full). Stor/Full gjelder nå bare åpent panel (`bigMode`); minimert er det en liten knapp med vanlig plassering, og åpnes det igjen, kommer Stor/Full tilbake. Test: `test/stor.js` (lang side, minimer, bytt størrelse, last på nytt).

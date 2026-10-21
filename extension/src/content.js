@@ -3617,8 +3617,11 @@
     return { node: el('div', { class: 'kvr-tile' }, [v, el('span', { text: label })]), value: v };
   }
 
+  // Stor/Full gjelder bare når panelet er åpent. Minimert er det en liten knapp med vanlig plassering, uansett størrelse.
+  function bigMode(panel) { return curSize > 0 && !panel.classList.contains('kvr-collapsed'); }
+
   function clamp(panel) {
-    if (curSize > 0) { if (modePos(curSize)) clampBig(panel); return; }
+    if (bigMode(panel)) { if (modePos(curSize)) clampBig(panel); return; }
     var w = panel.offsetWidth, keep = panel.classList.contains('kvr-collapsed') ? 48 : 200;
     var left = Math.min(Math.max(0, parseFloat(panel.style.left) || 0), Math.max(0, window.innerWidth - w));
     var top = Math.min(Math.max(0, parseFloat(panel.style.top) || 0), Math.max(0, window.innerHeight - keep));
@@ -3648,8 +3651,10 @@
     putImportant(panel, left, top);
   }
   function applyModePos(panel) {
-    if (curSize === 0) {
+    if (!bigMode(panel)) {
       if (panel.style.getPropertyPriority('left') === 'important') ['left', 'top', 'right'].forEach(function (k) { panel.style.removeProperty(k); });
+      // minimert i Stor/Full: uten plassering ville knappen havne nederst på siden, utenfor skjermen
+      if (curSize > 0) placePanel(panel);
       return;
     }
     ['left', 'top', 'right'].forEach(function (k) { panel.style.removeProperty(k); });
@@ -3723,7 +3728,7 @@
       if (Math.abs(dx) + Math.abs(dy) > 4) start.moved = true;
       if (!start.moved) return;
       panel.classList.add('kvr-dragging');
-      if (curSize > 0) { putImportant(panel, start.left + dx, start.top + dy); clampBig(panel); return; }
+      if (bigMode(panel)) { putImportant(panel, start.left + dx, start.top + dy); clampBig(panel); return; }
       panel.style.left = (start.left + dx) + 'px';
       panel.style.top = (start.top + dy) + 'px';
       clamp(panel);
@@ -3733,13 +3738,13 @@
       var moved = start.moved;
       start = null;
       panel.classList.remove('kvr-dragging');
-      if (moved) { if (curSize > 0) setModePos(curSize, { left: parseFloat(panel.style.left), top: parseFloat(panel.style.top) }); else store(K.pos, { left: parseFloat(panel.style.left), top: parseFloat(panel.style.top) }); }
+      if (moved) { if (bigMode(panel)) setModePos(curSize, { left: parseFloat(panel.style.left), top: parseFloat(panel.style.top) }); else store(K.pos, { left: parseFloat(panel.style.left), top: parseFloat(panel.style.top) }); }
       else onTap();
     });
     head.addEventListener('pointercancel', function () { start = null; panel.classList.remove('kvr-dragging'); });
     head.addEventListener('dblclick', function (e) {
       if (e.target.closest('button')) return;
-      if (curSize > 0) { setModePos(curSize, null); applyModePos(panel); return; }
+      if (bigMode(panel)) { setModePos(curSize, null); applyModePos(panel); return; }
       store(K.pos, null);
       store(K.size, null);
       panel.style.width = ''; panel.style.height = '';
@@ -3759,7 +3764,7 @@
     if (r.width < 20 || r.height < 20 || r.right < 120 || r.left > vw - 120 || r.bottom < 60 || r.top > vh - keepH) {
       store(K.pos, null); store(K.size, null);
       panel.style.width = ''; panel.style.height = '';
-      if (curSize > 0) { setModePos(curSize, null); applyModePos(panel); } else placePanel(panel);
+      if (bigMode(panel)) { setModePos(curSize, null); applyModePos(panel); } else placePanel(panel);
       why = why || 'utenfor skjermen';
     } else if (coverFixes < 3) {
       var hr = (panel.querySelector('.kvr-head') || panel).getBoundingClientRect();
@@ -4344,6 +4349,7 @@
       panel.classList.toggle('kvr-collapsed', c);
       toggle.textContent = c ? '+' : '–';
       store(K.collapsed, c);
+      applyModePos(panel);
       clamp(panel);
     }
     function flip() { setCollapsed(!panel.classList.contains('kvr-collapsed')); }
