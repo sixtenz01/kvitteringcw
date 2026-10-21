@@ -945,7 +945,7 @@
     ['repeatMin', 'Gjentatt beløp ≥ kr', '50'],
     ['pantMin', 'Pantebeløp ≥ kr', '20'], ['pantRatio', 'Panteretur > salg ×', '1'],
     ['openFrom', 'Åpner (HH:MM)', '06:00'], ['openTo', 'Stenger (HH:MM)', '23:00'],
-    ['maxGap', 'Maks hull i bongnr', '50'], ['profFactor', 'Avvik fra snitt ×', '1.5'],
+    ['profFactor', 'Avvik fra snitt ×', '1.5'],
     ['profMin', 'Minst antall for profil', '5'], ['profShrink', 'Krymping mot butikksnitt (antall bonger, tom = av)', '10'], ['reconTol', 'Avstemt toleranse kr', '1'],
     ['falseRet', 'Falsk retur-test (tom = av)', '1'], ['saleReturnMin', 'Salg og retur av samme beløp innen min', '60'],
     ['settleGraceMin', 'Salg etter oppgjør, frist min', '5'], ['diffRepeatN', 'Kassadiff. minus ≥ antall oppgjør', '3'],
@@ -1017,10 +1017,9 @@
     { id: 'afterSettle', title: 'Salg etter kassaoppgjør', text: 'Salg på en kasse etter dagens siste kassaoppgjør. Oppgjør før åpningstid regnes som forrige dag.', fields: [
       sf('settleGraceMin', 'ctl', 'num', 'Frist etter oppgjør', 'min', 'Salg innenfor fristen flagges ikke.', true)
     ], weights: ['Salg etter kassaoppgjør'] },
-    { id: 'deleted', title: 'Slettede bonger (bongnummer)', text: 'Hull, dobbelte og feil rekkefølge i bongnummer. Gjelder bare hvis CW-listen ikke er filtrert på type, kasse eller tid.', fields: [
-      sf('maxGap', 'ctl', 'num', 'Størst hull som regnes som slettede bonger', 'stk', 'Større hull hoppes over, de skyldes oftest filtrering.', true)
-      ,sf('seqRegMin', 'ctl', 'num', 'Løpenummer: avvik fra naboene', 'min', 'Tidspunktet ligger så langt utenfor tidene til de tre nabonumrene på hver side.', true)
-    ], weights: ['Hull i bongnummer', 'Bongnummer og tid stemmer ikke', 'Dobbelt bongnummer', 'Løpenummer avviker fra tid'] },
+    { id: 'deleted', title: 'Slettede bonger (bongnummer)', text: 'Dobbelt bongnummer, og bongnummer som ikke går i takt med klokkeslettet på samme kasse.', fields: [
+      sf('seqRegMin', 'ctl', 'num', 'Løpenummer: avvik fra naboene', 'min', 'Tidspunktet ligger så langt utenfor tidene til de tre nabonumrene på hver side.', true)
+    ], weights: ['Bongnummer og tid stemmer ikke', 'Dobbelt bongnummer', 'Løpenummer avviker fra tid'] },
     { id: 'diff', title: 'Kassadifferanse over tid', text: 'Gjentatte minusdifferanser per kasserer og kasse.', fields: [
       sf('diffMin', 'ctl', 'num', 'Differanser telles fra', 'kr'),
       sf('diffRepeatN', 'ctl', 'num', 'Minus i minst', 'oppgjør', 'Fordelt på minst to dager.', true),
@@ -1314,29 +1313,9 @@
     return { findings: findings, balance: rows };
   }
 
-  // Sekvens: hull i bongnummer per kasse, og bonger utenfor åpningstid.
+  // Sekvens: bonger utenfor åpningstid.
   function sequence(items, cfg) {
-    var findings = [], byK = {}, skipped = 0;
-    var maxGap = cnum(cfg.maxGap, 50);
-    items.forEach(function (it) {
-      var n = seqNum(it.transactionId);
-      if (n === null) return;
-      groupInto(byK, it.storeNumber + '|' + it.workstationNumber, { n: n, it: it });
-    });
-    Object.keys(byK).forEach(function (k) {
-      var arr = byK[k].sort(function (a, b) { return a.n - b.n; });
-      var uniq = [];
-      arr.forEach(function (x) { if (!uniq.length || uniq[uniq.length - 1].n !== x.n) uniq.push(x); });
-      for (var i = 1; i < uniq.length; i++) {
-        var gap = uniq[i].n - uniq[i - 1].n - 1;
-        if (gap > maxGap) { skipped++; continue; }
-        if (gap > 0) {
-          findings.push({ kind: 'Sekvens', code: 'gap', title: 'Hull i bongnummer', flag: false,
-            detail: 'Kasse ' + k.split('|')[1] + ': mangler ' + (uniq[i - 1].n + 1) + (gap > 1 ? '–' + (uniq[i].n - 1) : '') + ' (' + gap + ')',
-            ids: [uniq[i - 1].it.transactionId, uniq[i].it.transactionId] });
-        }
-      }
-    });
+    var findings = [];
     var from = mins(cfg.openFrom), to = mins(cfg.openTo);
     if (from !== null && to !== null) {
       var g = {};
@@ -1353,7 +1332,7 @@
           ids: g[k].map(function (x) { return x.transactionId; }) });
       });
     }
-    return { findings: findings, skippedGaps: skipped };
+    return { findings: findings };
   }
 
   // Dagsavstemming: salg per betalingsmåte mot kassaoppgjør (telt kontant, sendt bank) per kasse og dag.
@@ -1435,7 +1414,7 @@
     'Små returer før stenging': 4, 'Kontant tilbake uten salg flere ganger': 5, 'Samme beløp gjentatt': 3,
     'Bonger utenfor åpningstid': 2, 'Regel': 3,
     'Retur uten salg': 3, 'Kortkjøp refundert kontant': 5, 'Salg og retur av samme beløp': 4, 'Salg etter kassaoppgjør': 4,
-    'Hull i bongnummer': 3, 'Bongnummer og tid stemmer ikke': 4, 'Dobbelt bongnummer': 3, 'Gjentatte kassadifferanser': 4,
+    'Bongnummer og tid stemmer ikke': 4, 'Dobbelt bongnummer': 3, 'Gjentatte kassadifferanser': 4,
     'Avvikende sifferfordeling': 2, 'Mange runde beløp': 2, 'Rabatt uten årsak': 3, 'Mange rabatter uten årsak': 2, 'Rabatt med overvåket årsak': 3, 'Mange rabatter med overvåket årsak': 3,
     'Medlem i flere butikker samtidig': 4, 'Medlemsnr flere ganger samme dag': 2, 'Medlemsnr brukt svært mye': 2, 'Medlemsnr nesten bare hos én kasserer': 3,
     'Ansatt-medlemsnr brukt': 2, 'Kasserer bruker eget medlemsnr': 5, 'Avvikende pris på vare': 3, 'Mange avvikende priser': 3,
@@ -1711,10 +1690,9 @@
     });
   }
 
-  // Slettede bonger: hull i bongnummer, bongnummer og tid som ikke stemmer, og dobbelt bongnummer.
+  // Slettede bonger: bongnummer og tid som ikke stemmer, dobbelt bongnummer og løpenummer som avviker fra tid.
   function deletedReceipts(population, cfg) {
-    var findings = [], skipped = 0, byK = {};
-    var maxGap = cnum(cfg.maxGap, null);
+    var findings = [], byK = {};
     population.forEach(function (it) {
       var n = seqNum(it.transactionId);
       if (n !== null) groupInto(byK, it.storeNumber + '|' + it.workstationNumber, { n: n, it: it });
@@ -1736,17 +1714,12 @@
         uniq.push(x);
       });
       for (var i = 1; i < uniq.length; i++) {
-        var a = uniq[i - 1], b = uniq[i], gap = b.n - a.n - 1;
+        var a = uniq[i - 1], b = uniq[i];
         if (b.it.endDateTime < a.it.endDateTime) {
           findings.push({ kind: 'Slettede bonger', code: 'timeInversion', title: 'Bongnummer og tid stemmer ikke', flag: true,
             detail: 'Kasse ' + kasse + ': nr ' + b.n + ' kl ' + parseDT(b.it.endDateTime).time + ' kommer etter nr ' + a.n + ' kl ' + parseDT(a.it.endDateTime).time,
             ids: [a.it.transactionId, b.it.transactionId] });
         }
-        if (maxGap === null || gap <= 0) continue;
-        if (gap > maxGap) { skipped++; continue; }
-        findings.push({ kind: 'Slettede bonger', code: 'gap', title: 'Hull i bongnummer', flag: true,
-          detail: 'Kasse ' + kasse + ': mangler ' + (a.n + 1) + (gap > 1 ? '–' + (b.n - 1) : '') + ' (' + gap + ') mellom kl ' + parseDT(a.it.endDateTime).time + ' og ' + parseDT(b.it.endDateTime).time + ' ' + parseDT(b.it.endDateTime).date,
-          ids: [a.it.transactionId, b.it.transactionId], missing: gap });
       }
     });
     var regMin = cnum(cfg.seqRegMin, null);
@@ -1769,7 +1742,7 @@
         }
       });
     }
-    return { findings: findings, skippedGaps: skipped };
+    return { findings: findings };
   }
 
   // Kassadifferanse over tid per kasserer og kasse.

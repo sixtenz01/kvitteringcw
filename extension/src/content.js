@@ -1490,8 +1490,6 @@
       retR: L.returnReasons(items, scanMap, ctlCfg),
       hdr: L.headerChecks(items, pop, scanMap, ctlCfg)
     };
-    res.seq.findings = res.seq.findings.filter(function (f) { return f.code === 'hours'; });
-    res.seq.skippedGaps = res.deleted.skippedGaps;
     res.findings = res.patterns.concat(res.pant.findings, res.seq.findings, res.falseRet.findings, res.after,
       res.deleted.findings.filter(keep), res.diff.findings.filter(keep), res.numbers.findings.filter(keep), res.disc.findings,
       res.member.findings, res.price.findings, res.ku.findings, res.ev.findings, res.ledger.findings, res.corr.findings.filter(keep),
@@ -1859,8 +1857,7 @@
       }, 'kvr-sm'));
       ui.ctlFindings.appendChild(row);
     });
-    if (R.seq.skippedGaps) ui.ctlFindings.appendChild(hintEl(R.seq.skippedGaps + ' store hull i bongnummer er hoppet over (over ' + ctlCfg.maxGap + ' bonger, trolig fordi listen er filtrert).'));
-    ui.ctlFindings.appendChild(hintEl('Hull i bongnummer gjelder bare hvis CW-listen ikke er filtrert på type, kasse eller tid. Funn merket som avvik får rød markering og vises under «Kun avvik».'));
+    ui.ctlFindings.appendChild(hintEl('Funn merket som avvik får rød markering og vises under «Kun avvik».'));
     // pantebalanse
     if (!R.pant.balance.length) ui.ctlPant.appendChild(hintEl('Ingen skannede salg.'));
     else {
@@ -3535,7 +3532,7 @@
         scope: { text: R.scopeText, mode: R.mode, filters: R.filters, coverageText: R.coverageText, compare: R.compare },
         items: R.items, pop: R.pop, scan: R.scan, storeLabels: R.storeLabels,
         settings: { ctl: R.ctl, anom: R.anomCfg, weights: weights, currentDiffers: KvReport.stable([R.ctl, R.anomCfg]) !== KvReport.stable([ctlCfg, anomCfg]) },
-        checks: { falseRet: { coverage: C.falseRet.coverage, lineCheck: C.falseRet.lineCheck }, voids: C.voids ? { applicable: C.voids.applicable, coverage: C.voids.coverage } : null, campaign: C.disc && C.disc.camp ? { pending: C.disc.camp.pending, items: C.disc.camp.items.filter(function (e) { return e.status; }).map(function (e) { return { c: e.c, name: e.name, rateText: e.rateText, n: e.n, status: e.status }; }) } : null, skippedGaps: C.seq.skippedGaps || 0, numbers: C.numbers, ledger: C.ledger ? { lines: C.ledger.lines, pay: C.ledger.pay, vat: C.ledger.vat, refs: C.ledger.refs } : null },
+        checks: { falseRet: { coverage: C.falseRet.coverage, lineCheck: C.falseRet.lineCheck }, voids: C.voids ? { applicable: C.voids.applicable, coverage: C.voids.coverage } : null, campaign: C.disc && C.disc.camp ? { pending: C.disc.camp.pending, items: C.disc.camp.items.filter(function (e) { return e.status; }).map(function (e) { return { c: e.c, name: e.name, rateText: e.rateText, n: e.n, status: e.status }; }) } : null, numbers: C.numbers, ledger: C.ledger ? { lines: C.ledger.lines, pay: C.ledger.pay, vat: C.ledger.vat, refs: C.ledger.refs } : null },
         findings: C.findings, ranked: ranked, explain: explain, notes: noteSub,
         cashiers: L.rankCashiers(R.items, R.anom, weights, C.profile, C.cashierExtra).slice(0, 10),
         compare: compareForReport(R), failedScans: failedRecs.length,

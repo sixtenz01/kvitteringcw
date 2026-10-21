@@ -169,6 +169,16 @@ async function main() {
     await c.un();
   }
   if (want('kampanje')) {
+    // spørsmålsflyten vises med automatisk kampanjevare slått av; slås på igjen etterpå
+    const campAuto = async (on) => {
+      await go('Mer', 'Innstillinger');
+      if (!(await page.$eval('[data-sec=set-disc]', (d) => d.open))) await page.click('[data-sec=set-disc] summary');
+      await page.setChecked('[data-sec=set-disc] .kvr-set-row:has-text("Klassifiser automatisk som kampanjevare") input[type=checkbox]', on);
+      await go('Analyse', 'Sjekk først');
+      await page.click('[data-sec=chk-top] button:text-is("Kjør analyse")');
+      await page.waitForFunction(() => !/endret siden sist/.test(document.querySelector('[data-sec=chk-top]').innerText) && /Kontroller ferdig/.test(document.getElementById('kvr-panel').innerText), null, { timeout: 60000 });
+    };
+    await campAuto(false);
     await go('Analyse', 'Sjekk først');
     const q = '[data-sec=chk-list] .kvr-ck:has(.kvr-ck-t:has-text("09-29 10:12"))';
     for (let i = 0; i < 10 && !(await page.$(q)); i++) { const more = await page.$('[data-sec=chk-list] button:has-text("Vis flere")'); if (!more) break; await more.click(); await page.waitForTimeout(150); }
@@ -180,6 +190,7 @@ async function main() {
     await page.waitForSelector('.kvr-modal .kvr-camp, .kvr-modal table');
     await save('kampanje-dialog', await page.$('.kvr-dlg'));
     await page.click('.kvr-modal button:text-is("Lukk")');
+    await campAuto(true);
   }
   if (want('diagram')) {
     await go('Analyse', 'Diagram'); await view(1000);
@@ -278,6 +289,7 @@ async function main() {
     await go('Mer', 'Innstillinger');
     await page.click('[data-sec=set-bong] summary');
     const inp = page.locator('[data-sec=set-bong] input[aria-label="Stor panteretur fra"]');
+    await page.check('[data-sec=set-bong] input[aria-label="Stor panteretur fra: på"]');
     await inp.fill('250'); await inp.press('Tab');
     await view(1500);
     await page.mouse.click(1000, 600);

@@ -2,7 +2,7 @@
   'use strict';
 
   var L = typeof module !== 'undefined' && module.exports ? require('./logic.js') : root.KvLogic;
-  var VERSION = '3.26.0';
+  var VERSION = '3.27.0';
 
   // ---- SHA-256 (ren JS, så rapporten ikke avhenger av crypto.subtle) -------------------
   var K256 = [
@@ -180,8 +180,7 @@
     out.push('Pantelapper skilles på kode: 99 er lagt inn manuelt og 399 kommer fra pantemaskinen. Slettet pantelapp og slettede varelinjer forutsetter at CW viser slettingen som en linje med motlinje. Spesialbetaling, spør pris, kort og manuell kvittering leter etter ord og felt som ikke er bekreftet i ekte data; testene fanger dem når de dukker opp.');
     out.push('Medlemsnummertestene bruker alle innlastede bonger i valgte butikker. Mange bruk av ett nummer kan være en trofast kunde; resultatet avhenger av hvor lang periode som er lastet.');
     out.push('Annullert, manuell pris, parkert bong og spør pris er ikke observert i ekte data. «Hendelsesord» leter etter slike ord på tekstlinjer, men det er ikke bekreftet at CW viser dem på bongen. Kjøpeutbytte-tabellen er heller ikke bekreftet; testene kalibrerer seg mot det som finnes.');
-    if (m.checks && m.checks.skippedGaps) out.push(m.checks.skippedGaps + ' store hull i bongnummer er ikke tolket som slettede bonger (over grensen for maks hull).');
-    out.push('«Hull i bongnummer» forutsetter at listen ikke er filtrert på type, kasse eller tid, og at kvitteringstypene deler nummerserie per kasse (ikke bekreftet i ekte data).');
+    out.push('«Dobbelt bongnummer» og «Bongnummer og tid stemmer ikke» forutsetter at kvitteringstypene deler nummerserie per kasse (ikke bekreftet i ekte data).');
     var nb = m.checks && m.checks.numbers;
     if (nb && nb.overall && nb.overall.enough === false) out.push('Benford: bare ' + nb.overall.n + ' bonger i omfanget, for få til en sikker konklusjon.');
     out.push('Klokkeslett er som vist i CW-listen (lokal tid)' + (m.timeShift ? ', flyttet ' + (m.timeShift > 0 ? '+' : '') + m.timeShift + ' min etter innstillingen «Tidsforskyvning for listen»' : '') + '. Bongens topptekst kan vise starttid mens listen har sluttid.');

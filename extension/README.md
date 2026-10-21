@@ -32,13 +32,13 @@ All lagring (innstillinger, lagrede filtre, regler, skannecache) ligger i en ege
 
 ## Revisjon: omfang og analyser
 
-**Omfang for analysen** (Analyse → Sjekk først) velger hva «Kjør analyse» ser på, uavhengig av filtrene i listen: periode (med hurtigvalg), butikk, kasserer, kasse, og alt dette kombinert. «Sammenlign med en annen periode» gir periode A mot B. Valget huskes. Går omfanget utenfor det som er hentet fra CW, vises en advarsel, og «Kjør analyse» henter det som mangler (setter datoer og butikker i CW, og tømmer medlems-, vare- og bongsøk). Tester som trenger hele bildet (hull i bongnummer, salg etter kassaoppgjør, falsk retur) bruker alle innlastede bonger i valgte butikker og viser bare funn som gjelder omfanget.
+**Omfang for analysen** (Analyse → Sjekk først) velger hva «Kjør analyse» ser på, uavhengig av filtrene i listen: periode (med hurtigvalg), butikk, kasserer, kasse, og alt dette kombinert. «Sammenlign med en annen periode» gir periode A mot B. Valget huskes. Går omfanget utenfor det som er hentet fra CW, vises en advarsel, og «Kjør analyse» henter det som mangler (setter datoer og butikker i CW, og tømmer medlems-, vare- og bongsøk). Tester som trenger hele bildet (dobbelt bongnummer, salg etter kassaoppgjør, falsk retur) bruker alle innlastede bonger i valgte butikker og viser bare funn som gjelder omfanget.
 
 Nye tester (vekter og terskler justeres under Mer → Innstillinger):
 
 - **Falsk retur:** retur uten salg av varen i datagrunnlaget (krever at minst 80 % av salgene er skannet), kortkjøp refundert kontant, og salg og retur av samme beløp på samme kasse innen 60 minutter. Ren panteretur regnes ikke.
 - **Salg etter kassaoppgjør:** salg på en kasse etter dagens siste kassaoppgjør (frist 5 min). Oppgjør før åpningstid regnes som forrige dags avslutning.
-- **Slettede bonger:** hull i bongnummer per kasse, bongnummer og klokkeslett som ikke stemmer overens, og dobbelt bongnummer. Forutsetter at alle kvitteringstyper deler nummerserie per kasse.
+- **Slettede bonger:** bongnummer og klokkeslett som ikke stemmer overens, og dobbelt bongnummer. Forutsetter at alle kvitteringstyper deler nummerserie per kasse.
 - **Kassadifferanse over tid:** per kasserer og kasse: minst 3 oppgjør med minus fordelt på flere dager, eller minus totalt over 100 kr.
 - **Benford og tallanalyse:** første siffer i totalbeløp mot Benford (MAD, Nigrinis grenser), og andel hele kroner per kasserer mot butikken. Diagram under Analyse → Diagram. Funn per kasserer (ikke per bong) teller i kassererrangeringen.
 
@@ -125,7 +125,7 @@ Versjon 3.21.0 legger til: **Tempo** (serier av bonger med høyst N sekunder mel
 - **Kassererprofil:** returandel, snittbeløp, pantelapper per salg og korrigeringer (negative varelinjer utenom pant) per kasserer mot butikksnittet. Rødt = minst 1,5× snittet (innstilling).
 - **Mønstre:** små returer rett før stenging, kontant tilbake uten salg flere ganger på samme kasse, samme beløp gjentatt (per kasserer og dag). Dette er kontroller på tvers av bonger; «Mulige duplikater» i Filter-fanen er noe annet (samme beløp, kasse og minutt).
 - **Pantelapp-sjekk:** pantebalanse (salg mot utbetalt) per dag og butikk. Gjentatte pantebeløp ligger under «Pantelapp innløst flere ganger».
-- **Sekvens:** hull i bongnummer per kasse (kun pålitelig når CW-listen ikke er filtrert på type, kasse eller tid) og bonger utenfor åpningstid.
+- **Sekvens:** bonger utenfor åpningstid.
 - **Dagsavstemming:** forventet kontant (kontant − kontant tilbake fra salg) mot telt kontant i kassaoppgjør, per kasse og dag, med bank/kort og sendt bank til info.
 - **Oppfølging:** notat og status (sjekket / til oppfølging) per bong, oppfølgingsliste, filter og CSV-eksport. Radene får en prikk.
 - **Sammenlign bonger:** velg to bonger, trykk «Sammenlign» nederst. Linjer som ikke finnes på den andre markeres.
@@ -255,3 +255,5 @@ Versjon 3.24.0: **panelet kommer med en gang på journalsidene**, også før CW 
 Versjon 3.25.0: **ordliste for hendelsesord** i Innstillinger → Hendelsesord (legg til og fjern ord; standard anull, makul, makulert, storn, parker, på vent, manuell, spør pris, overstyr, prisendring, kansell, kanseller, avbrutt). Treff på starten av et ord uavhengig av store/små bokstaver, æøå og doble bokstaver. **Kampanjevare:** selger flere enn én kasserer samme vare med rabatt på flere enn to ulike bonger, klassifiseres varen automatisk som kampanjevare (rabatten flagges ikke; «Ikke kampanje» overstyrer). Skanning v8 lagrer bongens tekstlinjer. Tester: `test/logic.test.js`, `test/linjer.test.js`, `test/settings.js`, `test/kampanje.js`.
 
 Versjon 3.26.0: **returårsak.** Linjen `RETUR VARE` står over hver returnert vare, ofte med årsak (`RETUR VARE Coop Matvaregaranti`). Parseren (skanning v9) merker linjen under med `rv: 1` og årsaken i `rr` (maks 40 tegn); linjen regnes ikke som ukjent, og årsaken er med i fulltekstsøket og i forklaringen til «Retur av vare uten kjøp». `returnReasons()` samler varereturer (ikke pant) per årsak og kasserer: tabell «Retur per årsak» i Detaljer (klikk filtrerer listen), og kasserer markeres («Mange returer med overvåket årsak», 3 poeng) når bonger med overvåket årsak (`retWatch`, standard `matvaregaranti`, ordliste med samme treffregler som hendelsesord) ≥ `retWatchN` (3) og andelen ≥ `profFactor` × andelen hos de andre kassererne. `retWatchFlag` (av) flagger hver bong («Retur med overvåket årsak», 2 poeng). Kvitteringsvisningen viser linjen «RETUR VARE …», rød når årsaken er overvåket. Eldre skanninger (før v9) med negative varelinjer kan tas på nytt med «Skann returbonger på nytt» uten å skanne alt (`maybeReturn`). Tester: `test/innhold.test.js`, `test/innhold.js`.
+
+Versjon 3.27.0: **«Hull i bongnummer» er fjernet** (test, innstillingen `maxGap`, poengvekt, rapporttekst, hjelp, diagram og veiledning). Lagret `maxGap` og poengvekt forsvinner ved neste lesing (`sanitizeControl`/`sanitizeWeights`). «Dobbelt bongnummer», «Bongnummer og tid stemmer ikke» og «Løpenummer avviker fra tid» er beholdt.

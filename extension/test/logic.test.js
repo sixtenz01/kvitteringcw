@@ -265,10 +265,7 @@ const si = [mkI('x-100', '2026-10-02', '10:00', 1, 'A', 10), mkI('x-101', '2026-
   mkI('x-105', '2026-10-02', '10:15', 1, 'A', 10), mkI('y-500', '2026-10-02', '10:00', 2, 'A', 10), mkI('y-900', '2026-10-02', '10:30', 2, 'A', 10),
   mkI('z-1', '2026-10-02', '03:10', 3, 'A', 10), mkI('z-2', '2026-10-02', '23:30', 3, 'A', 10), mkI('z-3', '2026-10-02', '12:00', 3, 'A', 10)];
 const sq = L.sequence(si, C);
-const gaps = sq.findings.filter(f => f.code === 'gap');
-assert.strictEqual(gaps.length, 1 + 0);
-assert.match(gaps[0].detail, /Kasse 1: mangler 102–103 \(2\)/);
-assert.strictEqual(sq.skippedGaps, 1, 'hull over maks hoppes over');
+assert.ok(sq.findings.every(f => f.code === 'hours'), 'hull i bongnummer er fjernet');
 const hrs = sq.findings.filter(f => f.code === 'hours');
 assert.strictEqual(hrs.length, 1);
 assert.strictEqual(hrs[0].ids.length, 2);
@@ -424,15 +421,12 @@ const dPop = [dl('x-100', '10:00', 1), dl('x-101', '10:05', 1), dl('x-104', '10:
 dPop[8].transactionId = 'y-8'; dPop[7].transactionId = 'y-8x';
 const dr = L.deletedReceipts(dPop, C2);
 const dBy = c => dr.findings.filter(f => f.code === c);
-assert.strictEqual(dBy('gap').length, 1);
-assert.match(dBy('gap')[0].detail, /Kasse 1: mangler 102–103 \(2\) mellom kl 10:05 og 10:20 2026-10-02/);
-assert.strictEqual(dBy('gap')[0].missing, 2);
+assert.strictEqual(dBy('gap').length, 0, 'hull i bongnummer er fjernet');
 assert.strictEqual(dBy('timeInversion').length, 1);
 assert.match(dBy('timeInversion')[0].detail, /nr 105 kl 10:10 kommer etter nr 104 kl 10:20/);
 assert.strictEqual(dBy('dupSeq').length, 1);
 assert.match(dBy('dupSeq')[0].detail, /Kasse 2: bongnummer 8 finnes to ganger/);
-assert.strictEqual(dr.skippedGaps, 1, 'z: hull på 898 hoppes over');
-assert.strictEqual(L.deletedReceipts(dPop, Object.assign({}, C2, { maxGap: '' })).findings.filter(f => f.code === 'gap').length, 0);
+assert.ok(!('maxGap' in L.defaultControl()) && !('Hull i bongnummer' in L.RISK_WEIGHTS));
 assert.ok(dr.findings.every(f => f.flag === true));
 
 // ---- kassadifferanse over tid

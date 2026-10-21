@@ -192,7 +192,7 @@ function build(scale) {
       });
     });
   });
-  // E: hull i bongnummer, kasse 1 den 30. (seks bonger fjernet)
+  // E: seks bonger fjernet på kasse 1 den 30.
   const k1 = out.filter((e) => e.store === 1001 && e.ws === 1 && e.day === '2026-09-30' && e.type === 1 && e.m > 13 * 60 && e.m < 19 * 60).sort((a, b) => a.seq - b.seq);
   const start = Math.max(1, Math.floor(k1.length / 2) - 3);
   k1.slice(start, start + 6).forEach((e) => { dropped.push(e.id); });

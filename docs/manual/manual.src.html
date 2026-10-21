@@ -397,7 +397,7 @@
 <h3>Statistikk på tvers av kasserere</h3>
 <ul>
   <li><strong>Siste siffer</strong> (under Tallanalyse): fordelingen av siste siffer i totalbeløpet (ører) sammenlignes med normalfordelingen, som er medianen av kassererne, med en χ²-test. Oppdiktede eller rundede beløp gir ofte for mange nuller eller femmere. Krever minst tre kasserere og minst 50 bonger per kasserer.</li>
-  <li><strong>Løpenummer mot tid</strong> (under Slettede bonger): en bong flagges når tidspunktet ligger langt utenfor tidene til de tre nabonumrene på hver side. Peker ut den enkelte bongen, i motsetning til hull-testen som ser på nabopar.</li>
+  <li><strong>Løpenummer mot tid</strong> (under Slettede bonger): en bong flagges når tidspunktet ligger langt utenfor tidene til de tre nabonumrene på hver side. Peker ut den enkelte bongen.</li>
   <li><strong>Retur mot kassadifferanse</strong> (under Kassadifferanse over tid): Spearman-korrelasjon over dager mellom kassererens returandel og kassadifferanse. Negativ ρ betyr at dager med flere returer har mer minus i kassen. Krever minst 8 dager med minst 5 salg og et kassaoppgjør.</li>
   <li><strong>Krymping i kassererprofilen:</strong> tallene trekkes mot butikksnittet (som 10 bonger) før sammenligningen, så en kasserer med få bonger ikke flagges på tilfeldigheter.</li>
 </ul>
@@ -520,7 +520,6 @@
     <tr><td>Treff du vet er uskyldige, igjen og igjen</td><td>Øk grensen, eller slå testen av med På-bryteren. Notér hvorfor, så det er spor etter valget.</td></tr>
     <tr><td>Du savner treff du vet finnes</td><td>Senk grensen. Sjekk dekningsgraden: mange tester ser bare skannede bonger.</td></tr>
     <tr><td>Samme kasserer øverst hver gang</td><td>Se Kassererprofil. En kasserer på pantekassen eller i kveldsskiftet kan ha helt andre tall enn snittet. Sammenlign med omfang per kasse eller periode mot periode.</td></tr>
-    <tr><td>Falske hull i bongnummer</td><td>Listen er sannsynligvis filtrert på type, kasse eller tid. Fjern filtrene, eller sett «Størst hull» lavere.</td></tr>
     <tr><td>Mange spørsmål om kampanje</td><td>Svar Ja én gang per vare: svaret gjelder alle bonger med varen, uansett rabattprosent. Eller øk «Mulig kampanje: samme vare med rabatt på minst» og «Mulig kampanje: hos minst» under Rabatt.</td></tr>
     <tr><td>Lavere poeng enn du forventet</td><td>Samme forhold teller bare én gang (kapittel 4, Poeng). Overstrøkede piller viser hvilke tester som er dekket av en høyere.</td></tr>
     <tr><td>Salg etter oppgjør rett etter midnatt</td><td>Sett riktig åpningstid. Oppgjør før åpningstid regnes som forrige dag.</td></tr>
@@ -573,7 +572,6 @@
 <details class="faq"><summary>Filteret viser færre bonger enn forventet</summary><p>Filtre som krever skanning (pant, rabatt, vare, varegruppe) skjuler uskannede bonger. En gul stripe viser hvor mange. Skann for å se dem.</p></details>
 <details class="faq"><summary>Rabattfilteret finner ingenting selv om jeg har skannet</summary><p>Skanninger fra før versjon 3 har ikke rabattdata. «Skann synlige» tar dem på nytt, og statuslinjen viser «uten rabattdata».</p></details>
 <details class="faq"><summary>Testen «Retur uten salg» gir ingen treff</summary><p>Den vurderes bare når minst 80 % av salgene i datagrunnlaget er skannet. Rapporten sier fra hvis den ikke ble vurdert.</p></details>
-<details class="faq"><summary>Mange falske «hull i bongnummer»</summary><p>Testen forutsetter at listen ikke er filtrert på type, kasse eller tid. Fjern filtrene i Lindbak og i pluginen og kjør på nytt. Hull større enn grensen hoppes over.</p></details>
 <details class="faq"><summary>«Salg etter kassaoppgjør» rett etter midnatt</summary><p>Sett åpningstid riktig under Innstillinger → Åpningstider. Oppgjør før åpningstid regnes som forrige dags avslutning.</p></details>
 <details class="faq"><summary>Analysen overskrev datoene i Lindbak</summary><p>Når omfanget går utenfor det du har hentet, henter analysen det som mangler og setter Lindbaks dato og butikker. Det tømmer også medlems-, vare- og bongsøk i Lindbak.</p></details>
 <details class="faq"><summary>Jeg endret en terskel, men ingenting skjedde</summary><p>Terskler gjelder fra neste analyse. Trykk Kjør analyse. Poeng gjelder med en gang.</p></details>
@@ -621,7 +619,7 @@
 <h2 id="begrensninger"><span class="n">13</span>Kjente begrensninger</h2>
 <p>Veiledningen og pluginen er laget og testet mot oppdiktede data i en etterlikning av Lindbak. Disse punktene er ikke bekreftet i ekte data:</p>
 <ul>
-  <li>At alle kvitteringstyper deler nummerserie per kasse (grunnlaget for «hull i bongnummer»).</li>
+  <li>At alle kvitteringstyper deler nummerserie per kasse (grunnlaget for «Dobbelt bongnummer» og «Bongnummer og tid stemmer ikke»).</li>
   <li>Hvordan rabattårsak skrives på kvitteringen, og hva en Kupong-linje betyr (innløst eller bare knyttet til bongen).</li>
   <li>Hvordan annullerte bonger, manuell pris, bonger på vent og «spør pris» ser ut. Pluginen leter etter hendelsesord og samler ukjente linjer (Diagnostikk), men vet ikke hva Lindbak faktisk viser.</li>
   <li>Hvordan slettede varelinjer og pantelapper, «spør pris», manuelle kvitteringer, til gode-lapper, spesialbetalinger og kortnummer står på bongen. Testene leter etter motlinjer, ord og maskerte kortnumre, og Diagnostikk samler det de ikke kjenner igjen.</li>

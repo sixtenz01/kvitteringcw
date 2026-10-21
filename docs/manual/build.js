@@ -102,7 +102,7 @@ ${wrows ? `<h4>Poeng i risikoscore</h4><div class="tw"><table class="ref"><thead
   }).join('\n');
 }
 
-const DIA = { patterns: ['tSmall'], falseRet: ['tFalse', 'tFalse2'], afterSettle: ['tAfter'], deleted: ['tGap'], diff: ['tDiff'], numbers: ['tBenford'], pant: ['tPant'] };
+const DIA = { patterns: ['tSmall'], falseRet: ['tFalse', 'tFalse2'], afterSettle: ['tAfter'], diff: ['tDiff'], numbers: ['tBenford'], pant: ['tPant'] };
 const SCOPE_OF = { bong: ['Delvis', 'Bong'], patterns: ['Delvis', 'Bong'], falseRet: ['Ja', 'Bong'], afterSettle: ['Nei', 'Bong'], deleted: ['Nei', 'Bong'], diff: ['Ja (oppgjør)', 'Bong (oppgjør)'], numbers: ['Nei', 'Kasserer'], disc: ['Ja', 'Bong og kasserer'], pant: ['Ja', 'Bong'], hours: ['Nei', 'Bong'], profile: ['Delvis', 'Kasserer'], rules: ['Delvis', 'Bong'], ledger: ['Ja', 'Bong'], lapp: ['Ja', 'Bong og kasserer'], voids: ['Ja', 'Bong og kasserer'], special: ['Ja', 'Bong og kasserer'], ask: ['Ja', 'Bong og kasserer'], card: ['Ja (versjon 6)', 'Bong'], manual: ['Ja', 'Bong'], tempo: ['Nei', 'Bong og kasserer'], watch: ['Ja', 'Bong og kasserer'], retEan: ['Ja', 'Bong'], retReason: ['Ja', 'Kasserer (valgfritt bong)'], hdr: ['Ja (versjon 7)', 'Bong'], member: ['Nei', 'Bong'], price: ['Ja', 'Bong og kasserer'], ku: ['Ja', 'Bong'], events: ['Ja', 'Bong'] };
 
 function testsHtml() {

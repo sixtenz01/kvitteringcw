@@ -77,12 +77,12 @@ function scope() {
   return fig(svg(780, 262, 'Tre nivåer: hele listen, datagrunnlaget i valgte butikker, og omfanget som analyseres', () => {
     let o = rect(8, 8, 764, 246, 'd-box', 12) + text(24, 32, 'Alle bonger i CW-listen (det du har hentet)', { bold: true });
     o += rect(28, 48, 724, 192, 'd-soft', 10) + text(44, 72, 'Datagrunnlag: alle bonger i valgte butikker', { bold: true });
-    o += text(44, 90, 'Brukes av tester som trenger hele bildet: hull i bongnummer, salg etter kassaoppgjør, retur uten salg', { cls: 'd-muted', size: 11 });
+    o += text(44, 90, 'Brukes av tester som trenger hele bildet: dobbelt bongnummer, salg etter kassaoppgjør, retur uten salg', { cls: 'd-muted', size: 11 });
     o += rect(48, 106, 460, 120, 'd-acc', 8) + text(64, 130, 'Omfang: det analysen flagger og rapporterer', { bold: true });
     o += text(64, 150, 'Periode, butikk, kasserer og kasse du velger', { size: 12 }) + text(64, 168, 'under «Velg omfang» i Sjekk først', { size: 12 }) + text(64, 196, 'Funn utenfor omfanget vises ikke.', { cls: 'd-muted', size: 11 });
     o += rect(528, 106, 208, 120, 'd-box', 8) + text(542, 130, 'Filter i listen', { bold: true }) + text(542, 150, 'Teller bare med hvis du huker', { size: 11 }) + text(542, 166, '«Bruk også filtrene i listen»', { size: 11 }) + text(542, 196, 'Ellers uavhengig av omfanget.', { cls: 'd-muted', size: 11 });
     return o;
-  }, 'scope'), 'Omfanget bestemmer hvilke bonger som kan få funn. Datagrunnlaget er det testene sammenligner mot, slik at et omfang på én kasserer ikke gir falske hull i bongnummer.');
+  }, 'scope'), 'Omfanget bestemmer hvilke bonger som kan få funn. Datagrunnlaget er det testene sammenligner mot, slik at et omfang på én kasserer ikke gir falske funn.');
 }
 
 // ---- tidslinje --------------------------------------------------------------------
@@ -120,17 +120,6 @@ function tAfter() {
   return fig(timeline({ id: 'tafter', label: 'To salg kl 22:12 og 22:20 på en kasse som hadde kassaoppgjør kl 21:58', from: tm(20, 30), to: tm(22, 40), ticks: [tm(21, 0), tm(21, 30), tm(22, 0), tm(22, 30)], bands: [{ from: tm(21, 58), to: tm(22, 40), label: 'etter kassaoppgjør', cls: 'd-badsoft' }],
     marks: [{ m: tm(21, 10), label: 'salg', cls: 'd-dot', row: 'down' }, { m: tm(21, 40), label: 'salg', cls: 'd-dot', row: 'down' }, { m: tm(21, 58), label: 'Kassaoppgjør 21:58', cls: 'd-dot', row: 'up', big: true, bold: true }, { m: tm(22, 12), label: 'salg 89,90', cls: 'd-baddot', row: 'down' }, { m: tm(22, 20), label: 'salg 45,00', cls: 'd-baddot', row: 'up' }] }),
   'Et kassaoppgjør skal avslutte dagen på kassen. Salg etter siste oppgjør (utover fristen) flagges. Oppgjør før åpningstid regnes som forrige dags avslutning.');
-}
-
-function tGap() {
-  return fig(svg(780, 128, 'Bongnummer 2121 til 2123, så 2130: seks bonger mangler', () => {
-    let o = '';
-    [['2121', 0], ['2122', 1], ['2123', 2]].forEach((b) => { o += rect(20 + b[1] * 84, 30, 72, 40, 'd-box') + text(56 + b[1] * 84, 56, b[0], { anchor: 'middle', cls: 'd-mono' }); });
-    o += rect(280, 30, 270, 40, 'd-badsoft') + text(415, 50, '2124–2129 mangler', { anchor: 'middle', bold: true }) + text(415, 64, '6 bonger', { anchor: 'middle', size: 11, cls: 'd-muted' });
-    o += rect(570, 30, 72, 40, 'd-box') + text(606, 56, '2130', { anchor: 'middle', cls: 'd-mono' });
-    o += text(20, 102, 'Bongnummer går opp med én for hver kvittering på en kasse. Et hull kan bety slettede bonger, men også at listen er filtrert.', { size: 11, cls: 'd-muted' });
-    return o;
-  }, 'tgap'), 'Hull opp til grensen «Størst hull som regnes som slettede bonger» flagges. Større hull hoppes over fordi de nesten alltid skyldes filtrering.');
 }
 
 function tDiff() {
@@ -239,4 +228,4 @@ function storage() {
   }, 'storage'), 'Cachen er hardt begrenset og kan tømmes under Skann → Tøm cache. Panelets egne data deles ikke med Lindbak.');
 }
 
-module.exports = { flow, scan, scoring, scope, tSmall, tFalse, tFalse2, tAfter, tGap, tDiff, tBenford, tDisc, tPant, zip, settingsFlow, storage };
+module.exports = { flow, scan, scoring, scope, tSmall, tFalse, tFalse2, tAfter, tDiff, tBenford, tDisc, tPant, zip, settingsFlow, storage };

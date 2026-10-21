@@ -104,14 +104,15 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   await go('Analyse', 'Sjekk først');
   await runAnalysis();
   const lt = await listTxt();
-  for (const re of [/Salg og retur av samme beløp/, /Kortkjøp refundert kontant/, /Retur uten salg/, /Salg etter kassaoppgjør/, /Hull i bongnummer/, /Gjentatte kassadifferanser/]) assert.match(lt, re);
+  for (const re of [/Salg og retur av samme beløp/, /Kortkjøp refundert kontant/, /Retur uten salg/, /Salg etter kassaoppgjør/, /Gjentatte kassadifferanser/]) assert.match(lt, re);
+  assert.ok(!/Hull i bongnummer/.test(lt), 'hull i bongnummer er fjernet');
   await go('Analyse', 'Detaljer');
   await page.click('button:text-is("Åpne alle")');
   const fnd = (await page.innerText('[data-sec=findings]')).replace(/\s+/g, ' ');
   assert.match(fnd, /Kasse 1: salg 10:00 og retur 10:20, begge 100 kr \(kasserer A\)/);
   assert.match(fnd, /UKJENT VARE \(50 kr\) uten tilsvarende salg/);
   assert.match(fnd, /Kasse 1 2026-09-28: 2 salg \(150 kr\) etter kassaoppgjør kl 22:00 \(oppgjør av kasserer A; salg av C\)/);
-  assert.match(fnd, /Kasse 1: mangler 105–108 \(4\)/);
+  assert.ok(!/mangler 105–108/.test(fnd));
   assert.match(fnd, /Kasserer A: 2 av 2 oppgjør med minus, totalt -70 kr/);
   const diff = (await page.innerText('[data-sec=diff]')).replace(/\s+/g, ' ');
   assert.match(diff, /Kasserer A 2 2 0 −70,00/);
@@ -137,7 +138,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   assert.match(await scopeTxt(), /kasserer C → 2 av 11/);
   await runAnalysis();
   const cl = await listTxt();
-  assert.match(cl, /Salg etter kassaoppgjør/); assert.match(cl, /Hull i bongnummer/);
+  assert.match(cl, /Salg etter kassaoppgjør/);
   assert.ok(!/Retur uten salg|Kortkjøp/.test(cl), 'funn for andre kasserere vises ikke');
   await page.click('[data-sec=scope] button:text-is("Nullstill omfang")');
 
