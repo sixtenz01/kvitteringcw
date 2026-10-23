@@ -540,7 +540,7 @@
 
   // ---- samlet grunnlag og «Hent og skann i deler» ---------------------------------------------
   // CW viser høyst 1000 bonger per søk og kutter de eldste. Perioden hentes derfor dag for dag; en dag med 1000 bonger deles
-  // på beløp (CWs felt for sum fra og til). Hver del skannes mens den står i listen, og radene lagres i et samlet grunnlag
+  // på klokkeslett (CWs fra- og til-tid). Hver del skannes mens den står i listen, og radene lagres i et samlet grunnlag
   // som analysen bruker sammen med listen. Pause mellom søkene, stopp ved første søk uten svar, og søket ditt settes tilbake.
   function archKey(day) { return K.arch + ':' + day; }
   function loadArchive() {
@@ -603,6 +603,21 @@
   }
 
   function sumInputs() { return { min: document.querySelector('[ng-model="vm.selectedFilters.sumMin"]'), max: document.querySelector('[ng-model="vm.selectedFilters.sumMax"]') }; }
+  function timeInputs() { return { from: document.getElementById('fromTimePicker'), to: document.getElementById('toTimePicker') }; }
+  function timeWidget(node) { var $ = jq(), w = $ && node ? $(node).data('kendoTimePicker') : null; return w && typeof w.value === 'function' ? w : null; }
+  // Klokkeslett i CWs tidsfelt: via Kendo-widgeten når den finnes, og i feltet, som når du skriver selv.
+  function setTime(node, m) {
+    if (!node) return;
+    var w = timeWidget(node);
+    if (w) { w.value(m === null ? null : new Date(2000, 0, 1, Math.floor(m / 60), m % 60)); if (typeof w.trigger === 'function') w.trigger('change'); }
+    setInputValue(node, m === null ? '' : L.hhmm(m));
+  }
+  function restoreTime(node, o) {
+    if (!node) return;
+    var w = timeWidget(node);
+    if (w) { w.value(o.w); if (typeof w.trigger === 'function') w.trigger('change'); }
+    setInputValue(node, o.t);
+  }
   function partSay(t) { if (ui.partStatus) ui.partStatus.textContent = t; say(t); }
 
   async function searchNow(pause, timeout) {
@@ -617,12 +632,20 @@
     return gridData();
   }
 
-  async function partSearch(day, win, si) {
+  // Klokkeslettet slik CW har det (uten pluginens tidsforskyvning) innenfor vinduet, med ett minutts slingring.
+  function inWindow(it, w) {
+    var t = L.mins(L.parseDT(it.endDateTime).time);
+    if (t === null) return true;
+    t -= timeShift;
+    return t >= w.from - 1 && t <= w.to + 1;
+  }
+
+  async function partSearch(day, win, ti) {
     var q = function (sel) { return document.querySelector(sel); };
     setInputValue(q('#fromDatePicker'), noDate(day));
     setInputValue(q('#toDatePicker'), noDate(day));
-    if (si.min) setInputValue(si.min, win.min === null ? '' : String(win.min));
-    if (si.max) setInputValue(si.max, win.max === null ? '' : String(win.max));
+    setTime(ti.from, win.from);
+    setTime(ti.to, win.to);
     return searchNow(bulk.pause, bulk.timeout);
   }
 
@@ -633,39 +656,42 @@
     if (!days.length) { partSay('Velg Dato fra og Dato til under «Søk i hele journalen» først.'); return; }
     if (cw.free) { partSay('Fjern «Vare (EAN/navn)» først: fritekstsøk brukes ikke i deler, fordi det er tungt for CWs server.'); return; }
     var q = function (sel) { return document.querySelector(sel); };
-    var si = sumInputs(), ft = q('#freetextSearchInput'), fd = q('#fromDatePicker'), td = q('#toDatePicker');
-    var orig = { from: fd ? fd.value : '', to: td ? td.value : '', min: si.min ? si.min.value : '', max: si.max ? si.max.value : '', free: ft ? ft.value : '' };
+    var si = sumInputs(), ti = timeInputs(), ft = q('#freetextSearchInput'), fd = q('#fromDatePicker'), td = q('#toDatePicker');
+    var tw = function (n) { var w = timeWidget(n); return { t: n ? n.value : '', w: w ? w.value() : null }; };
+    var orig = { from: fd ? fd.value : '', to: td ? td.value : '', min: si.min ? si.min.value : '', max: si.max ? si.max.value : '', free: ft ? ft.value : '', tFrom: tw(ti.from), tTo: tw(ti.to) };
     var hook = window.__kvrParts || {};
     bulk = { stop: false, pause: hook.pause >= 0 ? hook.pause : PART_PAUSE, timeout: hook.timeout || CWX_TIMEOUT, cut: hook.cut || CWX_CUT, scan: ui.partScan.box.checked, extra: ui.partExtra.box.checked };
     var errors = [], log = [], t0 = Date.now(), nRows = 0, nScan = 0, nCut = 0, skipped = 0, parts = 0, today = todayStr();
-    if (!si.min || !si.max) errors.push('Fant ikke CWs felt for sum fra og til. Dager med 1000 bonger kan ikke deles og blir kuttet.');
+    if (!ti.from || !ti.to) errors.push('Fant ikke CWs felt for fra- og til-tid. Dager med 1000 bonger kan ikke deles og blir kuttet.');
     ui.partBtn.disabled = true; ui.partStop.disabled = false; ui.cwxBtn.disabled = true;
     var nums = Object.keys(cw.stores).filter(function (k) { return cw.stores[k]; });
     if (nums.length) setCwStores(nums);
     if (ft) setInputValue(ft, '');
+    if (si.min) setInputValue(si.min, '');   // beløp brukes ikke: hele dagen skal med
+    if (si.max) setInputValue(si.max, '');
     if (cw.members) setInputValue(q('[ng-model="vm.selectedFilters.memberNumber"]'), cw.members);
     if (cw.loyal) setInputValue(q('[ng-model="vm.selectedFilters.externalLoyaltyNumber"]'), cw.loyal);
     try {
       for (var di = 0; di < days.length && !bulk.stop; di++) {
         var day = days[di];
         if (arch.days[day] && arch.days[day].done && day < today) { skipped++; continue; }
-        var queue = [{ win: { min: null, max: null }, depth: 0 }], openKey = null, cutHere = 0, dayN = 0;
+        var queue = [{ win: L.DAY_WINDOW, depth: 0 }], cutHere = 0, dayN = 0;
         while (queue.length && !bulk.stop) {
           var p = queue.shift();
           parts++;
-          partSay('Henter ' + day + ' (' + L.sumText(p.win) + ')' + (days.length > 1 ? ', dag ' + (di + 1) + ' av ' + days.length : '') + '…');
-          var rows = await partSearch(day, p.win, si);
-          if (rows === null) { errors.push('CW svarte ikke på søket for ' + day + ' (' + L.sumText(p.win) + ') innen ' + Math.round(bulk.timeout / 1000) + ' s. Kjøringen ble stoppet; start igjen senere, så fortsetter den der den slapp.'); bulk.stop = true; break; }
-          var open = p.win.min === null && p.win.max === null;
-          if (open) openKey = idsKey(rows);
-          else if (p.depth === 1 && rows.length && idsKey(rows) === openKey) {
-            errors.push('CW brukte ikke beløpsfeltene for ' + day + ' (samme bonger som uten beløp). Dagen er kuttet ved 1000 bonger.');
+          partSay('Henter ' + day + ' (' + L.timeText(p.win) + ')' + (days.length > 1 ? ', dag ' + (di + 1) + ' av ' + days.length : '') + '…');
+          var rows = await partSearch(day, p.win, ti);
+          if (rows === null) { errors.push('CW svarte ikke på søket for ' + day + ' (' + L.timeText(p.win) + ') innen ' + Math.round(bulk.timeout / 1000) + ' s. Kjøringen ble stoppet; start igjen senere, så fortsetter den der den slapp.'); bulk.stop = true; break; }
+          var got = collect();
+          // CW har brukt tidsfeltene når alle bongene ligger i vinduet (ett minutts slingring). Ellers kuttes dagen, og det står hvorfor.
+          if (p.depth > 0 && got.some(function (r) { return !inWindow(r.item, p.win); })) {
+            errors.push('CW brukte ikke klokkeslett-feltene for ' + day + ' (bonger utenfor ' + L.timeText(p.win) + '). Dagen er kuttet ved 1000 bonger.');
+            addArchive(day, got.map(function (r) { return r.item; }));
             queue = []; cutHere++;
             continue;
           }
-          var got = collect();
-          if (rows.length >= bulk.cut && si.min && si.max) {
-            var sub = p.depth < 6 ? L.splitSum(p.win) : [];
+          if (rows.length >= bulk.cut && ti.from && ti.to) {
+            var sub = p.depth < 12 ? L.splitTime(p.win) : [];
             if (sub.length) { addArchive(day, got.map(function (r) { return r.item; })); queue = sub.map(function (w) { return { win: w, depth: p.depth + 1 }; }).concat(queue); continue; }
             cutHere++;
           } else if (rows.length >= bulk.cut) cutHere++;
@@ -679,7 +705,7 @@
         if (bulk.stop) break;
         if (bulk.extra) {
           // tilleggsdata for hele dagen: søk uten beløp, så CWs filtre ett om gangen
-          var whole = await partSearch(day, { min: null, max: null }, si);
+          var whole = await partSearch(day, L.DAY_WINDOW, ti);
           if (whole === null) { errors.push('CW svarte ikke på søket for ' + day + ' før tilleggsdata. Kjøringen ble stoppet.'); break; }
           bulk.inExtra = true;
           await fetchCwExtra();
@@ -701,6 +727,8 @@
       if (td) setInputValue(td, orig.to);
       if (si.min) setInputValue(si.min, orig.min);
       if (si.max) setInputValue(si.max, orig.max);
+      restoreTime(ti.from, orig.tFrom);
+      restoreTime(ti.to, orig.tTo);
       if (ft && orig.free) setInputValue(ft, orig.free);
       var back = await searchNow(bulk.pause, bulk.timeout);
       if (back === null) errors.push('CW svarte ikke da søket ditt skulle hentes tilbake. Trykk Oppdater i CW.');
@@ -4462,7 +4490,7 @@
     ui.partStatus = el('div', { class: 'kvr-note', role: 'status', text: '' });
     ui.partInfo = el('div', {});
     var secParts = section('parts', 'Hent og skann i deler', [
-      hintEl('For perioder med mer enn 1000 bonger. Bruker dato, butikker og medlemsnr fra «Søk i hele journalen» over. Pluginen søker én dag om gangen; en dag med 1000 bonger deles på beløp (CWs felt for sum fra og til). Hver del skannes mens den står i listen, og radene samles i pluginens egen database. Analysen bruker det samlede grunnlaget sammen med listen. Dager som er hentet før (unntatt i dag), hoppes over, så du kan stoppe og fortsette. Skanning tar omtrent 1 sekund per bong.'),
+      hintEl('For perioder med mer enn 1000 bonger. Bruker dato, butikker og medlemsnr fra «Søk i hele journalen» over. Pluginen søker én dag om gangen; en dag med 1000 bonger deles på klokkeslett (CWs fra- og til-tid), og en del som fortsatt har 1000 bonger, deles igjen. Hver del skannes mens den står i listen, og radene samles i pluginens egen database. Analysen bruker det samlede grunnlaget sammen med listen. Dager som er hentet før (unntatt i dag), hoppes over, så du kan stoppe og fortsette. Skanning tar omtrent 1 sekund per bong.'),
       el('div', { class: 'kvr-row' }, [ui.partScan.node, ui.partExtra.node]),
       el('div', { class: 'kvr-row' }, [ui.partBtn, ui.partStop, btn('Tøm samlet grunnlag', function () {
         confirmBox('Tøm samlet grunnlag', 'Fjerne ' + archCount() + ' bonger fra samlet grunnlag? Skannet innhold beholdes.', 'Tøm', function () { clearArchive(); apply(); renderParts(); partSay('Samlet grunnlag er tømt.'); });

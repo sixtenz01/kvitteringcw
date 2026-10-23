@@ -173,12 +173,27 @@ const mapOf = (pairs) => pairs.reduce((m, [it, s]) => (m[it.transactionId] = s, 
   assert.deepStrictEqual(L.dayList('2026-10-30', '2026-11-02'), ['2026-10-30', '2026-10-31', '2026-11-01', '2026-11-02']);
   assert.deepStrictEqual(L.dayList('2026-10-02', '2026-10-01'), []);
   assert.strictEqual(L.dayList('2026-01-01', '2026-12-31', 92).length, 92);
-  assert.deepStrictEqual(L.splitSum({ min: null, max: null }), [{ min: null, max: 0 }, { min: -0.01, max: 100 }, { min: 99.99, max: 300 }, { min: 299.99, max: null }], 'vinduene overlapper 0,01 kr');
-  assert.deepStrictEqual(L.splitSum({ min: -0.01, max: 100 }), [{ min: -0.01, max: 50 }, { min: 49.99, max: 100 }]);
-  assert.deepStrictEqual(L.splitSum({ min: 299.99, max: null }), [{ min: 299.99, max: 599.98 }, { min: 599.97, max: null }]);
-  assert.deepStrictEqual(L.splitSum({ min: null, max: 0 }), [{ min: null, max: -100 }, { min: -100.01, max: 0 }]);
-  assert.deepStrictEqual(L.splitSum({ min: 50, max: 51 }), [], 'kan ikke deles mer');
-  assert.strictEqual(L.sumText({ min: 99.99, max: 300 }), '99,99 – 300 kr');
+  assert.deepStrictEqual(L.splitTime(L.DAY_WINDOW), [{ from: 0, to: 719 }, { from: 718, to: 1439 }], 'halvdelene overlapper ett minutt');
+  assert.deepStrictEqual(L.splitTime({ from: 718, to: 1439 }), [{ from: 718, to: 1078 }, { from: 1077, to: 1439 }]);
+  assert.deepStrictEqual(L.splitTime({ from: 600, to: 601 }), [], 'kan ikke deles mer');
+  assert.strictEqual(L.timeText(L.DAY_WINDOW), 'hele dagen');
+  assert.strictEqual(L.timeText({ from: 420, to: 719 }), '07:00–11:59');
+  // en dag med 3000 bonger der 1000 er tatt før 12: halveringen når alltid et vindu med færre enn 1000
+  {
+    const times = [];
+    for (let i = 0; i < 1000; i++) times.push(420 + Math.floor(i * 0.3));   // 07:00–11:59
+    for (let i = 0; i < 2000; i++) times.push(720 + Math.floor(i * 0.3));   // 12:00–21:59
+    const got = new Set(), q = [L.DAY_WINDOW];
+    let searches = 0;
+    while (q.length) {
+      const w = q.shift(); searches++;
+      const hit = times.map((t, i) => [t, i]).filter(([t]) => t >= w.from && t <= w.to);
+      if (hit.length >= 1000) { q.unshift(...L.splitTime(w)); continue; }
+      hit.forEach(([, i]) => got.add(i));
+    }
+    assert.strictEqual(got.size, 3000, 'hele dagen, også 07–12');
+    assert.ok(searches < 20, 'få søk (' + searches + ')');
+  }
   assert.deepStrictEqual(L.archRow({ transactionId: 'a', endDateTime: '2026-10-22 10:00', totalAmount: 5, memberNumber: '123', toJSON: () => 1, extra: { x: 1 } }), { transactionId: 'a', endDateTime: '2026-10-22 10:00', totalAmount: 5 }, 'medlemsnummer og objekter lagres ikke');
   assert.strictEqual(L.archRow({ x: 1 }), null);
 }

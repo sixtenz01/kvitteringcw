@@ -3745,19 +3745,17 @@
     for (var t = a; t <= b && out.length < (maxDays || 92); t += 86400000) out.push(new Date(t).toISOString().slice(0, 10));
     return out;
   }
-  // Et beløpsvindu {min, max} (null = åpent) deles i mindre vinduer når søket treffer CW-grensen. Hvert vindu etter det første
-  // starter 0,01 kr under forrige slutt, så ingen bong faller mellom uansett om CW regner grensene med eller ikke; doble treff
-  // fjernes på transactionId. Tom liste = kan ikke deles mer (under 1 kr bredt).
-  function splitSum(w) {
-    var a = w && typeof w.min === 'number' ? w.min : null, b = w && typeof w.max === 'number' ? w.max : null;
-    var cut = function (bd) { return bd.slice(0, -1).map(function (x, i) { return { min: i === 0 || x === null ? x : round2(x - 0.01), max: bd[i + 1] }; }); };
-    if (a === null && b === null) return cut([null, 0, 100, 300, null]);
-    if (a === null) return cut([null, b - Math.max(100, Math.abs(b)), b]);
-    if (b === null) return cut([a, round2(a + Math.max(100, Math.abs(a))), null]);
-    if (b - a <= 1) return [];
-    return cut([a, Math.round((a + b) / 2), b]);
+  // Et tidsvindu {from, to} i minutter etter midnatt (0–1439) deles i to når søket treffer CW-grensen. Andre halvdel starter
+  // ett minutt før første slutter, så ingen bong faller mellom uansett om CW regner grensene med eller ikke; doble treff
+  // fjernes på transactionId. Tom liste = kan ikke deles mer (under to minutter).
+  var DAY_WINDOW = { from: 0, to: 1439 };
+  function splitTime(w) {
+    var a = w && typeof w.from === 'number' ? w.from : 0, b = w && typeof w.to === 'number' ? w.to : 1439;
+    if (b - a < 2) return [];
+    var mid = Math.floor((a + b) / 2);
+    return [{ from: a, to: mid }, { from: mid - 1, to: b }];
   }
-  function sumText(w) { return w.min === null && w.max === null ? 'alle beløp' : (w.min === null ? '…' : String(w.min).replace('.', ',')) + ' – ' + (w.max === null ? '…' : String(w.max).replace('.', ',')) + ' kr'; }
+  function timeText(w) { return w.from === 0 && w.to === 1439 ? 'hele dagen' : hhmm(w.from) + '–' + hhmm(w.to); }
   // Rad i samlet grunnlag: bare feltene testene trenger. Medlemsnummer lagres ikke.
   var ARCH_FIELDS = ['transactionId', 'endDateTime', 'rawDT', 'storeNumber', 'workstationNumber', 'cashierNumber', 'totalAmount', 'receiptType', 'saleChannel', 'bongnr'];
   function archRow(it) {
@@ -3936,7 +3934,7 @@
     sumSelected: sumSelected,
     parseReceipt: parseReceipt,
     splitDeleted: splitDeleted,
-    dayList: dayList, splitSum: splitSum, sumText: sumText, archRow: archRow,
+    dayList: dayList, splitTime: splitTime, timeText: timeText, hhmm: hhmm, DAY_WINDOW: DAY_WINDOW, archRow: archRow,
     cwChecks: cwChecks, sessions: sessions, shiftChecks: shiftChecks, copyChecks: copyChecks, shrinkChecks: shrinkChecks, CW_COMBOS: CW_COMBOS, EMP_TAG: EMP_TAG,
     isShrink: isShrink,
     delLines: delLines,
