@@ -11,7 +11,7 @@
   var K = {
     saved: 'kvr.saved.v1', collapsed: 'kvr.collapsed.v1', scan: 'kvr.scan.v2', pos: 'kvr.pos.v1',
     size: 'kvr.size.v1', sec: 'kvr.sec.v1', rules: 'kvr.rules.v1', anom: 'kvr.anom.v1',
-    stores: 'kvr.stores.v1', tab: 'kvr.tab.v1', layout: 'kvr.layout.v1', arules: 'kvr.arules.v1', notes: 'kvr.notes.v1', tasks: 'kvr.tasks.v1', ctl: 'kvr.ctl.v1', keynav: 'kvr.keynav.v1', tshift: 'kvr.tshift.v1', nlog: 'kvr.nlog.v1', wide: 'kvr.wide.v1', sub: 'kvr.sub.v1', weights: 'kvr.weights.v1', camp: 'kvr.camp.v1', lastrun: 'kvr.lastrun.v1', scope: 'kvr.scope.v1', help: 'kvr.help.v1', sub2: 'kvr.sub2.v1', reports: 'kvr.reports.v1', repopts: 'kvr.repopts.v1', pantmig: 'kvr.pantmig.v1', pos2: 'kvr.pos2.v1', campmig: 'kvr.campmig.v1', discmig: 'kvr.discmig.v1', evmig: 'kvr.evmig.v1', folder: 'kvr.folder.v1', folderAt: 'kvr.folderat.v1', cwx: 'kvr.cwx.v1'
+    stores: 'kvr.stores.v1', tab: 'kvr.tab.v1', layout: 'kvr.layout.v1', arules: 'kvr.arules.v1', notes: 'kvr.notes.v1', tasks: 'kvr.tasks.v1', ctl: 'kvr.ctl.v1', keynav: 'kvr.keynav.v1', tshift: 'kvr.tshift.v1', nlog: 'kvr.nlog.v1', wide: 'kvr.wide.v1', sub: 'kvr.sub.v1', weights: 'kvr.weights.v1', camp: 'kvr.camp.v1', lastrun: 'kvr.lastrun.v1', scope: 'kvr.scope.v1', help: 'kvr.help.v1', sub2: 'kvr.sub2.v1', reports: 'kvr.reports.v1', repopts: 'kvr.repopts.v1', pantmig: 'kvr.pantmig.v1', pos2: 'kvr.pos2.v1', campmig: 'kvr.campmig.v1', discmig: 'kvr.discmig.v1', evmig: 'kvr.evmig.v1', folder: 'kvr.folder.v1', folderAt: 'kvr.folderat.v1', cwx: 'kvr.cwx.v1', arch: 'kvr.arch.v1'
   };
   var sayTimer = null;
   var failedRecs = [];
@@ -48,6 +48,9 @@
   var weights = null, checkState = { newIds: {}, at: null, shown: 15, showChecked: false }, expanded = {};
   var notes = {}, ctlRes = null, ctlCfg = null, tasksCustom = [], boundCount = 0, keyNav = true, settingsStale = false, timeShift = 0;
   var cwx = null, cwRun = null;   // tilleggsdata fra CWs filtre, og kjøringen som pågår
+  // samlet grunnlag fra «Hent og skann i deler»: listerader fra mange CW-søk. Medlemsnummer bare i minnet (archMem).
+  var arch = { days: {} }, archMem = {}, archVer = 0, allCache = null, bulk = null;
+  var ARCH_LIMIT = 30000, ARCH_DAYS = 92, PART_PAUSE = 1500;
 
   function openDb() {
     return new Promise(function (res) {
@@ -425,7 +428,7 @@
   function cwxSay(t) { if (ui.cwxStatus) ui.cwxStatus.textContent = t; say(t); }
 
   async function fetchCwExtra() {
-    if (cwRun || scanning || !grid) return;
+    if (cwRun || scanning || !grid || (bulk && !bulk.inExtra)) return;
     var base = gridData();
     if (!base.length) { cwxSay('Hent først kvitteringer i CW (Søk i CW eller Oppdater i Lindbak), så tilleggsdataene gjelder samme periode og butikker.'); return; }
     var pause = window.__kvrCwx && window.__kvrCwx.pause >= 0 ? window.__kvrCwx.pause : CWX_PAUSE;
@@ -534,6 +537,203 @@
   }
 
   function stopCwExtra() { if (cwRun) { cwRun.stop = true; cwxSay('Stopper etter søket som pågår, og setter filtrene tilbake…'); } }
+
+  // ---- samlet grunnlag og «Hent og skann i deler» ---------------------------------------------
+  // CW viser høyst 1000 bonger per søk og kutter de eldste. Perioden hentes derfor dag for dag; en dag med 1000 bonger deles
+  // på beløp (CWs felt for sum fra og til). Hver del skannes mens den står i listen, og radene lagres i et samlet grunnlag
+  // som analysen bruker sammen med listen. Pause mellom søkene, stopp ved første søk uten svar, og søket ditt settes tilbake.
+  function archKey(day) { return K.arch + ':' + day; }
+  function loadArchive() {
+    var idx = store(K.arch);
+    arch = { days: {} };
+    if (idx && Array.isArray(idx.days)) idx.days.forEach(function (d) {
+      if (!d || !/^\d{4}-\d{2}-\d{2}$/.test(d.day)) return;
+      var v = store(archKey(d.day));
+      var rows = v && Array.isArray(v.rows) ? v.rows.map(L.archRow).filter(Boolean) : [];
+      arch.days[d.day] = { day: d.day, at: Number(d.at) || 0, done: !!d.done, cut: Number(d.cut) || 0, rows: rows };
+    });
+    archVer++;
+  }
+  function archCount() { return Object.keys(arch.days).reduce(function (a, d) { return a + arch.days[d].rows.length; }, 0); }
+  function saveArchiveIndex() {
+    store(K.arch, { v: 1, days: Object.keys(arch.days).sort().map(function (d) { var x = arch.days[d]; return { day: d, at: x.at, done: x.done, cut: x.cut, n: x.rows.length }; }) });
+  }
+  function addArchive(day, items) {
+    var e = arch.days[day] || (arch.days[day] = { day: day, at: 0, done: false, cut: 0, rows: [] });
+    var have = {};
+    e.rows.forEach(function (r, i) { have[r.transactionId] = i; });
+    items.forEach(function (it) {
+      var r = L.archRow(it);
+      if (!r) return;
+      if (it.memberNumber !== undefined && it.memberNumber !== null && it.memberNumber !== '') archMem[r.transactionId] = it.memberNumber;
+      if (have[r.transactionId] !== undefined) e.rows[have[r.transactionId]] = r; else { have[r.transactionId] = e.rows.length; e.rows.push(r); }
+    });
+    e.at = Date.now();
+    // tak: de eldste dagene går først (aldri dagen som hentes nå)
+    var days = Object.keys(arch.days).sort();
+    while (archCount() > ARCH_LIMIT && days.length > 1) { var old = days.shift(); if (old === day) { days.push(old); continue; } delete arch.days[old]; store(archKey(old), null); }
+    store(archKey(day), { rows: e.rows });
+    saveArchiveIndex();
+    archVer++;
+  }
+  function clearArchive() {
+    Object.keys(arch.days).forEach(function (d) { store(archKey(d), null); });
+    arch = { days: {} }; archMem = {}; archVer++;
+    store(K.arch, null);
+  }
+  // Listen i CW pluss raden fra samlet grunnlag som ikke står i listen nå. Slike rader kan analyseres, men ikke skannes eller markeres.
+  function allRecs() {
+    var days = Object.keys(arch.days);
+    if (!days.length) return recs;
+    if (allCache && allCache.recs === recs && allCache.ver === archVer) return allCache.out;
+    var have = {}, out = recs.slice(), prev = allCache ? allCache.arch : {}, next = {};
+    recs.forEach(function (r) { have[r.item.transactionId] = true; });
+    days.sort().forEach(function (d) {
+      arch.days[d].rows.forEach(function (row) {
+        var id = row.transactionId;
+        if (have[id]) return;
+        have[id] = true;
+        var r = prev[id] && prev[id].row === row ? prev[id] : { row: row, item: archMem[id] !== undefined ? Object.assign({}, row, { memberNumber: archMem[id] }) : row, tr: null, show: true, base: true, arch: true };
+        next[id] = r;
+        out.push(r);
+      });
+    });
+    allCache = { recs: recs, ver: archVer, out: out, arch: next };
+    return out;
+  }
+
+  function sumInputs() { return { min: document.querySelector('[ng-model="vm.selectedFilters.sumMin"]'), max: document.querySelector('[ng-model="vm.selectedFilters.sumMax"]') }; }
+  function partSay(t) { if (ui.partStatus) ui.partStatus.textContent = t; say(t); }
+
+  async function searchNow(pause, timeout) {
+    var b = document.querySelector('[ng-click="vm.applyFilters()"]');
+    if (!b) throw new Error('Fant ikke OPPDATER-knappen i CW.');
+    await wait(pause);
+    var before = boundCount;
+    b.click();
+    await waitFor(function () { return boundCount > before; }, timeout);
+    if (boundCount <= before) return null;
+    await wait(300);
+    return gridData();
+  }
+
+  async function partSearch(day, win, si) {
+    var q = function (sel) { return document.querySelector(sel); };
+    setInputValue(q('#fromDatePicker'), noDate(day));
+    setInputValue(q('#toDatePicker'), noDate(day));
+    if (si.min) setInputValue(si.min, win.min === null ? '' : String(win.min));
+    if (si.max) setInputValue(si.max, win.max === null ? '' : String(win.max));
+    return searchNow(bulk.pause, bulk.timeout);
+  }
+
+  async function fetchParts() {
+    if (bulk || cwRun || scanning || !grid) return;
+    var from = cw.dateFrom || (ui.cwFrom && ui.cwFrom.value), to = cw.dateTo || (ui.cwTo && ui.cwTo.value) || from;
+    var days = L.dayList(from, to, ARCH_DAYS);
+    if (!days.length) { partSay('Velg Dato fra og Dato til under «Søk i hele journalen» først.'); return; }
+    if (cw.free) { partSay('Fjern «Vare (EAN/navn)» først: fritekstsøk brukes ikke i deler, fordi det er tungt for CWs server.'); return; }
+    var q = function (sel) { return document.querySelector(sel); };
+    var si = sumInputs(), ft = q('#freetextSearchInput'), fd = q('#fromDatePicker'), td = q('#toDatePicker');
+    var orig = { from: fd ? fd.value : '', to: td ? td.value : '', min: si.min ? si.min.value : '', max: si.max ? si.max.value : '', free: ft ? ft.value : '' };
+    var hook = window.__kvrParts || {};
+    bulk = { stop: false, pause: hook.pause >= 0 ? hook.pause : PART_PAUSE, timeout: hook.timeout || CWX_TIMEOUT, cut: hook.cut || CWX_CUT, scan: ui.partScan.box.checked, extra: ui.partExtra.box.checked };
+    var errors = [], log = [], t0 = Date.now(), nRows = 0, nScan = 0, nCut = 0, skipped = 0, parts = 0, today = todayStr();
+    if (!si.min || !si.max) errors.push('Fant ikke CWs felt for sum fra og til. Dager med 1000 bonger kan ikke deles og blir kuttet.');
+    ui.partBtn.disabled = true; ui.partStop.disabled = false; ui.cwxBtn.disabled = true;
+    var nums = Object.keys(cw.stores).filter(function (k) { return cw.stores[k]; });
+    if (nums.length) setCwStores(nums);
+    if (ft) setInputValue(ft, '');
+    if (cw.members) setInputValue(q('[ng-model="vm.selectedFilters.memberNumber"]'), cw.members);
+    if (cw.loyal) setInputValue(q('[ng-model="vm.selectedFilters.externalLoyaltyNumber"]'), cw.loyal);
+    try {
+      for (var di = 0; di < days.length && !bulk.stop; di++) {
+        var day = days[di];
+        if (arch.days[day] && arch.days[day].done && day < today) { skipped++; continue; }
+        var queue = [{ win: { min: null, max: null }, depth: 0 }], openKey = null, cutHere = 0, dayN = 0;
+        while (queue.length && !bulk.stop) {
+          var p = queue.shift();
+          parts++;
+          partSay('Henter ' + day + ' (' + L.sumText(p.win) + ')' + (days.length > 1 ? ', dag ' + (di + 1) + ' av ' + days.length : '') + '…');
+          var rows = await partSearch(day, p.win, si);
+          if (rows === null) { errors.push('CW svarte ikke på søket for ' + day + ' (' + L.sumText(p.win) + ') innen ' + Math.round(bulk.timeout / 1000) + ' s. Kjøringen ble stoppet; start igjen senere, så fortsetter den der den slapp.'); bulk.stop = true; break; }
+          var open = p.win.min === null && p.win.max === null;
+          if (open) openKey = idsKey(rows);
+          else if (p.depth === 1 && rows.length && idsKey(rows) === openKey) {
+            errors.push('CW brukte ikke beløpsfeltene for ' + day + ' (samme bonger som uten beløp). Dagen er kuttet ved 1000 bonger.');
+            queue = []; cutHere++;
+            continue;
+          }
+          var got = collect();
+          if (rows.length >= bulk.cut && si.min && si.max) {
+            var sub = p.depth < 6 ? L.splitSum(p.win) : [];
+            if (sub.length) { addArchive(day, got.map(function (r) { return r.item; })); queue = sub.map(function (w) { return { win: w, depth: p.depth + 1 }; }).concat(queue); continue; }
+            cutHere++;
+          } else if (rows.length >= bulk.cut) cutHere++;
+          addArchive(day, got.map(function (r) { return r.item; }));
+          if (bulk.scan) {
+            var todo = todoFor(got);
+            if (todo.length) { var sr = await scanList(todo); nScan += sr.done; }
+            if (cancelScan && bulk.stop) break;
+          }
+        }
+        if (bulk.stop) break;
+        if (bulk.extra) {
+          // tilleggsdata for hele dagen: søk uten beløp, så CWs filtre ett om gangen
+          var whole = await partSearch(day, { min: null, max: null }, si);
+          if (whole === null) { errors.push('CW svarte ikke på søket for ' + day + ' før tilleggsdata. Kjøringen ble stoppet.'); break; }
+          bulk.inExtra = true;
+          await fetchCwExtra();
+          bulk.inExtra = false;
+          var rr = cwx && cwx.runs[0];
+          if (rr && rr.errors.length) errors.push(day + ', tilleggsdata: ' + rr.errors.join(' '));
+        }
+        var e = arch.days[day];
+        dayN = e ? e.rows.length : 0;
+        if (e) { e.done = true; e.cut = cutHere; e.at = Date.now(); saveArchiveIndex(); }
+        nRows += dayN; nCut += cutHere;
+        log.push(day + ': ' + plur(dayN, 'bong', 'bonger') + (cutHere ? ' (kuttet)' : ''));
+      }
+    } catch (ex) { errors.push(String(ex && ex.message || ex)); }
+    var stopped = bulk.stop && !errors.length;
+    // tilbake til søket ditt
+    try {
+      if (fd) setInputValue(fd, orig.from);
+      if (td) setInputValue(td, orig.to);
+      if (si.min) setInputValue(si.min, orig.min);
+      if (si.max) setInputValue(si.max, orig.max);
+      if (ft && orig.free) setInputValue(ft, orig.free);
+      var back = await searchNow(bulk.pause, bulk.timeout);
+      if (back === null) errors.push('CW svarte ikke da søket ditt skulle hentes tilbake. Trykk Oppdater i CW.');
+    } catch (ex2) { errors.push('Tilbakestilling: ' + (ex2 && ex2.message || ex2)); }
+    bulk = null; cancelScan = false;
+    ui.partBtn.disabled = false; ui.partStop.disabled = true; ui.cwxBtn.disabled = false;
+    setProgress(0);
+    archVer++;
+    lastParts = { at: Date.now(), days: days.length, skipped: skipped, parts: parts, rows: nRows, scanned: nScan, cut: nCut, log: log, errors: errors, stopped: stopped, sec: Math.round((Date.now() - t0) / 1000) };
+    apply();
+    renderParts();
+    partSay((stopped ? 'Stoppet. ' : 'Ferdig. ') + parts + ' søk, ' + plur(nRows, 'bong', 'bonger') + ' hentet' + (nScan ? ', ' + nScan + ' skannet' : '') + (skipped ? ', ' + plur(skipped, 'dag', 'dager') + ' hentet før' : '') + '. Samlet grunnlag: ' + archCount() + ' bonger.' + (errors.length ? ' Merknader: se under.' : ''));
+  }
+  var lastParts = null;
+
+  function stopParts() { if (bulk) { bulk.stop = true; cancelScan = true; partSay('Stopper etter søket eller bongen som pågår, og setter søket ditt tilbake…'); } }
+
+  function renderParts() {
+    if (!ui.partInfo) return;
+    ui.partInfo.innerHTML = '';
+    var days = Object.keys(arch.days).sort(), n = archCount();
+    if (!days.length) ui.partInfo.appendChild(hintEl('Samlet grunnlag er tomt.'));
+    else {
+      var scanned = 0, cut = days.filter(function (d) { return arch.days[d].cut; });
+      days.forEach(function (d) { arch.days[d].rows.forEach(function (r) { if (scanMap[r.transactionId]) scanned++; }); });
+      ui.partInfo.appendChild(hintEl('Samlet grunnlag: ' + n + ' bonger fra ' + plur(days.length, 'dag', 'dager') + ' (' + days[0] + (days.length > 1 ? ' – ' + days[days.length - 1] : '') + '), ' + scanned + ' skannet. ' +
+        (cut.length ? 'Kuttet ved 1000: ' + cut.join(', ') + '. ' : '') + 'Analysen bruker det sammen med listen. Medlemsnummer for bonger som ikke står i listen, finnes bare til siden lastes på nytt.'));
+    }
+    if (lastParts) {
+      if (lastParts.log.length) ui.partInfo.appendChild(hintEl('Sist: ' + lastParts.log.join(' · ') + ' (' + Math.round(lastParts.sec / 60) + ' min).'));
+      lastParts.errors.forEach(function (e) { ui.partInfo.appendChild(el('div', { class: 'kvr-hint kvr-cwx-err', text: e })); });
+    }
+  }
 
   // ---- skanning -------------------------------------------------------------
   function iframeDoc() {
@@ -694,6 +894,7 @@
   }
 
   async function scanVisible() {
+    if (bulk) return;
     var todo = todoVisible();
     if (!todo.length) { say('Ingenting å skanne (alt er skannet, eller ingen synlige salg).'); return; }
     await scanList(todo);
@@ -738,7 +939,7 @@
 
   function analysisRecs(mode) {
     if (mode === 'visible') return recs.filter(function (r) { return r.show; });
-    return recs.filter(function (r) { return scopeMatches(r.item) && (!scope.useFilters || r.show); });
+    return allRecs().filter(function (r) { return scopeMatches(r.item) && (!scope.useFilters || r.show); });
   }
 
   function analysisItems(mode) { return analysisRecs(mode).map(function (r) { return r.item; }); }
@@ -746,13 +947,13 @@
   function todoFor(list) {
     return list.filter(function (r) {
       var sc = scanMap[r.item.transactionId];
-      return SCAN_TYPES.indexOf(r.item.receiptType) !== -1 && (!sc || (r.item.receiptType === 1 && !L.hasV4(sc)));
+      return r.tr && SCAN_TYPES.indexOf(r.item.receiptType) !== -1 && (!sc || (r.item.receiptType === 1 && !L.hasV4(sc)));
     });
   }
 
   function loadedRange() {
     var min = '', max = '';
-    recs.forEach(function (r) {
+    allRecs().forEach(function (r) {
       var d = L.parseDT(r.item.endDateTime).date;
       if (!d) return;
       if (!min || d < min) min = d;
@@ -785,7 +986,7 @@
       if (!have.max || need.to > have.max) miss.push('til ' + need.to);
     }
     var haveStores = {};
-    recs.forEach(function (r) { haveStores[String(r.item.storeNumber)] = true; });
+    allRecs().forEach(function (r) { haveStores[String(r.item.storeNumber)] = true; });
     var missStores = scope.stores.filter(function (st) { return !haveStores[st] && !(fetched && fetched.count === boundCount && fetched.stores.indexOf(st) !== -1); });
     if (missStores.length) miss.push(missStores.length + (missStores.length > 1 ? ' butikker' : ' butikk'));
     return { missing: miss.length > 0, text: miss.join(', '), need: need };
@@ -816,7 +1017,7 @@
 
   async function runAnom(mode) {
     mode = mode === 'visible' ? 'visible' : 'scope';
-    if (scanning) return;
+    if (scanning || bulk) return;
     var list = analysisRecs(mode);
     await scanList(todoFor(list));
     anomMap = {};
@@ -899,7 +1100,7 @@
 
   function distinct(key) {
     var seen = {};
-    recs.forEach(function (r) { var v = r.item[key]; if (v !== null && v !== undefined) seen[v] = true; });
+    allRecs().forEach(function (r) { var v = r.item[key]; if (v !== null && v !== undefined) seen[v] = true; });
     return Object.keys(seen).sort(function (a, b) { return a - b || (a < b ? -1 : 1); });
   }
 
@@ -1034,11 +1235,11 @@
   }
 
   function refreshOptions() {
-    var key = [distinct('storeNumber'), distinct('workstationNumber'), distinct('cashierNumber'), distinct('receiptType'), JSON.stringify(storeMap), groupNames(), recs.length, cwStoreList.length].join('|');
+    var key = [distinct('storeNumber'), distinct('workstationNumber'), distinct('cashierNumber'), distinct('receiptType'), JSON.stringify(storeMap), groupNames(), allRecs().length, cwStoreList.length].join('|');
     if (key === optsKey) return;
     optsKey = key;
     var storeVals = distinct('storeNumber'), sc = {};
-    recs.forEach(function (r) { sc[r.item.storeNumber] = (sc[r.item.storeNumber] || 0) + 1; });
+    allRecs().forEach(function (r) { sc[r.item.storeNumber] = (sc[r.item.storeNumber] || 0) + 1; });
     setStoreBox(ui.stores, storeVals, sc, filters.stores);
     if (ui.scStores) {
       var union = {};
@@ -1091,6 +1292,7 @@
       });
       if (show) visible++;
     });
+    allRecs().forEach(function (r) { if (r.arch) { r.show = L.matches(r.item, filters, ctx); r.base = L.matches(r.item, bf, ctx); } });
     reorder();
     syncChecks();
     ui.dup = dup;
@@ -1650,20 +1852,21 @@
       compare: mode === 'scope' && scope.compare.on ? { a: per(scope.dateFrom, scope.dateTo), b: per(scope.compare.from, scope.compare.to) } : null,
       filters: mode === 'visible' ? chipDefs().filter(function (c) { return !c.state; }).map(function (c) { return c.label; }) : [],
       coverageText: mode === 'scope' && scopeCoverage().missing ? scopeCoverage().text : '',
-      cwxRun: cwx && cwx.runs[0] ? JSON.parse(JSON.stringify(cwx.runs[0])) : null
+      cwxRun: cwx && cwx.runs[0] ? JSON.parse(JSON.stringify(cwx.runs[0])) : null,
+      archInfo: (function () { var d = Object.keys(arch.days).sort(); return d.length ? { n: archCount(), from: d[0], to: d[d.length - 1], cut: d.filter(function (x) { return arch.days[x].cut; }) } : null; })()
     };
   }
 
   async function runChecks(mode) {
     mode = mode === 'visible' ? 'visible' : 'scope';
-    if (scanning || cwRun || !grid) return;
+    if (scanning || cwRun || bulk || !grid) return;
     lastMode = mode;
     await runAnom(mode);
     var items = analysisItems(mode);
     var scopeIds = {}, scopeCash = {};
     items.forEach(function (i) { scopeIds[i.transactionId] = true; scopeCash[String(i.cashierNumber)] = true; });
     // grunnlag for tester som trenger hele bildet: alle innlastede bonger i valgte butikker
-    var pop = mode === 'visible' ? items : recs.filter(function (r) { return storeOK(r.item); }).map(function (r) { return r.item; });
+    var pop = mode === 'visible' ? items : allRecs().filter(function (r) { return storeOK(r.item); }).map(function (r) { return r.item; });
     // bongkopier («Bong kopi») er ikke nye kjøp: bare hendelsesord ser dem, de andre testene får dem ikke
     var allItems = items, allPop = pop, cs = L.splitCopies(items, scanMap);
     items = cs.items; pop = L.splitCopies(pop, scanMap).items;
@@ -2974,7 +3177,8 @@
   function renderScopeInfo() {
     if (!ui.scopeInfo) return;
     ui.scopeBrief.textContent = scopeSummary() + ' · ' + analysisRecs('scope').length + ' bonger';
-    ui.scopeInfo.textContent = 'Omfang: ' + scopeSummary() + ' → ' + analysisRecs('scope').length + ' av ' + recs.length + ' kvitteringer i listen.';
+    var all = allRecs().length;
+    ui.scopeInfo.textContent = 'Omfang: ' + scopeSummary() + ' → ' + analysisRecs('scope').length + ' av ' + all + ' kvitteringer ' + (all > recs.length ? '(listen og samlet grunnlag).' : 'i listen.');
     var cov = scopeCoverage();
     ui.scopeWarn.style.display = cov.missing ? 'flex' : 'none';
     ui.scopeWarnTxt.textContent = 'Omfanget går utenfor det som er hentet fra CW (' + cov.text + '). «Kjør analyse» henter det som mangler.';
@@ -3955,7 +4159,7 @@
         checks: { falseRet: { coverage: C.falseRet.coverage, lineCheck: C.falseRet.lineCheck }, voids: C.voids ? { applicable: C.voids.applicable, coverage: C.voids.coverage } : null, campaign: C.disc && C.disc.camp ? { pending: C.disc.camp.pending, items: C.disc.camp.items.filter(function (e) { return e.status; }).map(function (e) { return { c: e.c, name: e.name, rateText: e.rateText, n: e.n, status: e.status }; }) } : null, numbers: C.numbers, ledger: C.ledger ? { lines: C.ledger.lines, pay: C.ledger.pay, vat: C.ledger.vat, refs: C.ledger.refs } : null },
         findings: C.findings, ranked: ranked, explain: explain, notes: noteSub,
         cashiers: L.rankCashiers(R.items, R.anom, weights, C.profile, C.cashierExtra).slice(0, 10),
-        compare: compareForReport(R), failedScans: failedRecs.length, cwxRun: R.cwxRun || null,
+        compare: compareForReport(R), failedScans: failedRecs.length, cwxRun: R.cwxRun || null, archInfo: R.archInfo || null,
         evidence: { files: files.map(function (f) { return { id: f.id, path: f.path, hash: f.hash, src: f.src }; }), byId: byId, missing: missing, requested: pick.length, cappedFrom: ranked.length },
         settingsJson: JSON.stringify({ app: 'kvitteringshenter', v: 1, ctl: R.ctl, anom: R.anomCfg, weights: weights, customRules: customRules, groups: rules, stores: manualStores, camp: campDec, keynav: keyNav }, null, 2) + '\n'
       };
@@ -4248,6 +4452,25 @@
     ], true);
     renderCwx();
 
+    // --- Hent og skann i deler
+    ui.partBtn = btn('Hent og skann i deler', fetchParts, 'kvr-primary');
+    ui.partStop = btn('Stopp', stopParts);
+    ui.partStop.disabled = true;
+    ui.partScan = check('Skann bongene', function () {});
+    ui.partScan.box.checked = true;
+    ui.partExtra = check('Hent tilleggsdata fra CW for hver dag', function () {});
+    ui.partStatus = el('div', { class: 'kvr-note', role: 'status', text: '' });
+    ui.partInfo = el('div', {});
+    var secParts = section('parts', 'Hent og skann i deler', [
+      hintEl('For perioder med mer enn 1000 bonger. Bruker dato, butikker og medlemsnr fra «Søk i hele journalen» over. Pluginen søker én dag om gangen; en dag med 1000 bonger deles på beløp (CWs felt for sum fra og til). Hver del skannes mens den står i listen, og radene samles i pluginens egen database. Analysen bruker det samlede grunnlaget sammen med listen. Dager som er hentet før (unntatt i dag), hoppes over, så du kan stoppe og fortsette. Skanning tar omtrent 1 sekund per bong.'),
+      el('div', { class: 'kvr-row' }, [ui.partScan.node, ui.partExtra.node]),
+      el('div', { class: 'kvr-row' }, [ui.partBtn, ui.partStop, btn('Tøm samlet grunnlag', function () {
+        confirmBox('Tøm samlet grunnlag', 'Fjerne ' + archCount() + ' bonger fra samlet grunnlag? Skannet innhold beholdes.', 'Tøm', function () { clearArchive(); apply(); renderParts(); partSay('Samlet grunnlag er tømt.'); });
+      }, 'kvr-sm')]),
+      ui.partStatus, ui.partInfo
+    ]);
+    renderParts();
+
     // --- Dato og tid (lokalt)
     var quick = el('div', { class: 'kvr-chips' });
     [['today', 'I dag'], ['yesterday', 'I går'], ['last24h', 'Siste 24 t'], ['night', 'Natt 00–06'], ['day', 'Dag 06–18'], ['evening', 'Kveld 18–24']].forEach(function (q) {
@@ -4322,7 +4545,7 @@
     var secScan = section('scan', 'Skanning', [
       el('div', { class: 'kvr-row' }, [ui.scanBtn, ui.stopBtn]),
       el('div', { class: 'kvr-row' }, [ui.retryBtn, btn('Tøm cache', function () {
-        clearScan(); anomMap = {}; ctlRes = null; checkState.at = null; failedRecs = []; lastRetry = null; syncRetry(); say('Cache tømt: skannet innhold og tilleggsdata fra CW.'); apply(); renderControl(); renderCwx();
+        clearScan(); clearArchive(); anomMap = {}; ctlRes = null; checkState.at = null; failedRecs = []; lastRetry = null; syncRetry(); say('Cache tømt: skannet innhold, tilleggsdata fra CW og samlet grunnlag.'); apply(); renderControl(); renderCwx(); renderParts();
       })]),
       el('div', { class: 'kvr-hint', text: 'Hver kvittering åpnes i CWs visningsfelt (ca. 1 s) og leses derfra. Pluginen sender aldri egne kall mot CWs API. Ikke bruk CWs søk eller liste mens skanningen går. Chrome bremser faner som er skjult, så la Lindbak stå i et eget vindu ved siden av det du jobber i.' })
     ], true);
@@ -4677,7 +4900,7 @@
     tabKeys(subNav);
 
     var tabDefs = [
-      ['cw', 'Hent', [hintEl('Henter nye kvitteringer fra Lindbak (hele journalen). Resultatet kan så filtreres under «Filtrer».'), secCw]],
+      ['cw', 'Hent', [hintEl('Henter nye kvitteringer fra Lindbak (hele journalen). Resultatet kan så filtreres under «Filtrer».'), secCw, secParts]],
       ['filter', 'Filtrer', [hintEl('Filtrerer kvitteringene som allerede er listet. Ingenting hentes på nytt.'), secStore, secTime, secWho, secSum, secContent, secSaved]],
       ['content', 'Skann', [el('p', { class: 'kvr-intro', text: 'Skann leser innholdet i kvitteringene: varer, pant, rabatt og betaling. Filtrer listen først, så skanner du bare det som er synlig. Filtrene som bruker innholdet ligger under «Filtrer» → Innhold.' }), secScan, secGroups]],
       ['analyse', 'Analyse', [subNav, subHost]],
@@ -4864,6 +5087,7 @@
       }
       scope = sanitizeScope(store(K.scope));
       cwx = sanitizeCwx(store(K.cwx));
+      loadArchive();
       folder.handle = store(K.folder);
       if (!folder.handle || typeof folder.handle.queryPermission !== 'function') folder.handle = null;
       folder.at = Number(store(K.folderAt)) || 0;

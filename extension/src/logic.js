@@ -3737,6 +3737,36 @@
     return res;
   }
 
+  // ---- hent i deler: CW gir høyst 1000 rader per søk ----------------------------------------
+  // Dagene fra og med til og med (ÅÅÅÅ-MM-DD), høyst maxDays.
+  function dayList(from, to, maxDays) {
+    var a = Date.parse(String(from || '') + 'T00:00:00Z'), b = Date.parse(String(to || from || '') + 'T00:00:00Z'), out = [];
+    if (!isFinite(a) || !isFinite(b) || b < a) return out;
+    for (var t = a; t <= b && out.length < (maxDays || 92); t += 86400000) out.push(new Date(t).toISOString().slice(0, 10));
+    return out;
+  }
+  // Et beløpsvindu {min, max} (null = åpent) deles i mindre vinduer når søket treffer CW-grensen. Hvert vindu etter det første
+  // starter 0,01 kr under forrige slutt, så ingen bong faller mellom uansett om CW regner grensene med eller ikke; doble treff
+  // fjernes på transactionId. Tom liste = kan ikke deles mer (under 1 kr bredt).
+  function splitSum(w) {
+    var a = w && typeof w.min === 'number' ? w.min : null, b = w && typeof w.max === 'number' ? w.max : null;
+    var cut = function (bd) { return bd.slice(0, -1).map(function (x, i) { return { min: i === 0 || x === null ? x : round2(x - 0.01), max: bd[i + 1] }; }); };
+    if (a === null && b === null) return cut([null, 0, 100, 300, null]);
+    if (a === null) return cut([null, b - Math.max(100, Math.abs(b)), b]);
+    if (b === null) return cut([a, round2(a + Math.max(100, Math.abs(a))), null]);
+    if (b - a <= 1) return [];
+    return cut([a, Math.round((a + b) / 2), b]);
+  }
+  function sumText(w) { return w.min === null && w.max === null ? 'alle beløp' : (w.min === null ? '…' : String(w.min).replace('.', ',')) + ' – ' + (w.max === null ? '…' : String(w.max).replace('.', ',')) + ' kr'; }
+  // Rad i samlet grunnlag: bare feltene testene trenger. Medlemsnummer lagres ikke.
+  var ARCH_FIELDS = ['transactionId', 'endDateTime', 'rawDT', 'storeNumber', 'workstationNumber', 'cashierNumber', 'totalAmount', 'receiptType', 'saleChannel', 'bongnr'];
+  function archRow(it) {
+    if (!it || typeof it.transactionId !== 'string' || !it.transactionId) return null;
+    var o = {};
+    ARCH_FIELDS.forEach(function (k) { if (it[k] !== undefined && it[k] !== null && typeof it[k] !== 'object') o[k] = it[k]; });
+    return o;
+  }
+
   // ---- fulltekstsøk i skannet innhold ---------------------------------------------------------
   var HAY = typeof WeakMap !== 'undefined' ? new WeakMap() : null;
   function scanHay(sc) {
@@ -3906,6 +3936,7 @@
     sumSelected: sumSelected,
     parseReceipt: parseReceipt,
     splitDeleted: splitDeleted,
+    dayList: dayList, splitSum: splitSum, sumText: sumText, archRow: archRow,
     cwChecks: cwChecks, sessions: sessions, shiftChecks: shiftChecks, copyChecks: copyChecks, shrinkChecks: shrinkChecks, CW_COMBOS: CW_COMBOS, EMP_TAG: EMP_TAG,
     isShrink: isShrink,
     delLines: delLines,

@@ -168,4 +168,19 @@ const mapOf = (pairs) => pairs.reduce((m, [it, s]) => (m[it.transactionId] = s, 
   assert.strictEqual(r.rows[0].id, 'P'); assert.strictEqual(r.items[0].n, 'MARLBORO RED');
 }
 
+// ---- hent i deler: dager og beløpsvinduer
+{
+  assert.deepStrictEqual(L.dayList('2026-10-30', '2026-11-02'), ['2026-10-30', '2026-10-31', '2026-11-01', '2026-11-02']);
+  assert.deepStrictEqual(L.dayList('2026-10-02', '2026-10-01'), []);
+  assert.strictEqual(L.dayList('2026-01-01', '2026-12-31', 92).length, 92);
+  assert.deepStrictEqual(L.splitSum({ min: null, max: null }), [{ min: null, max: 0 }, { min: -0.01, max: 100 }, { min: 99.99, max: 300 }, { min: 299.99, max: null }], 'vinduene overlapper 0,01 kr');
+  assert.deepStrictEqual(L.splitSum({ min: -0.01, max: 100 }), [{ min: -0.01, max: 50 }, { min: 49.99, max: 100 }]);
+  assert.deepStrictEqual(L.splitSum({ min: 299.99, max: null }), [{ min: 299.99, max: 599.98 }, { min: 599.97, max: null }]);
+  assert.deepStrictEqual(L.splitSum({ min: null, max: 0 }), [{ min: null, max: -100 }, { min: -100.01, max: 0 }]);
+  assert.deepStrictEqual(L.splitSum({ min: 50, max: 51 }), [], 'kan ikke deles mer');
+  assert.strictEqual(L.sumText({ min: 99.99, max: 300 }), '99,99 – 300 kr');
+  assert.deepStrictEqual(L.archRow({ transactionId: 'a', endDateTime: '2026-10-22 10:00', totalAmount: 5, memberNumber: '123', toJSON: () => 1, extra: { x: 1 } }), { transactionId: 'a', endDateTime: '2026-10-22 10:00', totalAmount: 5 }, 'medlemsnummer og objekter lagres ikke');
+  assert.strictEqual(L.archRow({ x: 1 }), null);
+}
+
 console.log('cwdata: ok');

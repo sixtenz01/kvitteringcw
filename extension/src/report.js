@@ -2,7 +2,7 @@
   'use strict';
 
   var L = typeof module !== 'undefined' && module.exports ? require('./logic.js') : root.KvLogic;
-  var VERSION = '3.35.0';
+  var VERSION = '3.36.0';
 
   // ---- SHA-256 (ren JS, så rapporten ikke avhenger av crypto.subtle) -------------------
   var K256 = [
@@ -177,6 +177,8 @@
     if (lg) [['lines', 'Linjer mot Totalt'], ['pay', 'Betaling mot Totalt'], ['vat', 'MVA-tabell']].forEach(function (x) {
       if (lg[x[0]] && !lg[x[0]].applicable && cov.salesV5) out.push(x[1] + ' ble ikke vurdert: ' + lg[x[0]].n + ' bonger lest, ' + (lg[x[0]].n ? pctText(lg[x[0]].ok / lg[x[0]].n) : '–') + ' stemte (minst 10 bonger og 80 % kreves for at avvik regnes som funn).');
     });
+    var ai = m.archInfo;
+    if (ai) out.push('Datagrunnlaget har med samlet grunnlag fra «Hent og skann i deler»: ' + ai.n + ' bonger fra ' + ai.from + (ai.to !== ai.from ? ' til ' + ai.to : '') + '.' + (ai.cut.length ? ' Disse dagene ble kuttet ved 1000 bonger fordi de ikke kunne deles: ' + ai.cut.join(', ') + '.' : ''));
     var cr = m.cwxRun;
     if (cr) out.push('Tilleggsdata fra CW (innhold, betaling, innlogging, bongkopi) ble hentet ' + new Date(cr.at).toLocaleString('nb-NO') + ' med CWs egne filtre for ' + cr.n + ' bonger' + (cr.from ? ' (' + (cr.from === cr.to ? cr.from : cr.from + ' – ' + cr.to) + ')' : '') + '. Merkingen er CWs egen.' + (cr.cut ? ' Søket hadde 1000 bonger og var trolig kuttet av CW.' : '') + (cr.errors && cr.errors.length ? ' Merknader fra hentingen: ' + cr.errors.join(' ') : ''));
     else out.push('Tilleggsdata fra CW (innhold, betaling, innlogging, bongkopi) var ikke hentet. Testene som bruker dem, ga ingen funn.');
