@@ -2,7 +2,7 @@
   'use strict';
 
   var L = typeof module !== 'undefined' && module.exports ? require('./logic.js') : root.KvLogic;
-  var VERSION = '3.34.0';
+  var VERSION = '3.35.0';
 
   // ---- SHA-256 (ren JS, så rapporten ikke avhenger av crypto.subtle) -------------------
   var K256 = [
@@ -177,7 +177,10 @@
     if (lg) [['lines', 'Linjer mot Totalt'], ['pay', 'Betaling mot Totalt'], ['vat', 'MVA-tabell']].forEach(function (x) {
       if (lg[x[0]] && !lg[x[0]].applicable && cov.salesV5) out.push(x[1] + ' ble ikke vurdert: ' + lg[x[0]].n + ' bonger lest, ' + (lg[x[0]].n ? pctText(lg[x[0]].ok / lg[x[0]].n) : '–') + ' stemte (minst 10 bonger og 80 % kreves for at avvik regnes som funn).');
     });
-    out.push('Pantelapper skilles på kode: 99 er lagt inn manuelt og 399 kommer fra pantemaskinen. Slettet pantelapp og slettede varelinjer forutsetter at CW viser slettingen som en linje med motlinje. Spesialbetaling, spør pris, kort og manuell kvittering leter etter ord og felt som ikke er bekreftet i ekte data; testene fanger dem når de dukker opp.');
+    var cr = m.cwxRun;
+    if (cr) out.push('Tilleggsdata fra CW (innhold, betaling, innlogging, bongkopi) ble hentet ' + new Date(cr.at).toLocaleString('nb-NO') + ' med CWs egne filtre for ' + cr.n + ' bonger' + (cr.from ? ' (' + (cr.from === cr.to ? cr.from : cr.from + ' – ' + cr.to) + ')' : '') + '. Merkingen er CWs egen.' + (cr.cut ? ' Søket hadde 1000 bonger og var trolig kuttet av CW.' : '') + (cr.errors && cr.errors.length ? ' Merknader fra hentingen: ' + cr.errors.join(' ') : ''));
+    else out.push('Tilleggsdata fra CW (innhold, betaling, innlogging, bongkopi) var ikke hentet. Testene som bruker dem, ga ingen funn.');
+    out.push('Pantelapper skilles på kode: 99 er lagt inn manuelt og 399 kommer fra pantemaskinen. Slettede linjer leses både som linje med motlinje og som linje CW har merket «(SLETTET)». Spesialbetaling, spør pris, kort og manuell kvittering leter etter ord og felt som ikke er bekreftet i ekte data; testene fanger dem når de dukker opp.');
     out.push('Medlemsnummertestene bruker alle innlastede bonger i valgte butikker. Mange bruk av ett nummer kan være en trofast kunde; resultatet avhenger av hvor lang periode som er lastet.');
     out.push('Annullert, manuell pris, parkert bong og spør pris er ikke observert i ekte data. «Hendelsesord» leter etter slike ord på tekstlinjer, men det er ikke bekreftet at CW viser dem på bongen. Kjøpeutbytte-tabellen er heller ikke bekreftet; testene kalibrerer seg mot det som finnes.');
     out.push('«Dobbelt bongnummer» og «Bongnummer og tid stemmer ikke» forutsetter at kvitteringstypene deler nummerserie per kasse (ikke bekreftet i ekte data).');

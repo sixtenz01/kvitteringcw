@@ -140,7 +140,7 @@ const fields = {
   zeroN: { what: 'Marker kassereren når så mange bonger har sum 0,00 kr. Slike bonger kan være åpnet skuff, avbrutt salg, testing eller varer helt dekket av kupong.', tip: 'Tom = av. Sjekk hva kassen gjør ved «åpne skuff» før du bruker lavere grense.', ex: '5: en kasserer med fem 0-kr-bonger får poeng.' },
   watchItems: { what: 'Varer du vil følge ekstra med på. Siffer matcher starten på EAN-koden, tekst matcher en del av varenavnet (store og små bokstaver spiller ingen rolle).', tip: 'Tom = av. Bruk for varer som lett kan tas ut eller omsettes: tobakk, alkohol, gavekort, energidrikk, mobilkort.', ex: '7040913, tobakk, gavekort.' },
   watchRet: { what: 'Flagger bonger der en overvåket vare står som returlinje (negativt beløp uten motlinje).', tip: 'Retur av tobakk og alkohol er uvanlig og fortjener en titt på bongen.', ex: 'En bong med «TOBAKK −99,00».' },
-  watchDel: { what: 'Flagger bonger der en overvåket vare er slettet (en linje og en motlinje med samme beløp).', tip: 'Sletting er vanlig ved feilskanning. Se på om varen ble solgt på nytt.', ex: '«GAVEKORT 500» og «GAVEKORT −500» på samme bong.' },
+  watchDel: { what: 'Flagger bonger der en overvåket vare er slettet (en linje og en motlinje med samme beløp, eller en linje CW har merket «(SLETTET)»).', tip: 'Sletting er vanlig ved feilskanning. Se på om varen ble solgt på nytt.', ex: '«GAVEKORT 500» og «GAVEKORT −500» på samme bong.' },
   watchN: { what: 'Marker kassereren når minst så mange salg har en overvåket vare, og andelen er over butikkens med «Avviker fra snittet» ganger.', tip: 'Tom = av. Krever også minst «Minst antall bonger for profil» salg.', ex: '10: kasserer med 12 av 40 salg (30 %) mot butikkens 8 % markeres.' },
   retEanDays: { what: 'Se tilbake så mange dager før returen. Returnert vare (EAN) som kortet eller medlemmet ikke har kjøpt i perioden, selv om de har andre kjøp, flagges.', tip: 'Tom = av. Minst så mange dager må være lastet før returen, ellers vurderes den ikke. Krever at 80 % av salgene er skannet.', ex: '7 dager: kort 1234 har to kjøp siste uke uten skoene som nå leveres tilbake.' },
   retEanDay: { what: 'For returer uten kort og medlem: flagger returen hvis ingen i butikken har solgt varen samme dag før returen.', tip: 'Svak indikasjon, derfor av som standard. Kunden kan ha kjøpt varen en annen dag.', ex: 'En retur kl. 15:00 på en EAN som ikke er solgt noe sted den dagen.' },
@@ -148,7 +148,28 @@ const fields = {
   retWatchN: { what: 'Kassereren markeres når så mange av bongene hans eller hennes har retur med overvåket årsak, og andelen er minst «Avviker fra snittet» ganger andelen hos de andre kassererne.', tip: 'Tom = av. Markeringen gir poeng i kassererprofilen, ikke på bongen.', ex: '3: tre bonger med matvaregaranti-retur.' },
   retWatchFlag: { what: 'Flagger hver bong med retur med overvåket årsak i Sjekk først.', tip: 'Av som standard, fordi én retur med matvaregaranti er vanlig. Slå på for å gå gjennom hver retur.', ex: 'På: hver matvaregaranti-retur blir en rad i Sjekk først.' },
   hdrOn: { what: 'Sammenligner kasserer, kasse og medlem i bongens topptekst med CW-listen. Avvik flagges.', tip: 'Feltet kontrolleres bare når minst 90 % av minst 10 bonger stemmer fra før, så et ukjent format gir ikke falske treff.', ex: 'Bongen sier kasserer 99, listen sier kasserer 12.' },
-  authDup: { what: 'Flagger bonger i samme butikk med samme terminal og samme autorisasjonskode fra kortterminalen.', tip: 'Formatet på terminalteksten er ikke bekreftet i ekte data. Se Diagnostikk for linjene pluginen ikke kjenner igjen.', ex: 'Autorisasjon 998877 på to bonger med ulike beløp.' }
+  authDup: { what: 'Flagger bonger i samme butikk med samme terminal og samme autorisasjonskode fra kortterminalen.', tip: 'Formatet på terminalteksten er ikke bekreftet i ekte data. Se Diagnostikk for linjene pluginen ikke kjenner igjen.', ex: 'Autorisasjon 998877 på to bonger med ulike beløp.' },
+
+  // ---- Tilleggsdata fra CW
+  cwRateN: { what: 'Kassereren markeres når så mange av salgene har samme innhold ifølge CWs filtre (for eksempel slettet vare, manuell rabatt eller kontant tilbake), og andelen er minst «Avviker fra snittet» ganger andelen hos de andre kassererne i samme kanal.', tip: 'Tom = av. Kontant, kreditt, finansiering og skannet pant sammenlignes ikke, fordi de er vanlige. Tallene krympes mot snittet som i kassererprofilen.', ex: '5: kasserer C har slettet vare på 8 av 30 salg (27 %), de andre i kanalen 3 %.' },
+  cwComboOn: { what: 'Flagger bonger der CWs filtre har funnet to ting som sammen er et kjent mønster: Vensafe og slettet vare, Vensafe og manuelt makulert, manuell pant og kontant tilbake, retur og kontant tilbake, manuell rabatt og ansattes medlemsnr, parkert bong og slettet vare.', tip: 'Hvert innhold alene er ofte helt vanlig. Manuell rabatt og ansattes medlemsnr krever at «Ansattes medlemsnr» er fylt ut.', ex: 'En bong der en snusvare er tatt ut av Vensafe og så slettet.' },
+
+  // ---- Innlogging og samtidige kasser
+  shortMin: { what: 'En innlogging på en kasse som varer høyst så mange minutter (til utlogging eller neste innlogging), med få salg og minst én retur eller sletting, flagges.', tip: 'Tom = av. Krever innlogging og utlogging fra «Hent tilleggsdata fra CW». Retur eller sletting sees fra CWs filtre eller fra skanningen.', ex: '10 min: kasserer X logger inn 13:00, gjør én retur og logger ut 13:06.' },
+  shortSales: { what: 'Det høyeste antallet salg en kort innlogging kan ha for å bli flagget.', tip: 'En vanlig vakt har mange salg. Hold tallet lavt.', ex: '3: innlogging med to salg, det ene en retur.' },
+  dualMin: { what: 'Kassereren markeres når samme kasserernummer har salg på kasse A, så kasse B, så kasse A igjen innen så mange minutter. Det kan bety at noen andre bruker kassererens innlogging.', tip: 'Tom = av. Bare betjente kasser telles: selvbetjente kasser og systembonger har ofte samme nummer på mange kasser. Trenger ikke tilleggsdata.', ex: '5 min: salg på kasse 1 kl. 12:00, kasse 3 kl. 12:02 og kasse 1 kl. 12:04.' },
+
+  // ---- Bongkopi
+  copyRetHours: { what: 'En retur i samme butikk innen så mange timer etter en bongkopi flagges når en returnert vare (EAN) også står på bongen som ble kopiert.', tip: 'Tom = av. Krever at den opprinnelige bongen og returen er skannet. En kopi kan brukes til å returnere varer som aldri ble kjøpt tilbake.', ex: '48 timer: kopi av bong 4711 med røkelaks, og retur av røkelaks dagen etter.' },
+  copyRetMin: { what: 'En retur hos kassereren som tok kopien, innen så mange minutter etter kopien, flagges selv om varene ikke kan sammenlignes.', tip: 'Tom = av. Trenger ikke skanning, men er en svakere indikasjon.', ex: '60 min: kopi kl. 14:10 og retur hos samme kasserer kl. 14:30.' },
+  copyN: { what: 'Kassereren markeres når så mange bongkopier er tatt av samme kasserer i perioden.', tip: 'Tom = av. Kopier er vanlige i kundeservice; se på hvem bongene tilhørte og om det fulgte returer.', ex: '5: fem bongkopier samme uke.' },
+
+  // ---- Svinn og internt forbruk
+  shrinkKr: { what: 'Flagger én registrering av synlig svinn eller internt forbruk med sum på minst grensen.', tip: 'Tom = av. Beløpet står i listen, så testen virker også uten skanning.', ex: '1000 kr: svinn på 1 539,10 kr flagges.' },
+  shrinkWatch: { what: 'Flagger svinn og internt forbruk med en vare fra listen under Overvåkede varer.', tip: 'Krever at svinnbongen er skannet og at listen over overvåkede varer er fylt ut.', ex: 'Tobakk registrert som svinn.' },
+  shrinkRet: { what: 'Flagger svinn og internt forbruk av en vare (EAN) som også er returnert på et salg i butikken samme dag.', tip: 'Samme vare kan ha blitt brukt to ganger: tatt i retur og så registrert som svinn. Krever skanning av begge bongene.', ex: 'Jordbær returnert kl. 18:00 og registrert som svinn kl. 21:00.' },
+  shrinkHours: { what: 'Flagger svinn og internt forbruk registrert utenom åpningstiden (Åpner og Stenger).', tip: 'Varetelling og opprydding kan skje utenom åpningstid; se på hvem som registrerte.', ex: 'Svinn registrert kl. 23:40 når butikken stenger 23:00.' },
+  profChannel: { what: 'Sammenligner hver kasserer med snittet i kanalen der kassereren har flest salg (betjent kasse eller selvbetjent), i stedet for hele butikken.', tip: 'Selvbetjente kasser har ofte flere returer og andre beløp. Kanaler med bare én kasserer bruker butikksnittet. Av = alle mot butikksnittet.', ex: 'På: en betjent kasserer sammenlignes med de andre betjente.' }
 };
 
 // ---- Tester: forklaring per innstillingsgruppe
@@ -180,6 +201,10 @@ const groups = {
   watch: { how: 'Teller salg, retur og sletting av varene du har lagt inn (EAN eller del av navn), og sammenligner kassererens andel med butikkens.', flags: ['Overvåket vare i retur', 'Overvåket vare slettet', 'Kasserer med uvanlig mange salg av overvåkede varer'], harmless: 'Feilskanning som rettes, og kasserere som står i kiosk eller tobakkskasse.', needs: 'Skannet innhold. Tom liste betyr at testen er av.' },
   retEan: { how: 'Leter etter returlinjer der kortet eller medlemmet har andre kjøp i perioden, men aldri har kjøpt akkurat den varen (EAN).', flags: ['Retur av vare kortet ikke har kjøpt', 'Retur av vare medlemmet ikke har kjøpt', 'Valgfritt: retur uten kort eller medlem og uten salg av varen samme dag'], harmless: 'Gaver, kjøp før perioden, kontant betaling eller kjøp i en annen butikk.', needs: 'Skannet innhold og minst 80 % skannede salg. Historikken må dekke «Se tilbake» dager før returen.' },
   retReason: { how: 'Leser årsaken på linjen «RETUR VARE» over hver returnert vare (for eksempel «Coop Matvaregaranti»), og samler returene per årsak og kasserer. Pant telles ikke.', flags: ['Kasserer med mange bonger med overvåket returårsak (standard matvaregaranti), over grensen og over andelen hos de andre', 'Valgfritt: hver bong med overvåket returårsak'], harmless: 'Matvaregaranti og andre returer er vanlige, og noen kasserere står oftere i kundeservice.', needs: 'Skanning fra versjon 3.26.0 (versjon 9). «Skann returbonger på nytt» skanner bare eldre bonger med retur.' },
+  cwx: { how: 'Bruker merkingen fra «Hent tilleggsdata fra CW»: hvilke bonger CWs innholdsfilter (slettet vare, manuell rabatt, makulert, manuell pant, retur, parkert, spør pris, Vensafe) og betalingsfilter fant. Andelen per kasserer sammenlignes med de andre i samme kanal, og noen kombinasjoner på samme bong flagges.', flags: ['Kasserer med mye av ett innhold, over grensen og over andelen hos de andre i kanalen', 'Bong med en kombinasjon av innhold, for eksempel Vensafe og slettet vare'], harmless: 'Kasserere som står i kiosk, tobakk eller kundeservice, nye kasserere som retter mange feil, og varer som skanner dårlig.', needs: 'Tilleggsdata fra CW for samme periode og butikker. Ikke skanning.' },
+  shift: { how: 'Innlogging og utlogging fra «Hent tilleggsdata fra CW» gir øktene på hver kasse. En kort økt med få salg og en retur eller sletting er uvanlig. Salg på to betjente kasser om hverandre sees i listen alene.', flags: ['Kort innlogging med retur eller sletting', 'Kasserer med salg på to betjente kasser om hverandre'], harmless: 'En leder som logger inn for å godkjenne en retur, kasserere som flytter mellom kasser, og felles innlogging som butikken har bestemt.', needs: 'Innlogging og utlogging fra tilleggsdata. Salg på to kasser trenger bare listen.' },
+  copy: { how: 'Bongkopier fra «Hent tilleggsdata fra CW» viser nummeret på den opprinnelige bongen. Pluginen finner den i listen og ser etter returer etter kopien.', flags: ['Retur etter bongkopi der en vare også står på den kopierte bongen', 'Retur hos samme kasserer kort tid etter kopien', 'Kasserer med mange bongkopier'], harmless: 'Kunder som trenger kopi til garanti eller regnskap, og returer som er helt i orden.', needs: 'Tilleggsdata fra CW. Sammenligning av varer krever at den opprinnelige bongen og returen er skannet.' },
+  shrink: { how: 'Bonger av typen synlig svinn (11) og internt forbruk (13), ofte registrert på PDA, skannes som vanlige bonger. Varene sammenlignes med overvåkede varer og med returer samme dag.', flags: ['Overvåket vare i svinn eller internt forbruk', 'Svinn av vare som er returnert samme dag', 'Stort beløp på én registrering', 'Registrering utenom åpningstid'], harmless: 'Utgått dato, knust vare, varetelling, og internt forbruk som butikken har bestemt.', needs: 'Skanning for varetestene. Beløp og klokkeslett står i listen.' },
   hdr: { how: 'Leser bongens topptekst og bunn (tekst utenfor tabellene) og sammenligner kasserer, kasse og medlem med CW-listen. Leser også terminal-ID, autorisasjonskode og inngangsmåte fra kortterminalens tekst.', flags: ['Topptekst som ikke stemmer med listen', 'Samme autorisasjonskode på flere bonger'], harmless: 'Bonger der listen er filtrert eller flyttet i tid, og kort som trekkes på nytt etter avbrutt betaling.', needs: 'Skanning på nytt (versjon 7). Formatet på topptekst og bunn er ikke bekreftet i ekte data; se Diagnostikk.' }
 };
 
@@ -228,7 +253,7 @@ const weights = {
   'Retur og kassadifferanse henger sammen': 'Kasserer har mer minus i kassen på dager med mange returer (poeng til kassereren).',
   'Manuell pantelapp': 'Bongen har manuelt innlagt pantelapp (kode 99) over beløpsgrensen.',
   'Mange manuelle pantelapper': 'Kasserer har uvanlig mange bonger med manuell pantelapp (poeng til kassereren).',
-  'Pantelapp slettet': 'Bongen har en pantelapp som er slettet med motlinje.',
+  'Pantelapp slettet': 'Bongen har en pantelapp som er slettet med motlinje eller merket «(SLETTET)».',
   'Pantelapp innløst flere ganger': 'Bongen er en av flere med samme pantelapp (nummer eller sum) innen tidsrommet eller på samme kasse samme dag.',
   'Varelinjer slettet, pant utbetalt kontant': 'Varelinjene er slettet og bare pant og kontant tilbake står igjen.',
   'Makulert vare ikke solgt på ny': 'En slettet vare er ikke solgt på nytt i butikken innen tidsrommet.',
@@ -241,7 +266,7 @@ const weights = {
   'Mange spør pris': 'Kasserer har mange bonger med spør pris (poeng til kassereren).',
   'Gjentatte returer på samme kort': 'Bongen er en av flere returer på samme kort.',
   'Manuell kvittering matcher annen bong': 'Manuell kvittering eller til gode-lapp har samme beløp som en annen bong.',
-  'Makulert linje på bong': 'Bongen har en varelinje som er makulert eller slettet med motlinje.',
+  'Makulert linje på bong': 'Bongen har en varelinje som er makulert eller slettet med motlinje, eller som CW har merket «(SLETTET)».',
   'Bonger i rask rekkefølge': 'Bongen er med i en serie bonger på samme kasse med svært kort tid mellom.',
   'Mange 0-kr-bonger': 'Kasserer har mange bonger på 0,00 kr (poeng til kassereren).',
   'Overvåket vare i retur': 'Bongen har en overvåket vare (EAN eller navn) som retur.',
@@ -254,6 +279,16 @@ const weights = {
   'Mange returer med overvåket årsak': 'Kasserer har mange bonger med overvåket returårsak, mer enn de andre kassererne.',
   'Topptekst stemmer ikke med listen': 'Kasserer, kasse eller medlem i bongens topptekst er ikke det samme som i CW-listen.',
   'Samme autorisasjonskode på flere bonger': 'Samme terminal og autorisasjonskode står på flere bonger.',
+  'Mye av ett innhold hos kasserer': 'Kasserer har uvanlig mange bonger med samme innhold ifølge CWs filtre, sammenlignet med de andre i kanalen (poeng til kassereren).',
+  'Kombinasjon av innhold på bong': 'CWs filtre har funnet to ting på bongen som sammen er et kjent mønster, for eksempel Vensafe og slettet vare.',
+  'Kort innlogging med retur eller sletting': 'Bongen er gjort i en kort innlogging med få salg, og har retur eller sletting.',
+  'Salg på to betjente kasser samtidig': 'Kasserer har salg på to betjente kasser om hverandre innen grensen (poeng til kassereren).',
+  'Bongkopi fulgt av retur': 'Returen kom etter en bongkopi, og en returnert vare står på den kopierte bongen, eller returen er hos samme kasserer kort tid etter.',
+  'Mange bongkopier': 'Kasserer har tatt mange bongkopier i perioden (poeng til kassereren).',
+  'Overvåket vare i svinn': 'Svinn eller internt forbruk av en overvåket vare.',
+  'Svinn av vare returnert samme dag': 'Varen er registrert som svinn og er også returnert i butikken samme dag.',
+  'Stort svinn på én registrering': 'Svinn eller internt forbruk med sum over grensen.',
+  'Svinn utenom åpningstid': 'Svinn eller internt forbruk registrert utenom åpningstiden.',
   'Regel': 'Bongen treffer en av dine egne avviksregler.'
 };
 

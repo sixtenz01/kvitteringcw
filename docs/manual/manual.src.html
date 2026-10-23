@@ -87,7 +87,16 @@
     <tr><td>Vare (EAN/navn)</td><td>Fritekstsøk i Lindbak, for eksempel et strekkodenummer.</td></tr>
     <tr><td>Bongnr</td><td>Hele eller deler av bongnummeret.</td></tr>
     <tr><td>Søk i CW / Nullstill CW</td><td>Starter søket, eller tømmer Lindbaks filter og alt du har skrevet her.</td></tr>
+    <tr><td>Hent tilleggsdata fra CW / Stopp</td><td>Bruker CWs egne filtre på søket du har i listen, ett om gangen. Se under.</td></tr>
   </tbody></table></div>
+<p><strong>Tilleggsdata fra CW.</strong> CW kan selv filtrere bongene på innhold og betaling. Knappen bruker det på søket som står i listen, slik at pluginen vet hvilke bonger CW mener har slettet vare, manuell rabatt, makulert bong og så videre, uten å skanne dem.</p>
+<ul>
+  <li><strong>Hva som hentes:</strong> hvert innholdsvalg i CW (spør pris, makulerte bonger system og manuell, pant skannet og manuell, slettet vare, slettet annet, manuell rabatt, parkert bong, returnert vare og Vensafe), betalingsmåtene kontant, kontant tilbake, kreditt, kupong, tilgodelapp, gavekort og finansiering, og systembongene (innlogging, utlogging, bongkopi, bankavstemming og dagsavslutning). For hver bongkopi leses nummeret på bongen som ble kopiert.</li>
+  <li><strong>Slik skjer det:</strong> pluginen huker av ett valg i CWs filter, trykker Oppdater og noterer bongene CW viser. Det er pause mellom søkene, omtrent 20 søk i alt. Til slutt settes filtrene og søket ditt tilbake. Pluginen sender ingen egne kall; det er CW som søker, slik som når du trykker selv.</li>
+  <li><strong>Trygt for CW:</strong> fritekstsøk brukes aldri, fordi det er tungt for CWs server. Svarer ikke CW innen ett minutt, stopper kjøringen, filtrene settes tilbake, og det står hva som skjedde. Bruker CW ikke et filter (samme bonger som uten filter), hoppes resten av det filteret over.</li>
+  <li><strong>Hold søket lite:</strong> CW viser høyst 1000 bonger per søk. Har søket ditt 1000 bonger, står det en merknad, og tallene gjelder bare bongene i listen. Velg én butikk og en kort periode.</li>
+  <li><strong>Etterpå:</strong> kjør analysen. Resultatet står i kortet «Fra CW: innhold, innlogging, bongkopi og svinn» under Detaljer og som funn i Sjekk først. Dataene lagres i pluginens egen database og slettes med «Tøm cache».</li>
+</ul>
 
 <h3 id="filtrer">Filtrer</h3>
 {{shots:filtrer-a,filtrer-b}}
@@ -183,6 +192,7 @@
     <tr><td>Kassadifferanse over tid</td><td>Antall oppgjør, minus og pluss per kasserer og kasse.</td></tr>
     <tr><td>Tallanalyse: Benford og runde beløp</td><td>Benford og andel hele kroner per kasserer.</td></tr>
     <tr><td>Rabatter og kuponger</td><td>Se kapittel 5.</td></tr>
+    <tr><td>Fra CW: innhold, innlogging, bongkopi og svinn</td><td>Innhold og betaling ifølge CWs filtre per kasserer, innlogging og utlogging per kasserer, bongkopier med opprinnelig bong og retur etterpå, og synlig svinn og internt forbruk per bruker og vare. Se kapittel 6.</td></tr>
     <tr><td>Bongregnskap og referanser</td><td>Dekning og treff for linjer mot Totalt, betaling mot Totalt, MVA-tabell og betalingsreferanse, topptekst og bunn (kasserer, kasse og medlem mot listen, autorisasjonskode), og knappen «Skann på nytt» for eldre skanninger. Se kapittel 6.</td></tr>
     <tr><td>Medlemsnummer</td><td>Medlemsnr med flest bonger og funn, med lenke som filtrerer listen. Se kapittel 6.</td></tr>
     <tr><td>Pantelapper: manuell og maskin</td><td>Pantelapper per kasserer delt på kode 99 (manuell) og 399 (pantemaskin), med slettede og gjenbrukte lapper. Se kapittel 6.</td></tr>
@@ -367,7 +377,7 @@
   </tbody></table></div>
 {{shotw:d-lapp}}
 <h3>Slettede varelinjer og makulerte varer</h3>
-<p>Når en varelinje slettes etter at den er skannet, står den igjen på bongen sammen med en motlinje (samme kode og beløp med motsatt fortegn). Pluginen kobler dem og regner begge som slettet.</p>
+<p>Når en varelinje slettes etter at den er skannet, står den igjen på bongen. CW viser den med «(SLETTET)» etter navnet, for eksempel «SALAT CRISPI 150G (SLETTET) 23.94»; beløpet står, men er ikke med i Totalt. Pluginen legger slike linjer til side, slik at bongregnskapet går opp og de andre testene bare ser varene som ble solgt, og regner dem som slettet. Eldre skanninger rettes automatisk. En slettet vare kan også stå som linje og motlinje (samme kode og beløp med motsatt fortegn); da kobles de og regnes begge som slettet. I kvitteringen i panelet står slettede linjer overstreket.</p>
 <ul>
   <li><strong>Makulert linje på bong:</strong> hver bong med en varelinje og motlinje flagges (2 poeng), også når varen er solgt på nytt, når dekningen er lav og når hele bongen er makulert. Har bongen samtidig rundt beløp, får den begge reaksjonene. Står «makulert» eller «annullert» som tekst på bongen, i en betalingslinje eller i topp/bunn, flagges den også som hendelsesord.</li>
   <li><strong>Varelinjer slettet, pant utbetalt kontant (av som standard):</strong> en kunde handler for 150 kr og betaler med pantelapp for 150 kr, og kassereren sletter deretter varelinjene slik at pantelappen utbetales som kontanter. Bongen flagges når de slettede linjene gjør at bare pant og kontant tilbake står igjen. «Kontant tilbake uten salg» regner nå også slettede linjer som ikke solgt.</li>
@@ -429,6 +439,25 @@
   <li><strong>I kvitteringen</strong> står linjen «RETUR VARE …» over varen, markert når årsaken er overvåket. Årsaken står også i forklaringen til «Retur av vare uten kjøp», og fulltekstsøket finner den.</li>
   <li><strong>Eldre skanninger</strong> har ikke årsaken. Knappen «Skann returbonger på nytt» tar bare bonger med negative varelinjer, ikke alle.</li>
 </ul>
+<h3>Tilleggsdata fra CW: innhold, innlogging og bongkopi</h3>
+<p>Disse testene bruker «Hent tilleggsdata fra CW» (se Hent). Uten tilleggsdata gir de ingen funn, bortsett fra salg på to betjente kasser, som bare trenger listen.</p>
+<ul>
+  <li><strong>Mye av ett innhold hos kasserer:</strong> andelen salg med hvert innhold (slettet vare, manuell rabatt, manuell pant, kontant tilbake …) sammenlignes med de andre kassererne i samme kanal. En kasserer markeres ved minst 5 slike bonger og minst «Avviker fra snittet» ganger andelen hos de andre. Kontant, kreditt, finansiering og skannet pant sammenlignes ikke, fordi de er vanlige.</li>
+  <li><strong>Kombinasjon av innhold på bong:</strong> to ting som hver for seg er vanlige, men sammen er kjente mønstre: Vensafe og slettet vare (en snusvare tas ut og slettes), Vensafe og manuelt makulert, manuell pant og kontant tilbake, retur og kontant tilbake, manuell rabatt og ansattes medlemsnr, og parkert bong og slettet vare.</li>
+  <li><strong>Kort innlogging med retur eller sletting:</strong> innlogging og utlogging gir øktene på hver kasse. En økt på høyst 10 minutter med høyst 3 salg, der minst ett har retur eller sletting, flagges. Det kan være noen som logger inn på en annens kasse for å gjøre en retur.</li>
+  <li><strong>Salg på to betjente kasser samtidig:</strong> samme kasserernummer har salg på kasse A, så B, så A igjen innen 5 minutter. Det kan bety at noen andre bruker kassererens innlogging. Selvbetjente kasser telles ikke, fordi én kasserer ofte står for mange av dem.</li>
+  <li><strong>Bongkopi fulgt av retur:</strong> en bongkopi viser nummeret på bongen som ble kopiert. En retur i samme butikk innen 48 timer der en returnert vare også står på den kopierte bongen, flagges; det samme gjør en retur hos samme kasserer innen 60 minutter etter kopien. En kopi kan brukes til å returnere varer som ikke ble levert tilbake. Kasserere med minst 5 kopier markeres.</li>
+</ul>
+<p><strong>Kanal.</strong> CW skiller betjent kasse (Lindbak POS, kanal 2), selvbetjent (Shop&amp;Go, kanal 3) og systembonger og PDA (kanal 1). Kassererprofilen og innholdsandelen sammenligner hver kasserer med de andre i samme kanal, slik at selvbetjente og betjente kasser ikke blandes. Det kan slås av under Innstillinger → Kassererprofil og avstemming.</p>
+<h3>Svinn og internt forbruk</h3>
+<p>Bonger av typen synlig svinn (heter Brekasje i CWs filter) og internt forbruk ligger under bongtypen Varetransaksjoner og registreres ofte på PDA. De skannes som vanlige bonger, men holdes utenfor testene for salg. Flagges:</p>
+<ul>
+  <li>overvåket vare i svinn eller internt forbruk,</li>
+  <li>vare i svinn som også er returnert i butikken samme dag,</li>
+  <li>én registrering på minst 1000 kr,</li>
+  <li>registrering utenom åpningstiden.</li>
+</ul>
+<p>Kortet viser registreringene per bruker og varene med høyest beløp. Svinn er ofte helt i orden; se etter mønstre før du konkluderer.</p>
 <h3>Topptekst og bunn</h3>
 <p>Fra versjon 7 leser skanningen også teksten utenfor tabellene på bongen: toppteksten (butikk, kasse, kasserer, medlemsnr) og bunnen med kortterminalens tekst (terminal-ID, autorisasjonskode, inngangsmåte som chip, kontaktløs eller tastet). Bare disse verdiene og ukjente linjer med tall byttet ut lagres, ikke hele teksten. Kasserer, kasse og medlem i toppteksten sammenlignes med listen; et felt kontrolleres bare når minst 90 % av minst ti bonger stemmer fra før, så et uventet format ikke gir falske treff. Samme autorisasjonskode på flere bonger i samme butikk og terminal flagges. Eldre skanninger tas på nytt fra kortet «Bongregnskap og referanser».</p>
 <div class="callout"><b>Skann på nytt</b>
@@ -564,6 +593,7 @@
 <ul>
   <li><strong>Egen database.</strong> Alt pluginen husker (innstillinger, lagrede filtre, regler, butikknavn, svar om sentral kampanje, notater, skannet innhold, rapportlogg) ligger i en egen database i nettleseren. Pluginen skriver aldri til Lindbaks egen lagring.</li>
   <li><strong>Hardt tak.</strong> Skannet innhold begrenses til 10 000 bonger og 25 MB, de eldste fjernes først. Hver skannet bong har dessuten grenser (maks 500 linjer, 80 tegn per varenavn og 20 betalingsmåter). Under Skann → Tøm cache sletter du alt skannet innhold.</li>
+  <li><strong>Tilleggsdata fra CW</strong> (hvilke bonger CWs filtre fant, systembonger og nummer på kopierte bonger) lagres i samme database, høyst 30 000 bonger og 5 000 systembonger. Medlemsnummer lagres ikke. «Tøm cache» sletter dem.</li>
   <li><strong>Ingenting sendes bort.</strong> Dataene blir på maskinen din. Pluginen kaller ikke eksterne tjenester og sender ingen egne kall mot Lindbaks API. Den leser bare det Lindbaks egen side allerede viser.</li>
   <li><strong>Persondata.</strong> Bevisbilder har ikke medlemsnummer. Rapporten har kasserernumre og bilder av kvitteringer. Behandle ZIP-filen som annen intern dokumentasjon.</li>
 </ul>
@@ -572,6 +602,7 @@
 <details class="faq"><summary>Panelet vises ikke</summary><p>Sjekk at du står i Kvitteringsjournal (adressen slutter på <code>/Journal/Viewer</code>) og at tillegget er slått på under <code>chrome://extensions</code>. Trykk <kbd>F5</kbd>. Panelet kan være skjult: prøv <kbd>Alt</kbd>+<kbd>K</kbd> eller dobbeltklikk der toppen skulle vært. Ligger det utenfor skjermen, bare som en stripe i kanten, er fjernet fra siden eller er dekket av noe i Lindbak, henter pluginen det fram av seg selv i løpet av et par sekunder og skriver «panelet var … og ble hentet fram» i Console. Panelet bygges først når listen (Kendo-gridet) finnes, så trykk Oppdater i Lindbak hvis siden er tom. Kommer panelet ikke etter 15 sekunder, viser pluginen en boks nederst til venstre som sier hvorfor: at den venter på listen, ikke finner gridet, eller fikk en feil. Ved feil kan du trykke «Kopier feilen» og sende teksten. Krever Chrome 111 eller nyere.</p></details>
 <details class="faq"><summary>Listen i Lindbak ser tom ut etter et søk</summary><p>Søket i Lindbak er i orden, men filtrene i pluginen (for eksempel «Søk i bongen», vare, betalingsmåte eller «Kun avvik») kan skjule alle radene i den nye listen. Da står det øverst i panelet at filtrene i pluginen skjuler alle kvitteringene, med knappen <strong>Vis alle</strong>. Den nullstiller bare pluginens filtre; søket i Lindbak og analysen røres ikke. Lindbaks egne nedtrekk og kalendere legger seg over panelet, så de kan brukes selv om panelet ligger over søkefeltene.</p></details>
 <details class="faq"><summary>Må jeg slette nettleserdata for å få panelet fram?</summary><p>Nei. Panelet kommer nå med en gang på journalsidene, også før listen er hentet («Venter på listen i CW»), og kobler seg til listen når Lindbak viser den, også etter et nytt søk. Er panelet likevel borte, trykk <kbd>Alt</kbd>+<kbd>K</kbd> eller dobbeltklikk toppen. Vises boksen nederst til venstre, trykk <strong>Nullstill visning</strong>: den fjerner bare plassering, størrelse og faner og laster siden på nytt. Skanninger, notater og innstillinger beholdes. Å slette nettleserdata sletter også alt dette.</p></details>
+<details class="faq"><summary>«Hent tilleggsdata fra CW» stoppet, eller listen ser annerledes ut</summary><p>Står det «CW svarte ikke», tok et søk mer enn ett minutt. Pluginen stopper da og setter filtrene tilbake. Sjekk at listen viser søket ditt, og trykk Oppdater i CW hvis den ikke gjør det. Vent litt før du prøver igjen, og velg en kortere periode eller færre butikker. Står det at filtrene ikke ble satt helt tilbake, trykk <strong>Nullstill CW</strong> og søk på nytt. «Stopp» avbryter etter søket som pågår.</p></details>
 <details class="faq"><summary>Analysen forsvant da jeg søkte i Lindbak</summary><p>Fra versjon 3.22.0 står resultatet fast når Lindbak-listen byttes. Bruker du en eldre versjon, oppdater. Fikk du en melding om at bonger ikke ligger i listen, trykk <strong>Hent i CW</strong> på bongen. F5 og «Tøm cache» fjerner analysen; skanningene beholdes, så kjør «Kjør analyse» på nytt.</p></details>
 <details class="faq"><summary>Kan jeg jobbe i andre faner mens skanningen går?</summary><p>I panelet: ja. I Lindbak: ikke søk eller bytt liste før skanningen er ferdig. I Chrome: en skjult fane blir bremset og skanningen stopper nesten opp. Dra Lindbak-fanen ut til et eget vindu, legg det ved siden av det du jobber i, og la det ikke bli dekket helt.</p></details>
 <details class="faq"><summary>«Skannet 0 av N» og ingenting skjer</summary><p>Klikk <strong>Skann nå</strong> eller gå til Skann og velg Skann innhold. Vent til visningsfeltet i Lindbak får innhold for hver bong. Skanning tar ca. ett sekund per bong; avgrens listen først hvis den er lang.</p></details>
@@ -629,9 +660,11 @@
   <li>At alle kvitteringstyper deler nummerserie per kasse (grunnlaget for «Dobbelt bongnummer» og «Bongnummer og tid stemmer ikke»).</li>
   <li>Hvordan rabattårsak skrives på kvitteringen, og hva en Kupong-linje betyr (innløst eller bare knyttet til bongen).</li>
   <li>Hvordan annullerte bonger, manuell pris, bonger på vent og «spør pris» ser ut. Pluginen leter etter hendelsesord og samler ukjente linjer (Diagnostikk), men vet ikke hva Lindbak faktisk viser.</li>
-  <li>Hvordan slettede varelinjer og pantelapper, «spør pris», manuelle kvitteringer, til gode-lapper, spesialbetalinger og kortnummer står på bongen. Testene leter etter motlinjer, ord og maskerte kortnumre, og Diagnostikk samler det de ikke kjenner igjen.</li>
+  <li>Hvordan «spør pris», manuelle kvitteringer, til gode-lapper, spesialbetalinger og kortnummer står på bongen. Testene leter etter ord og maskerte kortnumre, og Diagnostikk samler det de ikke kjenner igjen. Slettede varer («(SLETTET)» etter navnet) er sett i ekte data; slettede pantelapper er det ikke.</li>
+  <li>At nummeret i en bongkopi («BONGKOPI (nummer)») er løpenummeret til den opprinnelige bongen. Pluginen leter i samme butikk, helst på samme kasse.</li>
+  <li>Hva CWs innholdsfilter regner som for eksempel «Slettet annet» og «Vensafe». Merkingen er CWs egen og brukes slik CW gir den.</li>
   <li>At Kjøpeutbytte-tabellen finnes på medlemsbonger og hva grunnlaget omfatter. Testene kalibrerer seg mot det som finnes.</li>
-  <li>Hvordan topptekst og bunn ser ut (butikk, kasse, kasserer, medlem, terminal-ID, autorisasjonskode, inngangsmåte), om listen viser sekunder, og hva kanalkodene betyr. Testene kontrollerer bare felt som stemmer fra før, og Diagnostikk viser hva som er lest.</li>
+  <li>Hvordan topptekst og bunn ser ut (butikk, kasse, kasserer, medlem, terminal-ID, autorisasjonskode, inngangsmåte), og om listen viser sekunder. Kanalkodene er kartlagt med CWs eget filter (2 betjent, 3 Shop&amp;Go, 1 system og PDA). Testene kontrollerer bare felt som stemmer fra før, og Diagnostikk viser hva som er lest.</li>
   <li>At BUTIKK-kolonnen i listen og butikklisten i Lindbak har butikknavn, og at butikknummer med mer enn fire siffer er nivå pluss avdelingsnummer (131 og 1003).</li>
   <li>At en rabatt som mange kasserere gir på samme vare er en sentral kampanje. Pluginen spør i stedet for å anta, og kan ikke se kampanjen selv.</li>
   <li>At medlemsnummer alltid er satt på bongen i listen, og hvilket format det har.</li>

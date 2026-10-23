@@ -44,7 +44,9 @@ assert.deepStrictEqual(L.quickRange('today', new Date(2026, 9, 2, 12)), { dateFr
 assert.strictEqual(L.quickRange('yesterday', new Date(2026, 9, 2, 12)).dateFrom, '2026-10-01');
 assert.deepStrictEqual(L.sanitizeFilters({ stores: [1], bogus: 1, sort: 'sumAsc' }).stores, ['1']);
 assert.strictEqual(L.activeCount(F({ types: ['1'], onlyNegative: true, sort: 'sumAsc' })), 2);
-assert.strictEqual(L.typeLabel(11), 'PDA-operasjon (uavklart)');
+assert.strictEqual(L.typeLabel(11), 'Synlig svinn');
+assert.strictEqual(L.typeLabel(19), 'Bongkopi');
+assert.strictEqual(L.channelLabel(3), 'Selvbetjent (Shop&Go)');
 assert.strictEqual(L.typeLabel(99), 'Type 99');
 const r47 = [['Beskrivelse', '', 'Beløp'], ['RETUR VARE'], ['399 PANTELAPP', '', '-150.00'], ['RETUR VARE'], ['399 PANTELAPP', '', '-109.00'], ['RETUR VARE'], ['399 PANTELAPP', '', '-125.00'], ['RETUR VARE'], ['399 PANTELAPP', '', '-172.00'], ['', 'Totalt', '-556.00'], ['Kontant tilbake:', '', '556.00']];
 const sub = (o, k) => k.reduce((a, x) => (a[x] = o[x], a), {});

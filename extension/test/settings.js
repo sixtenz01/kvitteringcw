@@ -87,7 +87,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   assert.strictEqual(await idbGet('kv', 'kvr.help.v1'), 1);
 
   // innstillingssiden: alle grupper, endring, av/på, standard
-  assert.strictEqual(await page.$$eval('details.kvr-set', n => n.length), 28);
+  assert.strictEqual(await page.$$eval('details.kvr-set', n => n.length), 32);
   await group('bong');
   assert.strictEqual(await badge('bong'), '');
   assert.ok(await input('bong', 'Stor panteretur fra').isDisabled(), 'stor panteretur er av som standard (pant gir bare reaksjon på 99 og slettet 399)');

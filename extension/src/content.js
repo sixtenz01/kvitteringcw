@@ -11,13 +11,14 @@
   var K = {
     saved: 'kvr.saved.v1', collapsed: 'kvr.collapsed.v1', scan: 'kvr.scan.v2', pos: 'kvr.pos.v1',
     size: 'kvr.size.v1', sec: 'kvr.sec.v1', rules: 'kvr.rules.v1', anom: 'kvr.anom.v1',
-    stores: 'kvr.stores.v1', tab: 'kvr.tab.v1', layout: 'kvr.layout.v1', arules: 'kvr.arules.v1', notes: 'kvr.notes.v1', tasks: 'kvr.tasks.v1', ctl: 'kvr.ctl.v1', keynav: 'kvr.keynav.v1', tshift: 'kvr.tshift.v1', nlog: 'kvr.nlog.v1', wide: 'kvr.wide.v1', sub: 'kvr.sub.v1', weights: 'kvr.weights.v1', camp: 'kvr.camp.v1', lastrun: 'kvr.lastrun.v1', scope: 'kvr.scope.v1', help: 'kvr.help.v1', sub2: 'kvr.sub2.v1', reports: 'kvr.reports.v1', repopts: 'kvr.repopts.v1', pantmig: 'kvr.pantmig.v1', pos2: 'kvr.pos2.v1', campmig: 'kvr.campmig.v1', discmig: 'kvr.discmig.v1', evmig: 'kvr.evmig.v1', folder: 'kvr.folder.v1', folderAt: 'kvr.folderat.v1'
+    stores: 'kvr.stores.v1', tab: 'kvr.tab.v1', layout: 'kvr.layout.v1', arules: 'kvr.arules.v1', notes: 'kvr.notes.v1', tasks: 'kvr.tasks.v1', ctl: 'kvr.ctl.v1', keynav: 'kvr.keynav.v1', tshift: 'kvr.tshift.v1', nlog: 'kvr.nlog.v1', wide: 'kvr.wide.v1', sub: 'kvr.sub.v1', weights: 'kvr.weights.v1', camp: 'kvr.camp.v1', lastrun: 'kvr.lastrun.v1', scope: 'kvr.scope.v1', help: 'kvr.help.v1', sub2: 'kvr.sub2.v1', reports: 'kvr.reports.v1', repopts: 'kvr.repopts.v1', pantmig: 'kvr.pantmig.v1', pos2: 'kvr.pos2.v1', campmig: 'kvr.campmig.v1', discmig: 'kvr.discmig.v1', evmig: 'kvr.evmig.v1', folder: 'kvr.folder.v1', folderAt: 'kvr.folderat.v1', cwx: 'kvr.cwx.v1'
   };
   var sayTimer = null;
   var failedRecs = [];
   var lastRetry = null;
   var SCAN_TIMEOUT = 6000;
   var SCAN_LIMIT = 10000, SCAN_BYTES = 25 * 1024 * 1024;
+  var SCAN_TYPES = [1, 2, 11, 13];   // salg, kassaoppgjør, synlig svinn og internt forbruk
   var seqProof = { ok: 0, bad: 0 };
 
   var filters = L.defaultFilters();
@@ -46,6 +47,7 @@
   var scope = null, lastMode = 'scope', fetched = null;
   var weights = null, checkState = { newIds: {}, at: null, shown: 15, showChecked: false }, expanded = {};
   var notes = {}, ctlRes = null, ctlCfg = null, tasksCustom = [], boundCount = 0, keyNav = true, settingsStale = false, timeShift = 0;
+  var cwx = null, cwRun = null;   // tilleggsdata fra CWs filtre, og kjøringen som pågår
 
   function openDb() {
     return new Promise(function (res) {
@@ -114,6 +116,7 @@
 
   function clearScan() {
     scanMap = {}; dirty = {}; gcache = {};
+    cwx = null; store(K.cwx, null);
     if (db) { try { db.transaction('scan', 'readwrite').objectStore('scan').clear(); } catch (e) { db = null; } }
   }
 
@@ -346,6 +349,192 @@
     ui.cwStatus.textContent = b ? 'CW-filter nullstilt.' : 'Fant ikke nullstill-knappen i CW.';
   }
 
+  // ---- tilleggsdata fra CW: CWs egne filtre, ett om gangen ------------------------------------
+  // Pluginen huker av ett valg i CWs filter, trykker Oppdater og noterer hvilke bonger CW viser. Pluginen sender ingen egne kall;
+  // det er CW som søker, akkurat som når du trykker selv. Det er pause mellom søkene, kjøringen stopper ved første søk som ikke
+  // svarer, og filtrene og søket settes tilbake til slutt. Fritekstsøk brukes aldri, fordi det er tungt for CWs server.
+  var CWX_PAUSE = 1500, CWX_TIMEOUT = 60000, CWX_CUT = 1000, CWX_COPIES = 200, CWX_SYS = 5000, CWX_TAGS = 30000;
+  var CWX_PAY = ['Kontant', 'Kontant tilbake', 'Kreditt', 'Kupong', 'Tilgodelapp', 'Gavekort', 'Finansiering'];
+  var COPY_REF = /BONG\s*KOPI\s*\(\s*([A-Za-z0-9-]+)\s*\)/i;
+
+  function nodeText(li) { var t = li.querySelector(':scope > div .k-in, :scope > .k-in'); return t ? t.textContent.replace(/\s+/g, ' ').trim() : ''; }
+  // Nodene i et filtertre i CW (Kendo TreeView): avkrysningsboks, navn, sti («Pant → Manuell»), toppnivå og blad.
+  function treeNodes(root) {
+    if (!root) return [];
+    return Array.prototype.map.call(root.querySelectorAll('li'), function (li) {
+      var up = li.parentElement ? li.parentElement.closest('li') : null;
+      if (up && !root.contains(up)) up = null;
+      var name = nodeText(li);
+      return { cb: li.querySelector(':scope > div input[type=checkbox], :scope > input[type=checkbox]'), name: name, top: !up, leaf: !li.querySelector('li'), path: (up ? nodeText(up) + ' → ' : '') + name };
+    }).filter(function (x) { return x.cb && x.name; });
+  }
+  function contentTree() { return treeNodes(document.getElementById('contentFilterTreeView')); }
+  function typeTree() { var g = document.getElementById('receiptTypeGroup'); return treeNodes(g ? g.querySelector('[data-role=treeview]') || g : null); }
+  function clearTree(nodes) {
+    nodes.filter(function (x) { return x.top; }).forEach(function (x) { for (var i = 0; i < 2 && (x.cb.checked || x.cb.indeterminate); i++) x.cb.click(); });
+    nodes.forEach(function (x) { if (x.cb.checked) x.cb.click(); });
+  }
+  function setTree(nodes, want) { clearTree(nodes); nodes.forEach(function (x, i) { if (want[i] && !x.cb.checked) x.cb.click(); }); }
+  function treeIs(nodes, want) { return nodes.every(function (x, i) { return x.cb.checked === want[i]; }); }
+  function payWidget() { var $ = jq(), n = document.getElementById('paymentMethods'); var w = $ && n ? $(n).data('kendoMultiSelect') : null; return w && typeof w.value === 'function' ? w : null; }
+  function payValues(w) { var v = w.value(); return Array.isArray(v) ? v.slice() : v && v.length !== undefined ? Array.prototype.slice.call(v) : []; }
+  function setPay(w, v) { w.value(v); if (typeof w.trigger === 'function') w.trigger('change'); }
+  function gridData() {
+    var ds = grid && grid.dataSource;
+    var a = !ds ? [] : typeof ds.data === 'function' ? ds.data() : ds.view();
+    return Array.prototype.slice.call(a || []);
+  }
+  function idsKey(a) { return a.map(function (d) { return String(d.transactionId); }).sort().join('|'); }
+  // En rad fra CW-listen i samme form som pluginens egne: klokkeslett som CW viser det, og bare feltene testene trenger.
+  function cwxRow(di) {
+    var tb = grid.tbody && grid.tbody[0], tr = tb && di.uid ? tb.querySelector('tr[data-uid="' + di.uid + '"]') : null;
+    var dcell = tr && tr.querySelector('td[data-field="endDateTime"]'), shown = dcell ? L.parseCellDT(dcell.textContent) : '';
+    var x = plain(di);
+    return { tr: tr, item: { transactionId: x.transactionId, endDateTime: L.shiftDT(shown || L.localDT(x.endDateTime), timeShift), storeNumber: x.storeNumber, workstationNumber: x.workstationNumber,
+      cashierNumber: x.cashierNumber, receiptType: x.receiptType, saleChannel: x.saleChannel, totalAmount: x.totalAmount } };
+  }
+
+  async function cwxSearch() {
+    var b = document.querySelector('[ng-click="vm.applyFilters()"]');
+    if (!b) throw new Error('Fant ikke OPPDATER-knappen i CW.');
+    await wait(cwRun && cwRun.pause >= 0 ? cwRun.pause : CWX_PAUSE);
+    var before = boundCount;
+    b.click();
+    await waitFor(function () { return boundCount > before; }, cwRun && cwRun.timeout ? cwRun.timeout : CWX_TIMEOUT);
+    if (boundCount <= before) return null;
+    await wait(300);
+    return gridData();
+  }
+
+  // Teksten i visningsfeltet for en rad (bongkopier har ofte ingen tabell, så skanningen kan ikke brukes).
+  async function viewerText(tr) {
+    var d = iframeDoc();
+    if (!d || !tr) return null;
+    d.body.innerHTML = '';
+    if (typeof grid.clearSelection === 'function') grid.clearSelection();
+    grid.select(tr);
+    for (var w = 0; w < SCAN_TIMEOUT; w += 100) {
+      await wait(100);
+      d = iframeDoc();
+      var t = d ? (d.body.innerText || d.body.textContent || '') : '';
+      if (t.trim()) { await wait(150); d = iframeDoc(); return d ? (d.body.innerText || d.body.textContent || '') : t; }
+    }
+    return null;
+  }
+
+  function cwxSay(t) { if (ui.cwxStatus) ui.cwxStatus.textContent = t; say(t); }
+
+  async function fetchCwExtra() {
+    if (cwRun || scanning || !grid) return;
+    var base = gridData();
+    if (!base.length) { cwxSay('Hent først kvitteringer i CW (Søk i CW eller Oppdater i Lindbak), så tilleggsdataene gjelder samme periode og butikker.'); return; }
+    var pause = window.__kvrCwx && window.__kvrCwx.pause >= 0 ? window.__kvrCwx.pause : CWX_PAUSE;
+    cwRun = { stop: false, pause: pause, timeout: window.__kvrCwx && window.__kvrCwx.timeout || CWX_TIMEOUT };
+    var run = { at: Date.now(), n: base.length, cut: base.length >= CWX_CUT, from: '', to: '', searches: 0, log: [], errors: [], cutTags: [] };
+    var baseKey = idsKey(base), baseIds = {};
+    base.forEach(function (d) { baseIds[d.transactionId] = true; var t = L.parseDT(cwxRow(d).item.endDateTime).date; if (t && (!run.from || t < run.from)) run.from = t; if (t && t > run.to) run.to = t; });
+    var tags = {}, sys = [], copies = {};
+    var ct = contentTree(), tt = typeTree(), pw = payWidget();
+    var ctOrig = ct.map(function (x) { return x.cb.checked; }), ttOrig = tt.map(function (x) { return x.cb.checked; }), pwOrig = pw ? payValues(pw) : [];
+    var steps = [];
+    ct.filter(function (x) { return x.leaf; }).forEach(function (x) { steps.push({ g: 'innhold', tag: x.path, set: function () { setTree(ct, ct.map(function (y) { return y === x; })); } }); });
+    if (pw) {
+      var pd = Array.prototype.slice.call(pw.dataSource && pw.dataSource.data ? pw.dataSource.data() : []);
+      var vf = (pw.options && pw.options.dataValueField) || 'number', tf = (pw.options && pw.options.dataTextField) || 'text';
+      CWX_PAY.forEach(function (name) {
+        var m = pd.filter(function (d) { return String(d.get ? d.get(tf) : d[tf]).trim().toLowerCase() === name.toLowerCase(); })[0];
+        if (m) steps.push({ g: 'betaling', tag: 'Betaling: ' + name, set: function () { if (ct.length) setTree(ct, ctOrig); setPay(pw, [m.get ? m.get(vf) : m[vf]]); } });
+      });
+    }
+    var sysNode = tt.filter(function (x) { return x.top && /^Systemtransaksjoner$/i.test(x.name); })[0];
+    if (sysNode) steps.push({ g: 'system', tag: 'Systemtransaksjoner', set: function () { if (pw) setPay(pw, pwOrig); setTree(tt, tt.map(function (y) { return y === sysNode; })); } });
+    if (!ct.length) run.errors.push('Fant ikke innholdsfilteret i CW.');
+    if (!pw) run.errors.push('Fant ikke betalingsfilteret i CW.');
+    if (!sysNode) run.errors.push('Fant ikke «Systemtransaksjoner» i bongtypefilteret i CW.');
+    var skip = {}, t0 = Date.now();
+    ui.cwxBtn.disabled = true; ui.cwxStop.disabled = false; ui.scanBtn.disabled = true; ui.anomBtn.disabled = true;
+    try {
+      for (var i = 0; i < steps.length; i++) {
+        var st = steps[i];
+        if (cwRun.stop) { run.errors.push('Stoppet av deg etter ' + i + ' av ' + steps.length + ' søk.'); break; }
+        if (skip[st.g]) continue;
+        progress(i, steps.length + 1, t0, 'Henter fra CW (' + st.tag + ')', 0);
+        st.set();
+        var rows = await cwxSearch();
+        run.searches++;
+        if (rows === null) { run.errors.push('CW svarte ikke på søket «' + st.tag + '» innen ' + Math.round(cwRun.timeout / 1000) + ' s. Kjøringen ble stoppet. Sjekk at listen viser søket ditt, og trykk Oppdater i CW hvis den ikke gjør det.'); break; }
+        if (st.g !== 'system' && base.length >= 20 && idsKey(rows) === baseKey) { skip[st.g] = true; run.errors.push('CW brukte ikke filteret «' + st.tag + '» (samme bonger som uten filter). Resten av ' + st.g + 'sfilteret ble hoppet over.'); continue; }
+        if (rows.length >= CWX_CUT) run.cutTags.push(st.tag);
+        run.log.push({ tag: st.tag, n: rows.length });
+        if (st.g === 'system') {
+          var cps = [];
+          rows.forEach(function (d) { var r = cwxRow(d); if (sys.length < CWX_SYS) sys.push(r.item); if (r.item.receiptType === 19 && cps.length < CWX_COPIES) cps.push(r); });
+          for (var c = 0; c < cps.length && !cwRun.stop; c++) {
+            progress(i, steps.length + 1, t0, 'Leser bongkopi ' + (c + 1) + ' av ' + cps.length, 0);
+            var txt = await viewerText(cps[c].tr);
+            var m = txt ? COPY_REF.exec(txt) : null;
+            copies[cps[c].item.transactionId] = m ? m[1] : '';
+          }
+        } else rows.forEach(function (d) { var id = d.transactionId; (tags[id] = tags[id] || []).push(st.tag); });
+      }
+    } catch (e) { run.errors.push(String(e && e.message || e)); }
+    // tilbake til filtrene og søket du hadde
+    try {
+      if (ct.length) setTree(ct, ctOrig);
+      if (tt.length) setTree(tt, ttOrig);
+      if (pw) setPay(pw, pwOrig);
+      var back = (!ct.length || treeIs(ct, ctOrig)) && (!tt.length || treeIs(tt, ttOrig));
+      if (!back) run.errors.push('Filtrene i CW ble ikke satt helt tilbake. Trykk Nullstill i CW og søk på nytt.');
+      cwRun.stop = false;
+      var again = await cwxSearch();
+      if (again === null) run.errors.push('CW svarte ikke da søket ditt skulle hentes tilbake. Trykk Oppdater i CW.');
+      else if (idsKey(again) !== baseKey) run.errors.push('Listen etter tilbakestillingen er ikke helt lik listen før (' + again.length + ' mot ' + base.length + ' bonger). Det kan være nye bonger siden; søk på nytt i CW om du vil være sikker.');
+    } catch (e2) { run.errors.push('Tilbakestilling: ' + (e2 && e2.message || e2)); }
+    cwRun = null;
+    setProgress(0);
+    ui.cwxBtn.disabled = false; ui.cwxStop.disabled = true; ui.scanBtn.disabled = false; ui.anomBtn.disabled = false;
+    mergeCwx(run, baseIds, tags, sys, copies);
+    apply();
+    renderCwx();
+    cwxSay('Tilleggsdata fra CW: ' + run.searches + ' søk, ' + plur(Object.keys(tags).length, 'bong', 'bonger') + ' merket, ' + plur(sys.length, 'systembong', 'systembonger') + ', ' + plur(Object.keys(copies).length, 'bongkopi', 'bongkopier') + '.' + (run.errors.length ? ' Merknader: ' + run.errors.length + ' (se Hent → Tilleggsdata fra CW).' : ''));
+  }
+
+  // Nye data erstatter de gamle for bongene i søket; data fra andre søk beholdes innenfor faste grenser.
+  function mergeCwx(run, baseIds, tags, sys, copies) {
+    var old = cwx || { tags: {}, sys: [], copies: {}, runs: [] };
+    var nt = {};
+    Object.keys(old.tags || {}).forEach(function (id) { if (!baseIds[id]) nt[id] = old.tags[id]; });
+    var keys = Object.keys(nt);
+    if (keys.length + Object.keys(tags).length > CWX_TAGS) keys.slice(0, keys.length + Object.keys(tags).length - CWX_TAGS).forEach(function (id) { delete nt[id]; });
+    Object.keys(tags).forEach(function (id) { nt[id] = tags[id]; });
+    var seen = {}, ns = [];
+    sys.concat(old.sys || []).forEach(function (r) { if (!seen[r.transactionId] && ns.length < CWX_SYS) { seen[r.transactionId] = true; ns.push(r); } });
+    var nc = {};
+    Object.keys(old.copies || {}).forEach(function (id) { if (seen[id]) nc[id] = old.copies[id]; });
+    Object.keys(copies).forEach(function (id) { nc[id] = copies[id]; });
+    cwx = { tags: nt, sys: ns, copies: nc, runs: [run].concat(old.runs || []).slice(0, 10) };
+    store(K.cwx, cwx);
+  }
+
+  function sanitizeCwx(raw) {
+    if (!raw || typeof raw !== 'object' || !raw.tags || typeof raw.tags !== 'object' || !Array.isArray(raw.sys)) return null;
+    return { tags: raw.tags, sys: raw.sys.slice(0, CWX_SYS), copies: raw.copies && typeof raw.copies === 'object' ? raw.copies : {}, runs: Array.isArray(raw.runs) ? raw.runs.slice(0, 10) : [] };
+  }
+
+  function renderCwx() {
+    if (!ui.cwxInfo) return;
+    ui.cwxInfo.innerHTML = '';
+    var r = cwx && cwx.runs[0];
+    if (!r) { ui.cwxInfo.appendChild(hintEl('Ikke hentet ennå.')); return; }
+    var when = new Date(r.at).toLocaleString('nb-NO', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    ui.cwxInfo.appendChild(hintEl('Sist hentet ' + when + ' for ' + r.n + ' bonger (' + (r.from === r.to ? r.from : r.from + ' – ' + r.to) + '), ' + r.searches + ' søk.' +
+      (r.cut ? ' Søket ditt hadde 1000 bonger, så CW har trolig kuttet det; velg kortere periode for at tallene skal være hele.' : '')));
+    if (r.log.length) ui.cwxInfo.appendChild(hintEl(r.log.map(function (x) { return x.tag + ': ' + x.n + (r.cutTags.indexOf(x.tag) !== -1 ? ' (kuttet)' : ''); }).join(' · ')));
+    r.errors.forEach(function (e) { ui.cwxInfo.appendChild(el('div', { class: 'kvr-hint kvr-cwx-err', text: e })); });
+  }
+
+  function stopCwExtra() { if (cwRun) { cwRun.stop = true; cwxSay('Stopper etter søket som pågår, og setter filtrene tilbake…'); } }
+
   // ---- skanning -------------------------------------------------------------
   function iframeDoc() {
     var f = document.querySelector('iframe');
@@ -416,7 +605,7 @@
   }
 
   async function scanList(todo) {
-    if (scanning || !todo.length) return { done: 0, failed: 0 };
+    if (scanning || cwRun || !todo.length) return { done: 0, failed: 0 };
     scanning = true; cancelScan = false;
     ui.scanBtn.disabled = true; ui.anomBtn.disabled = true; ui.stopBtn.disabled = false; ui.stopTop.style.display = ''; ui.retryBtn.disabled = true; if (ui.retryBtn2) ui.retryBtn2.disabled = true;
     var prev = grid.select();
@@ -557,7 +746,7 @@
   function todoFor(list) {
     return list.filter(function (r) {
       var sc = scanMap[r.item.transactionId];
-      return (r.item.receiptType === 1 || r.item.receiptType === 2) && (!sc || (r.item.receiptType === 1 && !L.hasV4(sc)));
+      return SCAN_TYPES.indexOf(r.item.receiptType) !== -1 && (!sc || (r.item.receiptType === 1 && !L.hasV4(sc)));
     });
   }
 
@@ -633,7 +822,7 @@
     anomMap = {};
     var n = 0;
     list.forEach(function (r) {
-      if (L.isCopy(scanMap[r.item.transactionId])) return;   // bongkopi: bare hendelsesord
+      if (L.isCopy(scanMap[r.item.transactionId]) || L.isShrink(r.item)) return;   // bongkopi: bare hendelsesord; svinn: egne tester
       var reasons = L.anomalies(r.item, scanMap[r.item.transactionId], anomCfg, customRules, groupsOf(r.item.transactionId));
       if (reasons.length) { anomMap[r.item.transactionId] = reasons; n++; }
     });
@@ -1460,13 +1649,14 @@
       scopeObj: mode === 'scope' ? JSON.parse(JSON.stringify(scope)) : null,
       compare: mode === 'scope' && scope.compare.on ? { a: per(scope.dateFrom, scope.dateTo), b: per(scope.compare.from, scope.compare.to) } : null,
       filters: mode === 'visible' ? chipDefs().filter(function (c) { return !c.state; }).map(function (c) { return c.label; }) : [],
-      coverageText: mode === 'scope' && scopeCoverage().missing ? scopeCoverage().text : ''
+      coverageText: mode === 'scope' && scopeCoverage().missing ? scopeCoverage().text : '',
+      cwxRun: cwx && cwx.runs[0] ? JSON.parse(JSON.stringify(cwx.runs[0])) : null
     };
   }
 
   async function runChecks(mode) {
     mode = mode === 'visible' ? 'visible' : 'scope';
-    if (scanning || !grid) return;
+    if (scanning || cwRun || !grid) return;
     lastMode = mode;
     await runAnom(mode);
     var items = analysisItems(mode);
@@ -1477,19 +1667,31 @@
     // bongkopier («Bong kopi») er ikke nye kjøp: bare hendelsesord ser dem, de andre testene får dem ikke
     var allItems = items, allPop = pop, cs = L.splitCopies(items, scanMap);
     items = cs.items; pop = L.splitCopies(pop, scanMap).items;
+    // svinn og internt forbruk (type 11 og 13) er ikke salg: de får egne tester, men teller med i bongnummer per kasse
+    var seqItems = items, seqPop = pop, shrinkItems = items.filter(L.isShrink), shrinkPop = pop.filter(L.isShrink);
+    items = items.filter(function (i) { return !L.isShrink(i); }); pop = pop.filter(function (i) { return !L.isShrink(i); });
     var keep = function (f) { return f.ids.length ? f.ids.some(function (id) { return scopeIds[id]; }) : (f.cashier ? !!scopeCash[f.cashier] : true); };
     var ask = L.askPrice(items, pop, scanMap, ctlCfg), manual = L.manualReceipts(items, pop, scanMap, ctlCfg), covered = {};
     ask.findings.concat(manual.findings).forEach(function (f) { if (f.flag) f.ids.forEach(function (id) { covered[id] = true; }); });
+    // tilleggsdata fra CW for butikkene og dagene i grunnlaget
+    var days = {}, stores = {};
+    allPop.forEach(function (i) { days[L.parseDT(i.endDateTime).date] = true; stores[String(i.storeNumber)] = true; });
+    var cwxS = cwx ? { tags: cwx.tags, copies: cwx.copies, sys: cwx.sys.filter(function (r) { return stores[String(r.storeNumber)] && days[L.parseDT(r.endDateTime).date]; }) } : null;
+    var prof = L.profiles(items, scanMap, ctlCfg);
     var res = {
       at: new Date(), n: allItems.length, copies: cs.copies.length, mode: mode,
-      profile: L.profiles(items, scanMap, ctlCfg),
+      profile: prof,
+      cw: L.cwChecks(items, cwxS, ctlCfg, prof.mainCh),
+      shift: L.shiftChecks(items, cwxS && cwxS.sys, scanMap, cwxS, ctlCfg),
+      copy: L.copyChecks(items, pop, cwxS && cwxS.sys, cwxS && cwxS.copies, scanMap, ctlCfg),
+      shrink: L.shrinkChecks(shrinkItems, pop, scanMap, ctlCfg),
       patterns: L.patterns(items, scanMap, ctlCfg),
       pant: L.pantCheck(items, scanMap, ctlCfg),
-      seq: L.sequence(items, ctlCfg),
+      seq: L.sequence(seqItems, ctlCfg),
       recon: L.reconcile(items, scanMap, ctlCfg),
       falseRet: L.falseReturns(items, pop, scanMap, ctlCfg),
       after: L.afterSettlement(items, pop, ctlCfg),
-      deleted: L.deletedReceipts(pop, ctlCfg),
+      deleted: L.deletedReceipts(seqPop, ctlCfg),
       diff: L.diffTrend(items, scanMap, ctlCfg),
       numbers: L.numbers(items, scanMap, ctlCfg),
       disc: L.discounts(items, scanMap, ctlCfg, pop, campDec),
@@ -1515,7 +1717,8 @@
       res.deleted.findings.filter(keep), res.diff.findings.filter(keep), res.numbers.findings.filter(keep), res.disc.findings,
       res.member.findings, res.price.findings, res.ku.findings, res.ev.findings, res.ledger.findings, res.corr.findings.filter(keep),
       res.lapp.findings.filter(keep), res.voids.findings.filter(keep), res.special.findings, res.ask.findings.filter(keep), res.card.findings.filter(keep), res.manual.findings.filter(keep),
-      res.tempo.findings.filter(keep), res.watch.findings.filter(keep), res.retEan.findings.filter(keep), res.retR.findings.filter(keep), res.hdr.findings.filter(keep));
+      res.tempo.findings.filter(keep), res.watch.findings.filter(keep), res.retEan.findings.filter(keep), res.retR.findings.filter(keep), res.hdr.findings.filter(keep),
+      res.cw.findings.filter(keep), res.shift.findings.filter(keep), res.copy.findings.filter(keep), res.shrink.findings.filter(keep));
     res.cashierExtra = {};
     res.findings.forEach(function (f) {
       if (f.flag) f.ids.forEach(function (id) { if (scopeIds[id]) addFlag(id, f.title); });
@@ -1831,6 +2034,52 @@
     if (old) box.appendChild(el('div', { class: 'kvr-row' }, [btn('Skann på nytt (' + old + ' eldre)', rescanOld)]));
   }
 
+  // Tilleggsdata fra CW og svinn: innhold per kasserer, innlogging, bongkopi og svinn/internt forbruk.
+  function renderCwxCard(R) {
+    var box = ui.ctlCwx, C = R.cw, S = R.shift, P = R.copy, W = R.shrink;
+    var getBtn = function () { return el('div', { class: 'kvr-row' }, [btn('Hent tilleggsdata fra CW', function () { fetchCwExtra(); }), btn('Til Hent', function () { ui.go('cw'); }, 'kvr-sm')]); };
+    box.appendChild(el('b', { class: 'kvr-subh', text: 'Innhold og betaling ifølge CWs filtre' }));
+    if (!C.on) { box.appendChild(hintEl('Ikke hentet. «Hent tilleggsdata fra CW» bruker CWs egne filtre på søket i listen og merker bongene med innhold og betaling. Kjør analysen på nytt etterpå.')); box.appendChild(getBtn()); }
+    else {
+      box.appendChild(hintEl(C.tagged + ' av ' + C.sales + ' salg er merket av CWs filtre. ' + C.combos + ' bonger har en kombinasjon som flagges.' + (cwx && cwx.runs[0] && cwx.runs[0].cut ? ' Søket var kuttet ved 1000 bonger; tallene gjelder bongene i listen.' : '')));
+      if (C.tags.length) box.appendChild(tbl(['Innhold', 'Bonger', 'Andel av salg'], C.tags.map(function (t) { return [t.tag.replace(/^Betaling: /, 'Betaling: '), t.n, pct(C.sales ? t.n / C.sales : 0)]; })));
+      var cols = C.tags.filter(function (t) { return t.rate; }).slice(0, 6).map(function (t) { return t.tag; });
+      var rows = C.rows.filter(function (r) { return cols.some(function (t) { return r.cells[t].n; }); });
+      if (cols.length && rows.length) box.appendChild(tbl(['Kasserer', 'Salg'].concat(cols.map(function (t) { return t.replace(/^Betaling: /, ''); })), rows.map(function (r) {
+        return [{ node: entLink('kasserer', r.id) }, r.sales].concat(cols.map(function (t) { var e = r.cells[t]; return e.n ? { t: e.n + ' (' + pct(e.rate) + ')', bad: e.flag } : '–'; }));
+      })));
+      box.appendChild(hintEl('Rødt = minst ' + (ctlCfg.cwRateN || '–') + ' bonger og minst ' + ctlCfg.profFactor + '× andelen hos de andre kassererne i samme kanal (eller i butikken). Kontant, kreditt, finansiering og skannet pant sammenlignes ikke. Merkingen er CWs egen; se bongene før du konkluderer.'));
+    }
+    box.appendChild(el('b', { class: 'kvr-subh', text: 'Innlogging og utlogging' }));
+    if (!S.hasLogins) box.appendChild(hintEl('Ingen innlogginger i grunnlaget. De hentes med «Hent tilleggsdata fra CW».' + (S.dual ? ' ' + S.dual + ' kasserere har salg på to betjente kasser om hverandre (se funn).' : '')));
+    else {
+      box.appendChild(hintEl(S.logins + ' innlogginger og ' + S.logouts + ' utlogginger gir ' + S.sessions.length + ' økter. ' + S.short + ' korte innlogginger med retur eller sletting, ' + S.dual + ' kasserere med salg på to betjente kasser om hverandre.'));
+      if (S.rows.length) box.appendChild(tbl(['Kasserer', 'Økter', 'Tid innlogget', 'Korteste', 'Kasser', 'Kort med retur/sletting'], S.rows.map(function (r) {
+        return [{ node: entLink('kasserer', r.id) }, r.sessions, (r.minutes / 60).toFixed(1).replace('.', ',') + ' t', r.shortest === null ? '–' : r.shortest + ' min', r.kasser.join(', '), { t: r.short, bad: r.short > 0 }];
+      })));
+      box.appendChild(hintEl('En økt varer fra innlogging til utlogging eller neste innlogging på samme kasse. Kort = høyst ' + (ctlCfg.shortMin || '–') + ' min med høyst ' + ctlCfg.shortSales + ' salg.'));
+    }
+    box.appendChild(el('b', { class: 'kvr-subh', text: 'Bongkopier' }));
+    if (!P.n) box.appendChild(hintEl('Ingen bongkopier i grunnlaget. De hentes med «Hent tilleggsdata fra CW».'));
+    else {
+      box.appendChild(hintEl(P.n + ' bongkopier. ' + P.found + ' av de opprinnelige bongene står i listen. ' + P.ret + ' kopier er fulgt av en retur.'));
+      box.appendChild(tbl(['Når', 'Kasse', 'Kasserer', 'Kopi av bong', 'Opprinnelig', 'Retur etterpå'], P.copies.slice(0, 15).map(function (x) {
+        var o = x.orig;
+        return [x.copy.endDateTime.slice(5), x.copy.workstationNumber, { node: entLink('kasserer', x.copy.cashierNumber) }, x.ref || '–',
+          o ? o.endDateTime.slice(5) + ' · kasserer ' + o.cashierNumber + ' · ' + fmt(o.totalAmount) : 'ikke i listen',
+          x.ret ? { t: x.ret.endDateTime.slice(11) + ' · ' + fmt(x.ret.totalAmount), bad: true } : '–'];
+      })));
+    }
+    box.appendChild(el('b', { class: 'kvr-subh', text: 'Synlig svinn og internt forbruk' }));
+    if (!W.n) box.appendChild(hintEl('Ingen bonger med synlig svinn eller internt forbruk i omfanget. I CW hører de til bongtypen Varetransaksjoner.'));
+    else {
+      box.appendChild(hintEl(W.n + ' registreringer, til sammen ' + fmt(W.kr) + ' kr (' + Object.keys(W.byType).map(function (k) { return k.toLowerCase() + ' ' + W.byType[k].n + ' · ' + fmt(W.byType[k].kr) + ' kr'; }).join(', ') + '). ' + W.scanned + ' av ' + W.n + ' er skannet; varene leses bare fra skannede bonger.'));
+      box.appendChild(tbl(['Registrert av', 'Bonger', 'Kr', 'Varelinjer', 'Flagget'], W.rows.map(function (r) { return [{ node: entLink('kasserer', r.id) }, r.n, fmt(r.kr), r.lines, { t: r.flags, bad: r.flags > 0 }]; })));
+      if (W.items.length) box.appendChild(tbl(['Vare', 'EAN', 'Linjer', 'Kr'], W.items.slice(0, 10).map(function (e) { return [e.n, e.c, e.lines, fmt(e.kr)]; })));
+      box.appendChild(hintEl('Svinn er ofte helt i orden (utgått dato, knust vare). Se etter mønstre: overvåkede varer, samme vare som er returnert samme dag, store beløp og registreringer utenom åpningstid.'));
+    }
+  }
+
   function renderAuditCards(R) {
     var D = R.diff;
     if (!D || !D.rows.length) ui.ctlDiff.appendChild(hintEl('Ingen skannede kassaoppgjør i omfanget. Skann og kjør analysen på nytt.'));
@@ -1862,6 +2111,7 @@
     renderLappCard(R);
     renderLinesCard(R);
     renderAcctCard(R);
+    renderCwxCard(R);
     ui.ctlNum.appendChild(hintEl('MAD under 0,006 er nær Benford, 0,006–0,012 akseptabel, 0,012–0,015 marginal, over 0,015 avvikende (Nigrini). Avvik er en indikasjon som må forklares, ikke et bevis. Kasserere med færre enn ' + ctlCfg.benfordCashMin + ' bonger vurderes ikke.'));
   }
 
@@ -1869,7 +2119,7 @@
     if (!ui.ctlProfile) return;
     var R = ctlRes;
     ui.ctlInfo.textContent = R ? 'Sist kjørt ' + R.at.toLocaleTimeString('nb-NO') + ' på ' + R.n + (R.mode === 'visible' ? ' synlige' : ' kvitteringer i omfanget') + '.' : 'Ikke kjørt ennå. Filtrer listen først, og trykk «Kjør alle kontroller».';
-    [ui.ctlProfile, ui.ctlFindings, ui.ctlPant, ui.ctlRecon, ui.ctlDiff, ui.ctlNum, ui.ctlDisc, ui.ctlMember, ui.ctlMisc, ui.ctlLapp, ui.ctlLines, ui.ctlAcct].forEach(function (n) { n.innerHTML = ''; });
+    [ui.ctlProfile, ui.ctlFindings, ui.ctlPant, ui.ctlRecon, ui.ctlDiff, ui.ctlNum, ui.ctlDisc, ui.ctlMember, ui.ctlMisc, ui.ctlLapp, ui.ctlLines, ui.ctlAcct, ui.ctlCwx].forEach(function (n) { n.innerHTML = ''; });
     ui.ctlResults.style.display = R ? '' : 'none';
     ui.ctlSumCard.style.display = R ? '' : 'none';
     if (!R) return;
@@ -1880,14 +2130,17 @@
     // kassererprofil
     if (!R.profile.rows.length) ui.ctlProfile.appendChild(hintEl('Ingen salg blant synlige kvitteringer.'));
     else {
-      var st = R.profile.store;
+      var st = R.profile.store, chs = R.profile.channels || [], multi = chs.length > 1;
+      var avgRow = function (name, m, last) { return [name, m.count, pct(m.retShare), fmt(m.avg), m.scanned ? m.lapperPer.toFixed(2) : '–', m.scanned ? m.negPer.toFixed(2) : '–'].concat(multi ? [last] : []); };
       var rows = R.profile.rows.map(function (r) {
         return [{ node: entLink('kasserer', r.id) }, r.count, { t: pct(r.retShare), bad: r.flags.retShare }, { t: fmt(r.avg), bad: r.flags.avg },
-          r.scanned ? { t: r.lapperPer.toFixed(2), bad: r.flags.lapperPer } : '–', r.scanned ? { t: r.negPer.toFixed(2), bad: r.flags.negPer } : '–'];
+          r.scanned ? { t: r.lapperPer.toFixed(2), bad: r.flags.lapperPer } : '–', r.scanned ? { t: r.negPer.toFixed(2), bad: r.flags.negPer } : '–'].concat(multi ? [L.channelLabel(r.ch) + (r.refCh === null ? ' (mot butikk)' : '')] : []);
       });
-      rows.push(['Butikksnitt', st.count, pct(st.retShare), fmt(st.avg), st.scanned ? st.lapperPer.toFixed(2) : '–', st.scanned ? st.negPer.toFixed(2) : '–']);
-      ui.ctlProfile.appendChild(tbl(['Kasserer', 'Salg', 'Returandel', 'Snitt kr', 'Manuell pant/salg', 'Korr./salg'], rows));
-      ui.ctlProfile.appendChild(hintEl('Rødt = minst ' + ctlCfg.profFactor + '× butikksnittet (snitt også under 1/' + ctlCfg.profFactor + '). Returandel = salg med negativ sum, uten rene pantereturer. Manuell pant = pantelapper med kode 99. Den og korrigeringer (negative varelinjer utenom pant) krever skanning. Kasserere med færre enn ' + ctlCfg.profMin + ' bonger vurderes ikke.' + (ctlCfg.profShrink ? ' Tallene krympes mot butikksnittet (som ' + ctlCfg.profShrink + ' bonger), så få bonger gir små utslag.' : '')));
+      if (multi) chs.forEach(function (c) { rows.push(avgRow('Snitt ' + c.label.toLowerCase(), c, plur(c.cashiers, 'kasserer', 'kasserere'))); });
+      rows.push(avgRow('Butikksnitt', st, ''));
+      ui.ctlProfile.appendChild(tbl(['Kasserer', 'Salg', 'Returandel', 'Snitt kr', 'Manuell pant/salg', 'Korr./salg'].concat(multi ? ['Kanal'] : []), rows));
+      var refTxt = multi && ctlCfg.profChannel ? 'snittet i kassererens kanal (der hen har flest salg; kanal med én kasserer: butikksnittet)' : 'butikksnittet';
+      ui.ctlProfile.appendChild(hintEl('Rødt = minst ' + ctlCfg.profFactor + '× ' + refTxt + ' (snitt også under 1/' + ctlCfg.profFactor + '). Returandel = salg med negativ sum, uten rene pantereturer. Manuell pant = pantelapper med kode 99. Den og korrigeringer (negative varelinjer utenom pant, og linjer merket slettet) krever skanning. Kasserere med færre enn ' + ctlCfg.profMin + ' bonger vurderes ikke.' + (ctlCfg.profShrink ? ' Tallene krympes mot snittet (som ' + ctlCfg.profShrink + ' bonger), så få bonger gir små utslag.' : '')));
     }
     // funn
     if (!R.findings.length) ui.ctlFindings.appendChild(hintEl('Ingen funn med gjeldende terskler.'));
@@ -2610,6 +2863,8 @@
         sub(l.dr ? 'Årsak: ' + L.reasonName(l.dr) : cw ? 'Kampanje (' + cw + ')' : 'Uten årsak', '', l.dr || cw ? '' : 'kvr-rc-hit');
       }
     });
+    // linjer CW har merket «(SLETTET)»: beløpet er ikke med i Totalt
+    L.delLines(sc).forEach(function (l) { row(l.n, fmt(l.a), 'kvr-rc-del' + (L.lappKind(l) === 'mach' ? ' kvr-rc-hit' : ''), [tag('slettet')], l.c + ' ' + l.n + ' (SLETTET)'); });
     if (sc.trunc) box.appendChild(el('div', { class: 'kvr-rc-meta', text: '… ' + sc.trunc + ' linjer til er ikke lest' }));
     sep();
     if (typeof sc.rnd === 'number' && sc.rnd) row('Øreavrunding', fmt(sc.rnd));
@@ -3700,7 +3955,7 @@
         checks: { falseRet: { coverage: C.falseRet.coverage, lineCheck: C.falseRet.lineCheck }, voids: C.voids ? { applicable: C.voids.applicable, coverage: C.voids.coverage } : null, campaign: C.disc && C.disc.camp ? { pending: C.disc.camp.pending, items: C.disc.camp.items.filter(function (e) { return e.status; }).map(function (e) { return { c: e.c, name: e.name, rateText: e.rateText, n: e.n, status: e.status }; }) } : null, numbers: C.numbers, ledger: C.ledger ? { lines: C.ledger.lines, pay: C.ledger.pay, vat: C.ledger.vat, refs: C.ledger.refs } : null },
         findings: C.findings, ranked: ranked, explain: explain, notes: noteSub,
         cashiers: L.rankCashiers(R.items, R.anom, weights, C.profile, C.cashierExtra).slice(0, 10),
-        compare: compareForReport(R), failedScans: failedRecs.length,
+        compare: compareForReport(R), failedScans: failedRecs.length, cwxRun: R.cwxRun || null,
         evidence: { files: files.map(function (f) { return { id: f.id, path: f.path, hash: f.hash, src: f.src }; }), byId: byId, missing: missing, requested: pick.length, cappedFrom: ranked.length },
         settingsJson: JSON.stringify({ app: 'kvitteringshenter', v: 1, ctl: R.ctl, anom: R.anomCfg, weights: weights, customRules: customRules, groups: rules, stores: manualStores, camp: campDec, keynav: keyNav }, null, 2) + '\n'
       };
@@ -3974,14 +4229,24 @@
     cwFree.addEventListener('input', function () { cw.free = cwFree.value.trim(); summary(); });
     cwBong.addEventListener('input', function () { cw.bong = cwBong.value.trim(); summary(); });
     ui.cwStatus = el('div', { class: 'kvr-note', text: '' });
+    ui.cwxBtn = btn('Hent tilleggsdata fra CW', fetchCwExtra);
+    ui.cwxStop = btn('Stopp', stopCwExtra);
+    ui.cwxStop.disabled = true;
+    ui.cwxStatus = el('div', { class: 'kvr-note', role: 'status', text: '' });
+    ui.cwxInfo = el('div', {});
     var secCw = section('cw', 'Søk i hele journalen (CW)', [
       el('div', { class: 'kvr-row' }, [field('Dato fra', cwFrom), field('Dato til', cwTo)]),
       field('Butikker (navn som i CW)', cwQ), ui.cwStores, ui.cwCount,
       field('Medlemsnr', cwMem), field('Lojalitets-ID', cwLoy),
       el('div', { class: 'kvr-row' }, [field('Vare (EAN/navn)', cwFree), field('Bongnr', cwBong)]),
       el('div', { class: 'kvr-row' }, [btn('Søk i CW', cwSearch, 'kvr-primary'), btn('Nullstill CW', cwReset)]),
-      ui.cwStatus
+      ui.cwStatus,
+      el('b', { class: 'kvr-subh', text: 'Tilleggsdata fra CW' }),
+      hintEl('Bruker CWs egne filtre på søket du har i listen: hvert innholdsvalg (slettet vare, manuell rabatt, makulert, manuell pant, retur, parkert, spør pris, Vensafe …), betalingsmåtene kontant, kontant tilbake, kreditt, kupong, tilgodelapp, gavekort og finansiering, og systembongene (innlogging, utlogging, bongkopi, bankavstemming, dagsavslutning). Ett søk om gangen med pause mellom, omtrent 20 søk. Filtrene og søket ditt settes tilbake etterpå. Fritekst brukes ikke.'),
+      el('div', { class: 'kvr-row' }, [ui.cwxBtn, ui.cwxStop]),
+      ui.cwxStatus, ui.cwxInfo
     ], true);
+    renderCwx();
 
     // --- Dato og tid (lokalt)
     var quick = el('div', { class: 'kvr-chips' });
@@ -4057,7 +4322,7 @@
     var secScan = section('scan', 'Skanning', [
       el('div', { class: 'kvr-row' }, [ui.scanBtn, ui.stopBtn]),
       el('div', { class: 'kvr-row' }, [ui.retryBtn, btn('Tøm cache', function () {
-        clearScan(); anomMap = {}; ctlRes = null; checkState.at = null; failedRecs = []; lastRetry = null; syncRetry(); say('Cache tømt.'); apply(); renderControl();
+        clearScan(); anomMap = {}; ctlRes = null; checkState.at = null; failedRecs = []; lastRetry = null; syncRetry(); say('Cache tømt: skannet innhold og tilleggsdata fra CW.'); apply(); renderControl(); renderCwx();
       })]),
       el('div', { class: 'kvr-hint', text: 'Hver kvittering åpnes i CWs visningsfelt (ca. 1 s) og leses derfra. Pluginen sender aldri egne kall mot CWs API. Ikke bruk CWs søk eller liste mens skanningen går. Chrome bremser faner som er skjult, så la Lindbak stå i et eget vindu ved siden av det du jobber i.' })
     ], true);
@@ -4180,9 +4445,12 @@
     secLapp.classList.add('kvr-span');
     var secLines = fold(section('lines', 'Linjer, kort og spesialbetaling', [ui.ctlLines]), 'lines', false);
     var secAcct = fold(section('acct', 'Bongregnskap og referanser', [ui.ctlAcct]), 'acct', false);
+    ui.ctlCwx = el('div', {});
+    var secCwx = fold(section('cwx', 'Fra CW: innhold, innlogging, bongkopi og svinn', [ui.ctlCwx]), 'cwx', true);
+    secCwx.classList.add('kvr-span');
     ui.ctlSum = el('div', { class: 'kvr-ctlsum' });
     ui.ctlJump = el('div', { class: 'kvr-chips' });
-    [['profile', 'Profil'], ['findings', 'Funn'], ['pantbal', 'Pant'], ['recon', 'Avstemming'], ['diff', 'Differanse'], ['numbers', 'Tall'], ['disc', 'Rabatt'], ['member', 'Medlem'], ['misc', 'Pris m.m.'], ['lapp', 'Pantelapper'], ['lines', 'Linjer m.m.'], ['acct', 'Regnskap']].forEach(function (j) {
+    [['profile', 'Profil'], ['findings', 'Funn'], ['pantbal', 'Pant'], ['recon', 'Avstemming'], ['diff', 'Differanse'], ['numbers', 'Tall'], ['disc', 'Rabatt'], ['member', 'Medlem'], ['misc', 'Pris m.m.'], ['lapp', 'Pantelapper'], ['lines', 'Linjer m.m.'], ['acct', 'Regnskap'], ['cwx', 'Fra CW']].forEach(function (j) {
       ui.ctlJump.appendChild(btn(j[1], function () {
         var n = openSec(j[0]);
         if (n) n.scrollIntoView({ block: 'start', behavior: 'smooth' });
@@ -4191,7 +4459,7 @@
     ui.ctlSumCard = section('ctlsum', 'Resultat', [ui.ctlSum, ui.ctlJump,
       el('div', { class: 'kvr-row' }, [btn('Fold sammen alle', function () { foldAll(false); }, 'kvr-sm'), btn('Åpne alle', function () { foldAll(true); }, 'kvr-sm'), btn('⤢ Større', function () { ui.wideBtn.click(); }, 'kvr-sm')]),
       hintEl('Tabellene har mange kolonner. «Større» (⤢ i tittelfeltet) gir plass til alle: Stor dokker panelet til høyre og beholder lista i Lindbak, Full bruker hele skjermen.')]);
-    ui.ctlResults = el('div', { class: 'kvr-pane' }, [secProfile, secFindings, secPantBal, secRecon, secDiff, secNum, secDisc, secMember, secMisc, secLapp, secLines, secAcct]);
+    ui.ctlResults = el('div', { class: 'kvr-pane' }, [secProfile, secFindings, secCwx, secPantBal, secRecon, secDiff, secNum, secDisc, secMember, secMisc, secLapp, secLines, secAcct]);
     ui.noteList = el('div', { class: 'kvr-list' });
     ui.noteCount = hintEl('');
     var kn = check('Tastaturflyt: ↑ ↓ bytter bong, N notat, M velg/fjern', function () { keyNav = kn.box.checked; store(K.keynav, keyNav); });
@@ -4535,7 +4803,7 @@
     if (g.__kvBound) {
       if (refreshStoreMap()) { optsKey = ''; renderCwStores(); }
       var tb = g.tbody && g.tbody[0];
-      if (tb && !scanning && tb.querySelectorAll(':scope > tr').length !== tb.querySelectorAll(':scope > tr > td.kvr-cb-cell').length) apply();
+      if (tb && !scanning && !cwRun && tb.querySelectorAll(':scope > tr').length !== tb.querySelectorAll(':scope > tr > td.kvr-cb-cell').length) apply();
       return;
     }
     grid = g;
@@ -4544,7 +4812,7 @@
     var wb = document.getElementById('kvr-boot');
     if (wb && !bootShown) wb.remove();
     installGridClicks();
-    g.bind('dataBound', function () { boundCount++; setTimeout(apply, 0); });
+    g.bind('dataBound', function () { boundCount++; if (!cwRun) setTimeout(apply, 0); });   // mens tilleggsdata hentes, viser listen CWs filtrerte søk
     apply();
     renderCwStores();
   }
@@ -4555,7 +4823,7 @@
       if (db) {
         mem = await readAll(db, 'kv');
         var raw = await readAll(db, 'scan');
-        Object.keys(raw).forEach(function (k) { if (raw[k] && (raw[k].v >= 2 && raw[k].v <= 9)) scanMap[k] = raw[k]; });
+        Object.keys(raw).forEach(function (k) { if (raw[k] && (raw[k].v >= 2 && raw[k].v <= 9)) scanMap[k] = L.splitDeleted(raw[k]); });   // «(SLETTET)»-linjer i eldre skanninger
       }
       migrateLocal();
       rules = L.sanitizeRules(store(K.rules));
@@ -4595,6 +4863,7 @@
         store(K.discmig, 1);
       }
       scope = sanitizeScope(store(K.scope));
+      cwx = sanitizeCwx(store(K.cwx));
       folder.handle = store(K.folder);
       if (!folder.handle || typeof folder.handle.queryPermission !== 'function') folder.handle = null;
       folder.at = Number(store(K.folderAt)) || 0;
