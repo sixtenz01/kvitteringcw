@@ -43,14 +43,18 @@ var grid={tbody:[tbody],dataSource:{data:function(){return data},view:function()
   dataItem:function(tr){var u=tr.getAttribute('data-uid');return data.filter(function(d){return d.uid===u})[0]},
   select:function(tr){if(!arguments.length)return cur?[cur]:[];cur=tr;var d=grid.dataItem(tr);setTimeout(function(){document.getElementById('rc').contentDocument.body.innerHTML=receipts[d.transactionId]||''},5)},
   clearSelection:function(){cur=null}};
-function render(list){data=list.map(function(r){return Object.assign({uid:'u'+(++uid)},r)});
-  tbody.innerHTML=data.map(function(d){return '<tr data-uid="'+d.uid+'"><td data-field="endDateTime">'+d.endDateTime+'</td><td>'+d.totalAmount+'</td></tr>'}).join('');
+// __rawUtc: rådata i UTC uten tidssone (to timer før), cellen viser norsk tid, som i CW
+function utc(s){var d=new Date(Date.UTC(+s.slice(0,4),+s.slice(5,7)-1,+s.slice(8,10),+s.slice(11,13)-2,+s.slice(14,16)));return d.toISOString().slice(0,16).replace('T',' ')}
+function render(list){data=list.map(function(r){var o=Object.assign({uid:'u'+(++uid),__shown:r.__shown||r.endDateTime},r);if(window.__rawUtc&&!r.__shown)o.endDateTime=utc(r.endDateTime);return o});
+  tbody.innerHTML=data.map(function(d){return '<tr data-uid="'+d.uid+'"><td data-field="endDateTime">'+d.__shown.slice(8,10)+'.'+d.__shown.slice(5,7)+'.'+d.__shown.slice(0,4)+' '+d.__shown.slice(11,16)+'</td><td>'+d.totalAmount+'</td></tr>'}).join('');
   handlers.forEach(function(f){f()})}
 function iso(v){var m=/^(\\d{2})\\.(\\d{2})\\.(\\d{4})$/.exec(v||'');return m?m[3]+'-'+m[2]+'-'+m[1]:''}
 function val(sel){return document.querySelector(sel).value}
 // tidsfeltene som Kendo TimePicker: widgeten har verdien, feltet viser teksten
 function tp(id){var n=document.getElementById(id),v=null;n.__w={kendoTimePicker:{value:function(x){if(!arguments.length)return v;v=x;n.value=x?String(x.getHours()).padStart(2,'0')+':'+String(x.getMinutes()).padStart(2,'0'):''},trigger:function(){}}}}
 tp('fromTimePicker');tp('toTimePicker');
+// som CWs ng-blur="vm.onFromTimeChange()": feiler når tiden er tom
+window.__cwCrash=0;['fromTimePicker','toTimePicker'].forEach(function(id){var n=document.getElementById(id);n.addEventListener('blur',function(){if(!n.__w.kendoTimePicker.value())window.__cwCrash++})});
 // datofeltene som Kendo DatePicker: som i CW følger søket widgetens verdi, ikke teksten i feltet
 var p2=function(x){return String(x).padStart(2,'0')};
 function dp(id){var n=document.getElementById(id),v=null;n.__w={kendoDatePicker:{value:function(x){if(!arguments.length)return v;v=x;n.value=x?p2(x.getDate())+'.'+p2(x.getMonth()+1)+'.'+x.getFullYear():''},trigger:function(){}}};
@@ -68,6 +72,7 @@ function search(){
   // som CW: listen tømmes eller tegnes på nytt med gamle data (dataBound) før svaret kommer
   var slow=window.__slow||0;
   if(!slow){setTimeout(function(){render(list.slice(0,CAP))},20);return}
+  if(window.__stray&&!document.getElementById('stray')){var x=document.createElement('div');x.id='stray';x.className='page-loading-bar';x.style.cssText='width:40px;height:10px';document.body.appendChild(x)}
   if(window.__noMask)setTimeout(function(){render(data.map(function(d){var c=Object.assign({},d);delete c.uid;return c}))},10);
   else{mask.style.display='block';setTimeout(function(){render([])},10)}
   setTimeout(function(){mask.style.display='none';render(list.slice(0,CAP))},slow)}
@@ -85,9 +90,10 @@ search();
   const browser = await chromium.launch();
   const page = await (await browser.newContext({ locale: 'nb-NO' })).newPage();
   const errors = [], apiCalls = [];
+  page.on('console', (m) => { if (/DBG/.test(m.text())) console.log(m.text()); });
   page.on('pageerror', (e) => { errors.push(e.message); console.error('PAGEERROR', e.message); });
   await page.addInitScript((cap) => { window.__kvrScan = { settle: 0, poll: 10 }; window.__kvrParts = { pause: 0, timeout: 1500, cut: cap }; window.__kvrCwx = { pause: 0, timeout: 1500 };
-    window.__kvrSearch = { poll: 20, quiet: 100, empty: 300, same: 400, misfit: 600, stuck: 1000 }; }, CAP);
+    window.__kvrSearch = { poll: 20, quiet: 100, empty: 300, same: 400, misfit: 600, stuck: 1000, busyOk: 200 }; }, CAP);
   await page.route('https://chainweb.coop.no/**', (r) => {
     if (r.request().url().indexOf('/Api/') !== -1) { apiCalls.push(r.request().url()); return r.fulfill({ status: 404, body: '' }); }
     return r.fulfill({ contentType: 'text/html; charset=utf-8', body: html });
@@ -130,7 +136,9 @@ search();
     ['2026-09-22', '00:00', '23:59']
   ]);
   assert.ok(parts.every((x) => x.free === '' && x.mn === '' && x.mx === ''), 'aldri fritekst, og beløp brukes ikke');
-  assert.deepStrictEqual(await sums(), before, 'søket ditt er satt tilbake');
+  // tomme tidsfelt blir hele døgnet: CW feiler på tom tid
+  const after = Object.assign({}, before, { a: '00:00', b: '23:59' });
+  assert.deepStrictEqual(await sums(), after, 'søket ditt er satt tilbake');
   assert.match(await status(), /^Ferdig\. 11 søk, 170 bonger hentet, 170 skannet\. Samlet grunnlag: 170 bonger\./);
   const info = await txt('[data-sec=parts]');
   assert.match(info, /Samlet grunnlag: 170 bonger fra 3 dager \(2026-09-20 – 2026-09-22\), 170 skannet\./);
@@ -171,23 +179,25 @@ search();
   assert.match(await txt('[data-sec=parts]'), /CW svarte ikke på søket for 2026-09-21 \(hele dagen\) innen 2 s\. Kjøringen ble stoppet; start igjen senere, så fortsetter den der den slapp\./);
   const s4 = (await page.evaluate(() => window.__searches)).map((x) => x.f);
   assert.deepStrictEqual(s4, ['2026-09-20', '2026-09-21', before.from.split('.').reverse().join('-')], 'ingen søk etter stoppen, bortsett fra søket tilbake');
-  assert.deepStrictEqual(await sums(), before);
+  assert.deepStrictEqual(await sums(), after);
   await page.evaluate(() => { window.__noAnswerDay = ''; });
   await run();
   assert.deepStrictEqual((await page.evaluate(() => window.__searches)).slice(0, -1).map((x) => x.f).filter((v, i, a) => a.indexOf(v) === i), ['2026-09-21', '2026-09-22'], 'fortsetter der den slapp');
 
   // CW tømmer listen og viser et lastesymbol før svaret kommer: pluginen venter på svaret
-  for (const mode of [{ slow: 300 }, { slow: 300, noMask: true }]) {
+  for (const mode of [{ slow: 300 }, { slow: 300, noMask: true }, { slow: 300, rawUtc: true }, { slow: 300, stray: true }]) {
     await page.click('[data-sec=parts] button:text-is("Tøm samlet grunnlag")');
     await page.click('.kvr-modal button:text-is("Tøm")');
-    await page.evaluate((m) => { window.__slow = m.slow; window.__noMask = !!m.noMask; }, mode);
+    await page.evaluate((m) => { window.__slow = m.slow; window.__noMask = !!m.noMask; window.__rawUtc = !!m.rawUtc; window.__stray = !!m.stray; const x = document.getElementById('stray'); if (x) x.remove(); }, mode);
+    const tRun = Date.now();
     await run();
+    assert.ok(Date.now() - tRun < 30000, 'ingen lang venting: ' + (Date.now() - tRun) + ' ms ' + JSON.stringify(mode));
     assert.match(await status(), /^Ferdig\. 11 søk, 170 bonger hentet\. Samlet grunnlag: 170 bonger\.$/, JSON.stringify(mode) + ' ' + await txt('[data-sec=parts]'));
     assert.strictEqual((await idb('kvr.arch.v1:2026-09-21')).rows.length, 120);
     assert.strictEqual((await idb('kvr.arch.v1:2026-09-20')).rows.length, 30);
     assert.match(await txt('[data-sec=parts]'), /Søkene mot CW \(11\)/);
   }
-  await page.evaluate(() => { window.__slow = 0; window.__noMask = false; });
+  await page.evaluate(() => { window.__slow = 0; window.__noMask = false; window.__rawUtc = false; window.__stray = false; const x = document.getElementById('stray'); if (x) x.remove(); });
 
   // datofeltet blir ikke satt (CW viser en annen dag): stopper uten å lagre
   await page.click('[data-sec=parts] button:text-is("Tøm samlet grunnlag")');
@@ -197,6 +207,7 @@ search();
   assert.match(await txt('[data-sec=parts]'), /Listen i CW viser 2026-09-22, ikke 2026-09-20 som det ble søkt på\. Datofeltet i CW ble trolig ikke satt/);
   assert.strictEqual(await idb('kvr.arch.v1:2026-09-20'), undefined, 'ingenting lagret');
 
+  assert.strictEqual(await page.evaluate(() => window.__cwCrash), 0, 'CW fikk aldri tom tid');
   assert.deepStrictEqual(apiCalls, []);
   assert.deepStrictEqual(errors, []);
   await browser.close();

@@ -610,51 +610,58 @@
     if (w) { w.value(m === null ? null : new Date(2000, 0, 1, Math.floor(m / 60), m % 60)); if (typeof w.trigger === 'function') w.trigger('change'); }
     setInputValue(node, m === null ? '' : L.hhmm(m));
   }
-  function restoreTime(node, o) {
+  // Var feltet tomt, settes det til hele døgnet (00:00 eller 23:59): CWs egen kode feiler når tiden blir tom
+  // («Cannot read properties of null (reading 'valueOf')»), og da kunne forrige klokkeslett blitt hengende i søket.
+  function restoreTime(node, o, empty) {
     if (!node) return;
-    var w = timeWidget(node);
+    var w = timeWidget(node), has = w ? !!o.w : !!o.t;
+    if (!has) { setTime(node, empty); return; }
     if (w) { w.value(o.w); if (typeof w.trigger === 'function') w.trigger('change'); }
     setInputValue(node, o.t);
   }
   function partSay(t) { if (ui.partStatus) ui.partStatus.textContent = t; say(t); }
 
-  // Lastesymboler som er synlige nå (utenfor panelet). Brukes for å se når CW begynner og slutter å laste.
+  // Lastesymboler som er synlige nå (utenfor panelet og utenfor radene i listen). Brukes for å se når CW begynner og slutter å laste.
   function loaders() {
     return Array.prototype.filter.call(document.querySelectorAll('.k-loading-mask, .k-loading-image, .k-loading, [class*="loading"], [class*="spinner"]'), function (n) {
-      if (n.closest('#kvr-panel')) return false;
-      var cs = window.getComputedStyle(n);
-      return n.getClientRects().length > 0 && cs.display !== 'none' && cs.visibility !== 'hidden' && Number(cs.opacity) > 0;
+      if (n.closest('#kvr-panel') || n.closest('tbody')) return false;
+      var cs = window.getComputedStyle(n), r = n.getBoundingClientRect();
+      return r.width >= 8 && r.height >= 8 && cs.display !== 'none' && cs.visibility !== 'hidden' && Number(cs.opacity) > 0;
     });
   }
   function domRows() { var tb = grid && grid.tbody && grid.tbody[0]; return tb ? tb.querySelectorAll(':scope > tr').length : 0; }
 
   // Søk med CWs Oppdater-knapp. Pausen før er minst like lang som forrige søk tok, så CW aldri jobber mer enn halve tiden for oss.
-  // Svaret regnes som ferdig først når CW har begynt å laste (dataBound eller et nytt lastesymbol), lastesymbolet er borte,
-  // og listen har stått stille en stund. En liste som er lik den før søket, eller som ikke passer med «expect» (dato og klokkeslett),
-  // brukes først etter lengre stillhet, med mindre CW viste et lastesymbol som forsvant igjen. Uten svar innen timeout: null.
+  // Svaret regnes som ferdig når CW har begynt å laste (dataBound eller et nytt lastesymbol), lastesymbolet er borte,
+  // og listen har stått stille en stund etterpå. En liste som er lik den før søket, eller som ikke passer med «expect»
+  // (dato og klokkeslett), brukes først etter lengre stillhet. Et lastesymbol som blir stående, holder ikke søket i gang:
+  // når listen er ny, passer og har stått stille i 2 s, eller symbolet har stått i 20 s, ses det bort fra det. Uten svar innen timeout: null.
   async function searchNow(pause, timeout, expect) {
     var b = document.querySelector('[ng-click="vm.applyFilters()"]');
     if (!b) throw new Error('Fant ikke OPPDATER-knappen i CW.');
     await wait(Math.max(pause, pause > 0 ? lastSearchMs : 0));
     var hook = window.__kvrSearch || {}, opt = function (k, d) { return hook[k] >= 0 ? hook[k] : d; };
-    var poll = opt('poll', 150) || 150, quietN = opt('quiet', 600), emptyN = opt('empty', 4000), sameN = opt('same', 6000), misfitN = opt('misfit', 15000), stuckN = opt('stuck', 30000);
+    var poll = opt('poll', 150) || 150, quietN = opt('quiet', 600), emptyN = opt('empty', 4000), sameN = opt('same', 6000), misfitN = opt('misfit', 15000), stuckN = opt('stuck', 20000), busyOkN = opt('busyOk', 2000);
     var before = boundCount, key0 = idsKey(gridData()), t0 = Date.now(), old = loaders(), started = false, sawBusy = false, busySince = 0, last = null, since = 0;
     b.click();
     while (Date.now() - t0 < timeout) {
       await wait(poll);
       var now = Date.now(), busy = loaders().some(function (n) { return old.indexOf(n) === -1; });
       if (busy && !busySince) busySince = now;
-      if (!busy) { if (busySince) sawBusy = true; busySince = 0; }
-      // et lastesymbol som aldri forsvinner (for eksempel en fast animasjon) holder ikke søket i gang for alltid
+      if (!busy && busySince) { sawBusy = true; busySince = 0; since = now; }   // stillheten regnes fra lastesymbolet forsvant
       if (busy && now - busySince > stuckN) { old = old.concat(loaders()); busy = false; busySince = 0; }
       if (busy || boundCount > before) started = true;
-      if (!started || busy) { last = null; continue; }
-      var data = gridData(), key = idsKey(data) + '#' + data.length + '#' + domRows();
+      if (!started) continue;
+      var data = gridData(), ids = idsKey(data), key = ids + '#' + data.length + '#' + domRows();
       if (key !== last) { last = key; since = now; continue; }
-      var quiet = now - since, fresh = sawBusy || idsKey(data) !== key0;
-      if (quiet < (data.length ? quietN : emptyN)) continue;
-      if (!fresh && quiet < sameN) continue;
-      if (expect && !expect(data) && quiet < misfitN) continue;
+      var quiet = now - since;
+      if (busy) {
+        if (!(boundCount > before && data.length && ids !== key0 && quiet >= busyOkN && (!expect || expect(data)))) continue;
+      } else {
+        if (quiet < (data.length ? quietN : emptyN)) continue;
+        if (!sawBusy && ids === key0 && quiet < sameN) continue;
+        if (expect && quiet < misfitN && !expect(data)) continue;
+      }
       lastSearchMs = since - t0;
       return data;
     }
@@ -683,13 +690,21 @@
     if (w) { w.value(o.w); if (typeof w.trigger === 'function') w.trigger('change'); }
     setInputValue(node, o.t);
   }
-  // Dato og minutt for raden slik CW har dem (uten pluginens tidsforskyvning).
-  function rowDT(d) { return L.parseDT(L.localDT(plain(d).endDateTime)); }
-  function rowDay(d) { return rowDT(d).date; }
-  function onDay(data, day) { return !data.length || data.filter(function (d) { return rowDay(d) === day; }).length >= data.length * 0.9; }
-  function fitsWin(data, win) {
+  // Dato og klokkeslett for radene slik CW viser dem (cellen i listen; ellers rådata i norsk tid), uten pluginens tidsforskyvning.
+  // Rader uten lesbar tid teller ikke.
+  function cwTimes(data) {
+    var tb = grid && grid.tbody && grid.tbody[0], byUid = {};
+    if (tb) Array.prototype.forEach.call(tb.querySelectorAll(':scope > tr[data-uid]'), function (tr) { byUid[tr.getAttribute('data-uid')] = tr; });
+    return data.map(function (d) {
+      var tr = d && d.uid ? byUid[d.uid] : null, c = tr && tr.querySelector('td[data-field="endDateTime"]'), shown = c ? L.parseCellDT(c.textContent) : '';
+      var p = L.parseDT(shown || L.localDT(plain(d).endDateTime));
+      return { date: p.date, min: L.mins(p.time) };
+    }).filter(function (x) { return x.date; });
+  }
+  function onDay(tm, day) { return !tm.length || tm.filter(function (x) { return x.date === day; }).length >= tm.length * 0.9; }
+  function fitsWin(tm, win) {
     if (win.from === L.DAY_WINDOW.from && win.to === L.DAY_WINDOW.to) return true;
-    return data.every(function (d) { var t = L.mins(rowDT(d).time); return t === null || (t >= win.from - 1 && t <= win.to + 1); });
+    return tm.every(function (x) { return x.min === null || (x.min >= win.from - 1 && x.min <= win.to + 1); });
   }
 
   async function partSearch(day, win, ti) {
@@ -698,7 +713,7 @@
     setDate(q('#toDatePicker'), day);
     setTime(ti.from, win.from);
     setTime(ti.to, win.to);
-    var t0 = Date.now(), rows = await searchNow(bulk.pause, bulk.timeout, function (data) { return onDay(data, day) && fitsWin(data, win); });
+    var t0 = Date.now(), rows = await searchNow(bulk.pause, bulk.timeout, function (data) { var tm = cwTimes(data); return onDay(tm, day) && fitsWin(tm, win); });
     bulk.log.push({ day: day, win: L.timeText(win), n: rows ? rows.length : null, ms: Date.now() - t0 });
     if (bulk.log.length > 400) bulk.log.shift();
     return rows;
@@ -706,7 +721,7 @@
 
   function wrongDay(rows, day) {
     var seen = {};
-    rows.forEach(function (d) { var x = rowDay(d); if (x && x !== day) seen[x] = 1; });
+    cwTimes(rows).forEach(function (x) { if (x.date !== day) seen[x.date] = 1; });
     return 'Listen i CW viser ' + (Object.keys(seen).sort().slice(0, 3).join(', ') || 'andre datoer') + ', ikke ' + day + ' som det ble søkt på. Datofeltet i CW ble trolig ikke satt, eller CW var ikke ferdig med å laste. Kjøringen ble stoppet; ingenting fra dette søket er lagret.';
   }
 
@@ -741,7 +756,7 @@
           // tilleggsdata for hele dagen først (søk uten klokkeslett, så CWs filtre ett om gangen), så rask skanning vet hvilke bonger som trengs
           var whole = await partSearch(day, L.DAY_WINDOW, ti);
           if (whole === null) { errors.push('CW svarte ikke på søket for ' + day + ' før tilleggsdata. Kjøringen ble stoppet.'); break; }
-          if (!onDay(whole, day)) { errors.push(wrongDay(whole, day)); break; }
+          if (!onDay(cwTimes(whole), day)) { errors.push(wrongDay(whole, day)); break; }
           bulk.inExtra = true;
           await fetchCwExtra();
           bulk.inExtra = false;
@@ -756,7 +771,7 @@
           partSay('Henter ' + day + ' (' + L.timeText(p.win) + ')' + (days.length > 1 ? ', dag ' + (di + 1) + ' av ' + days.length : '') + '…');
           var rows = await partSearch(day, p.win, ti);
           if (rows === null) { errors.push('CW svarte ikke på søket for ' + day + ' (' + L.timeText(p.win) + ') innen ' + Math.round(bulk.timeout / 1000) + ' s. Kjøringen ble stoppet; start igjen senere, så fortsetter den der den slapp.'); bulk.stop = true; break; }
-          if (!onDay(rows, day)) { errors.push(wrongDay(rows, day)); bulk.stop = true; break; }
+          if (!onDay(cwTimes(rows), day)) { errors.push(wrongDay(rows, day)); bulk.stop = true; break; }
           var got = collect();
           // CW har brukt tidsfeltene når alle bongene ligger i vinduet (ett minutts slingring). Ellers kuttes dagen, og det står hvorfor.
           if (p.depth > 0 && got.some(function (r) { return !inWindow(r.item, p.win); })) {
@@ -796,8 +811,8 @@
       restoreDate(td, orig.dTo);
       if (si.min) setInputValue(si.min, orig.min);
       if (si.max) setInputValue(si.max, orig.max);
-      restoreTime(ti.from, orig.tFrom);
-      restoreTime(ti.to, orig.tTo);
+      restoreTime(ti.from, orig.tFrom, L.DAY_WINDOW.from);
+      restoreTime(ti.to, orig.tTo, L.DAY_WINDOW.to);
       if (ft && orig.free) setInputValue(ft, orig.free);
       var back = await searchNow(bulk.pause, bulk.timeout);
       if (back === null) errors.push('CW svarte ikke da søket ditt skulle hentes tilbake. Trykk Oppdater i CW.');
