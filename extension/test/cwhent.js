@@ -121,7 +121,7 @@ search();
   const page = await (await browser.newContext({ locale: 'nb-NO' })).newPage();
   const errors = [], apiCalls = [];
   page.on('pageerror', (e) => { errors.push(e.message); console.error('PAGEERROR', e.message); });
-  await page.addInitScript(() => { window.__kvrScan = { settle: 0, poll: 10 }; window.__kvrCwx = { pause: 0, timeout: 1500 }; });
+  await page.addInitScript(() => { window.__kvrScan = { settle: 0, poll: 10 }; window.__kvrCwx = { pause: 0, timeout: 1500 }; window.__kvrSearch = { poll: 20, quiet: 100, empty: 300, same: 400, misfit: 600, stuck: 1000 }; });
   await page.route('https://chainweb.coop.no/**', (r) => {
     if (r.request().url().indexOf('/Api/') !== -1) { apiCalls.push(r.request().url()); return r.fulfill({ status: 404, body: '' }); }
     return r.fulfill({ contentType: 'text/html; charset=utf-8', body: html });

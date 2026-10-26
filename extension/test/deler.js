@@ -51,19 +51,31 @@ function val(sel){return document.querySelector(sel).value}
 // tidsfeltene som Kendo TimePicker: widgeten har verdien, feltet viser teksten
 function tp(id){var n=document.getElementById(id),v=null;n.__w={kendoTimePicker:{value:function(x){if(!arguments.length)return v;v=x;n.value=x?String(x.getHours()).padStart(2,'0')+':'+String(x.getMinutes()).padStart(2,'0'):''},trigger:function(){}}}}
 tp('fromTimePicker');tp('toTimePicker');
+// datofeltene som Kendo DatePicker: som i CW følger søket widgetens verdi, ikke teksten i feltet
+var p2=function(x){return String(x).padStart(2,'0')};
+function dp(id){var n=document.getElementById(id),v=null;n.__w={kendoDatePicker:{value:function(x){if(!arguments.length)return v;v=x;n.value=x?p2(x.getDate())+'.'+p2(x.getMonth()+1)+'.'+x.getFullYear():''},trigger:function(){}}};
+  n.__set=function(t){var m=/^(\d{2})\.(\d{2})\.(\d{4})$/.exec(t);n.__w.kendoDatePicker.value(m?new Date(+m[3],+m[2]-1,+m[1]):null)}}
+dp('fromDatePicker');dp('toDatePicker');
+function dval(id){var w=document.getElementById(id).__w.kendoDatePicker.value();return w?w.getFullYear()+'-'+p2(w.getMonth()+1)+'-'+p2(w.getDate()):''}
+var mask=document.createElement('div');mask.className='k-loading-mask';mask.style.cssText='position:absolute;width:20px;height:20px;display:none';document.getElementById('g').appendChild(mask);
 function search(){
-  var f=iso(val('#fromDatePicker')),t=iso(val('#toDatePicker')),mn=val('[ng-model="vm.selectedFilters.sumMin"]'),mx=val('[ng-model="vm.selectedFilters.sumMax"]'),a=val('#fromTimePicker'),b=val('#toTimePicker');
+  var f=dval('fromDatePicker'),t=dval('toDatePicker'),mn=val('[ng-model="vm.selectedFilters.sumMin"]'),mx=val('[ng-model="vm.selectedFilters.sumMax"]'),a=val('#fromTimePicker'),b=val('#toTimePicker');
   window.__searches.push({f:f,t:t,a:a,b:b,mn:mn,mx:mx,free:val('#freetextSearchInput')});
   if(window.__ignoreTime){a='';b=''}
   var list=ALL.filter(function(r){var d=r.endDateTime.slice(0,10),h=r.endDateTime.slice(11,16);return (!f||d>=f)&&(!t||d<=t)&&(!a||h>=a)&&(!b||h<=b)&&(mn===''||r.totalAmount>=Number(mn))&&(mx===''||r.totalAmount<=Number(mx))});
   list.sort(function(a,b){return a.endDateTime<b.endDateTime?1:-1});
   if(window.__noAnswerDay&&f===window.__noAnswerDay)return;
-  setTimeout(function(){render(list.slice(0,CAP))},20)}
+  // som CW: listen tømmes eller tegnes på nytt med gamle data (dataBound) før svaret kommer
+  var slow=window.__slow||0;
+  if(!slow){setTimeout(function(){render(list.slice(0,CAP))},20);return}
+  if(window.__noMask)setTimeout(function(){render(data.map(function(d){var c=Object.assign({},d);delete c.uid;return c}))},10);
+  else{mask.style.display='block';setTimeout(function(){render([])},10)}
+  setTimeout(function(){mask.style.display='none';render(list.slice(0,CAP))},slow)}
 document.getElementById('apply').addEventListener('click',search);
 function mk(list){return{each:function(fn){list.forEach(function(e,i){fn.call(e,i,e)})},eq:function(i){return mk([list[i]])},data:function(n){var e=list[0];return e&&e.__w?e.__w[n]:undefined}}}
 document.getElementById('g').__w={kendoGrid:grid};
 window.jQuery=function(a){return typeof a==='string'?mk([]):mk([a])};
-document.querySelector('#fromDatePicker').value='22.09.2026';document.querySelector('#toDatePicker').value='22.09.2026';
+document.querySelector('#fromDatePicker').__set('22.09.2026');document.querySelector('#toDatePicker').__set('22.09.2026');
 document.querySelector('[ng-model="vm.selectedFilters.sumMin"]').value='5';
 search();
 </script></body></html>`;
@@ -74,7 +86,8 @@ search();
   const page = await (await browser.newContext({ locale: 'nb-NO' })).newPage();
   const errors = [], apiCalls = [];
   page.on('pageerror', (e) => { errors.push(e.message); console.error('PAGEERROR', e.message); });
-  await page.addInitScript((cap) => { window.__kvrScan = { settle: 0, poll: 10 }; window.__kvrParts = { pause: 0, timeout: 1500, cut: cap }; window.__kvrCwx = { pause: 0, timeout: 1500 }; }, CAP);
+  await page.addInitScript((cap) => { window.__kvrScan = { settle: 0, poll: 10 }; window.__kvrParts = { pause: 0, timeout: 1500, cut: cap }; window.__kvrCwx = { pause: 0, timeout: 1500 };
+    window.__kvrSearch = { poll: 20, quiet: 100, empty: 300, same: 400, misfit: 600, stuck: 1000 }; }, CAP);
   await page.route('https://chainweb.coop.no/**', (r) => {
     if (r.request().url().indexOf('/Api/') !== -1) { apiCalls.push(r.request().url()); return r.fulfill({ status: 404, body: '' }); }
     return r.fulfill({ contentType: 'text/html; charset=utf-8', body: html });
@@ -162,6 +175,27 @@ search();
   await page.evaluate(() => { window.__noAnswerDay = ''; });
   await run();
   assert.deepStrictEqual((await page.evaluate(() => window.__searches)).slice(0, -1).map((x) => x.f).filter((v, i, a) => a.indexOf(v) === i), ['2026-09-21', '2026-09-22'], 'fortsetter der den slapp');
+
+  // CW tømmer listen og viser et lastesymbol før svaret kommer: pluginen venter på svaret
+  for (const mode of [{ slow: 300 }, { slow: 300, noMask: true }]) {
+    await page.click('[data-sec=parts] button:text-is("Tøm samlet grunnlag")');
+    await page.click('.kvr-modal button:text-is("Tøm")');
+    await page.evaluate((m) => { window.__slow = m.slow; window.__noMask = !!m.noMask; }, mode);
+    await run();
+    assert.match(await status(), /^Ferdig\. 11 søk, 170 bonger hentet\. Samlet grunnlag: 170 bonger\.$/, JSON.stringify(mode) + ' ' + await txt('[data-sec=parts]'));
+    assert.strictEqual((await idb('kvr.arch.v1:2026-09-21')).rows.length, 120);
+    assert.strictEqual((await idb('kvr.arch.v1:2026-09-20')).rows.length, 30);
+    assert.match(await txt('[data-sec=parts]'), /Søkene mot CW \(11\)/);
+  }
+  await page.evaluate(() => { window.__slow = 0; window.__noMask = false; });
+
+  // datofeltet blir ikke satt (CW viser en annen dag): stopper uten å lagre
+  await page.click('[data-sec=parts] button:text-is("Tøm samlet grunnlag")');
+  await page.click('.kvr-modal button:text-is("Tøm")');
+  await page.evaluate(() => { ['fromDatePicker', 'toDatePicker'].forEach((id) => { const w = document.getElementById(id).__w.kendoDatePicker, v0 = w.value; w.__v = new Date(2026, 8, 22); w.value = function (x) { if (!arguments.length) return w.__v; }; w.__v0 = v0; }); });
+  await run();
+  assert.match(await txt('[data-sec=parts]'), /Listen i CW viser 2026-09-22, ikke 2026-09-20 som det ble søkt på\. Datofeltet i CW ble trolig ikke satt/);
+  assert.strictEqual(await idb('kvr.arch.v1:2026-09-20'), undefined, 'ingenting lagret');
 
   assert.deepStrictEqual(apiCalls, []);
   assert.deepStrictEqual(errors, []);
