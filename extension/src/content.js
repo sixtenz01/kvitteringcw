@@ -632,6 +632,7 @@
       if (cm === undefined || cm === m || Date.now() - t0 > 3000) break;
       await wait(50);
     }
+    if (m !== null && cm === null) return;   // CW har ikke fått verdien: blur ville bare få CW til å feile; kontrollen etterpå sier fra
     node.dispatchEvent(new Event('blur', { bubbles: true }));
     await wait(settleMs());
   }
@@ -645,16 +646,6 @@
     }
     setInputValue(node, m === null ? '' : L.hhmm(m), true);
     await commitTime(node, m);
-  }
-  // Var feltet tomt, settes det til hele døgnet (00:00 eller 23:59): CWs egen kode feiler når tiden blir tom,
-  // og da kunne forrige klokkeslett blitt hengende i søket.
-  async function restoreTime(node, o, empty) {
-    if (!node) return;
-    var w = timeWidget(node), has = w ? !!o.w : !!o.t;
-    if (!has) { await setTime(node, empty); return; }
-    if (w) { w.value(o.w); if (typeof w.trigger === 'function') w.trigger('change'); }
-    setInputValue(node, o.t, true);
-    await commitTime(node, w ? copyMin(o.w) : L.mins(String(o.t || '').trim()));
   }
   function partSay(t) { if (ui.partStatus) ui.partStatus.textContent = t; say(t); }
 
@@ -782,30 +773,40 @@
       return mn instanceof Date || mx instanceof Date ? f(mn) + ' til ' + f(mx) : '';
     } catch (e) { return ''; }
   }
+  function shownVal(v, time) { return v === null || v === '' ? 'tomt' : time ? L.hhmm(v) : v; }
+  // Fra- og til-tid, ett felt om gangen: til først når til-feltet er tomt (CWs onFromTimeChange leser begge og feiler på tom)
+  // eller fra ellers havner etter til.
+  async function putTimes(ti, from, to, base) {
+    if (!ti.from || !ti.to) return;
+    var curTo = readTime(ti.to);
+    if (curTo === null || from > curTo) { await setTime(ti.to, to, base); await setTime(ti.from, from, base); }
+    else { await setTime(ti.from, from, base); await setTime(ti.to, to, base); }
+  }
+  // Avvik mellom ønsket og faktisk klokkeslett: i feltet, og i CWs egen kopi når den kan leses.
+  function timeBad(ti, from, to) {
+    var bad = [];
+    if (!ti.from || !ti.to) return bad;
+    if (readTime(ti.from) !== from) bad.push({ f: 'Fra-tid', n: ti.from, v: shownVal(readTime(ti.from), true), t: 1 });
+    if (readTime(ti.to) !== to) bad.push({ f: 'Til-tid', n: ti.to, v: shownVal(readTime(ti.to), true), t: 1 });
+    [['Fra-tid i CW', ti.from, from], ['Til-tid i CW', ti.to, to]].forEach(function (x) {
+      var c = cwCopy(x[1]), cm = c === undefined ? undefined : copyMin(c);
+      if (cm !== undefined && cm !== x[2]) bad.push({ f: x[0], n: x[1], v: shownVal(cm, true), t: 1 });
+    });
+    return bad;
+  }
+
   async function setRange(day, win, ti) {
     var fd = document.querySelector('#fromDatePicker'), td = document.querySelector('#toDatePicker');
     var dp = day.split('-'), bases = [null, new Date(+dp[0], +dp[1] - 1, +dp[2]), new Date(2000, 0, 1)];
     var put = async function (base) {
       inOrder(day, readDate(td), function () { setDate(fd, day); }, function () { setDate(td, day); });
-      if (!ti.from || !ti.to) return;
-      // til først når til-feltet er tomt (CWs onFromTimeChange leser begge og feiler på tom) eller fra ellers havner etter til
-      var curTo = readTime(ti.to);
-      if (curTo === null || win.from > curTo) { await setTime(ti.to, win.to, base); await setTime(ti.from, win.from, base); }
-      else { await setTime(ti.from, win.from, base); await setTime(ti.to, win.to, base); }
+      await putTimes(ti, win.from, win.to, base);
     };
-    var shown = function (v, time) { return v === null || v === '' ? 'tomt' : time ? L.hhmm(v) : v; };
     var check = function () {
       var bad = [];
-      if (fd && readDate(fd) !== day) bad.push({ f: 'Dato fra', n: fd, v: shown(readDate(fd)) });
-      if (td && readDate(td) !== day) bad.push({ f: 'Dato til', n: td, v: shown(readDate(td)) });
-      if (ti.from && ti.to && readTime(ti.from) !== win.from) bad.push({ f: 'Fra-tid', n: ti.from, v: shown(readTime(ti.from), true), t: 1 });
-      if (ti.from && ti.to && readTime(ti.to) !== win.to) bad.push({ f: 'Til-tid', n: ti.to, v: shown(readTime(ti.to), true), t: 1 });
-      [['Fra-tid i CW', ti.from, win.from], ['Til-tid i CW', ti.to, win.to]].forEach(function (x) {
-        if (!x[1] || !ti.from || !ti.to) return;
-        var c = cwCopy(x[1]), cm = c === undefined ? undefined : copyMin(c);
-        if (cm !== undefined && cm !== x[2]) bad.push({ f: x[0], n: x[1], v: shown(cm, true), t: 1 });
-      });
-      return bad;
+      if (fd && readDate(fd) !== day) bad.push({ f: 'Dato fra', n: fd, v: shownVal(readDate(fd)) });
+      if (td && readDate(td) !== day) bad.push({ f: 'Dato til', n: td, v: shownVal(readDate(td)) });
+      return bad.concat(timeBad(ti, win.from, win.to));
     };
     // dagens dato først; bare når klokkeslettet ikke godtas, prøves søkedagen og en fast dato. Hver to ganger (andre gang ligger den andre grensen riktig).
     var bad = [];
@@ -926,9 +927,12 @@
       if (si.min) setInputValue(si.min, orig.min);
       if (si.max) setInputValue(si.max, orig.max);
       var oMin = function (o, empty) { var v = o.w; return v instanceof Date ? v.getHours() * 60 + v.getMinutes() : (L.mins(String(o.t || '').trim()) === null ? empty : L.mins(String(o.t).trim())); };
-      var rFrom = function () { return restoreTime(ti.from, orig.tFrom, L.DAY_WINDOW.from); }, rTo = function () { return restoreTime(ti.to, orig.tTo, L.DAY_WINDOW.to); };
-      var cTo = readTime(ti.to);
-      if (cTo !== null && oMin(orig.tFrom, L.DAY_WINDOW.from) > cTo) { await rTo(); await rFrom(); } else { await rFrom(); await rTo(); }
+      // klokkeslettene settes tilbake som under hentingen (dagens dato, ett felt om gangen) og kontrolleres; tomt blir 00:00 og 23:59
+      if (ti.from && ti.to) {
+        var tf = oMin(orig.tFrom, L.DAY_WINDOW.from), tt = oMin(orig.tTo, L.DAY_WINDOW.to), tb = [];
+        for (var ri = 0; ri < 2; ri++) { await putTimes(ti, tf, tt); tb = timeBad(ti, tf, tt); if (!tb.length) break; }
+        if (tb.length) errors.push('Klokkeslettene i CW ble ikke satt tilbake til ' + L.hhmm(tf) + '–' + L.hhmm(tt) + ' (' + tb.map(function (b) { return b.f + ' viser ' + b.v; }).join(', ') + '). Sjekk fra- og til-tid i CW før du søker selv.');
+      }
       if (ft && orig.free) setInputValue(ft, orig.free);
       var back = await searchNow(bulk.pause, bulk.timeout);
       if (back === null) errors.push('CW svarte ikke da søket ditt skulle hentes tilbake. Trykk Oppdater i CW.');

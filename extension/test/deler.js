@@ -216,6 +216,27 @@ search();
   await page.evaluate(() => { window.__slow = 0; window.__noMask = false; window.__rawUtc = false; window.__stray = false; window.__noAngular = false; window.__kvrSearch.settle = 0; const x = document.getElementById('stray'); if (x) x.remove(); });
 
   assert.strictEqual(await page.evaluate(() => window.__clamped || 0), 0, 'fra ble aldri satt etter til');
+  // søket ditt hadde klokkeslett, og widgeten har en gammel dato: settes tilbake riktig og uten at CW feiler
+  await page.click('[data-sec=parts] button:text-is("Tøm samlet grunnlag")');
+  await page.click('.kvr-modal button:text-is("Tøm")');
+  await page.evaluate(() => {
+    const f = document.getElementById('fromTimePicker').__w.kendoTimePicker, t = document.getElementById('toTimePicker').__w.kendoTimePicker;
+    t.min(null); f.value(new Date(2000, 0, 1, 8, 0)); t.value(new Date(2000, 0, 1, 20, 0)); f.trigger('change'); t.trigger('change');
+  });
+  await page.waitForTimeout(100);
+  const crash0 = await page.evaluate(() => window.__cwCrash);
+  await run();
+  const back = await sums();
+  assert.deepStrictEqual([back.a, back.b], ['08:00', '20:00'], 'klokkeslettene ditt er satt tilbake');
+  assert.deepStrictEqual(await page.evaluate(() => window.__filt), { a: '08:00', b: '20:00' }, 'CW søker med klokkeslettene dine');
+  assert.ok(!/ble ikke satt tilbake/.test(await txt('[data-sec=parts]')));
+  assert.strictEqual(await page.evaluate(() => window.__cwCrash), crash0, 'CW feilet ikke ved tilbakestillingen');
+  await page.evaluate(() => {
+    const f = document.getElementById('fromTimePicker').__w.kendoTimePicker, t = document.getElementById('toTimePicker').__w.kendoTimePicker;
+    f.value(new Date()); f.value().setHours(0, 0, 0, 0); t.min(null); const d = new Date(); d.setHours(23, 59, 0, 0); t.value(d); f.trigger('change'); t.trigger('change');
+  });
+  await page.waitForTimeout(100);
+
 
   // CW viser en annen dag enn den som ble søkt på: stopper uten å lagre
   await page.click('[data-sec=parts] button:text-is("Tøm samlet grunnlag")');
