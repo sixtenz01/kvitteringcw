@@ -331,11 +331,10 @@
     ms.trigger('change');
   }
 
-  // Datoene settes som i «Hent og skann i deler»: via datovelgeren, i trygg rekkefølge, og CW får verdien før feltet forlates.
+  // Datoene settes som i «Hent og skann i deler»: via datovelgeren, og CW får verdiene før feltene forlates.
   async function cwSearch() {
     var q = function (sel) { return document.querySelector(sel); }, fd = q('#fromDatePicker'), td = q('#toDatePicker');
-    if (cw.dateFrom && cw.dateTo) await inOrder(cw.dateFrom, readDate(td), function () { return setDate(fd, cw.dateFrom); }, function () { return setDate(td, cw.dateTo); });
-    else { if (cw.dateFrom) await setDate(fd, cw.dateFrom); if (cw.dateTo) await setDate(td, cw.dateTo); }
+    await setFields([{ node: fd, kind: 'd', v: cw.dateFrom }, { node: td, kind: 'd', v: cw.dateTo }]);
     var nums = Object.keys(cw.stores).filter(function (k) { return cw.stores[k]; });
     if (nums.length) setCwStores(nums);
     if (cw.members) setInputValue(q('[ng-model="vm.selectedFilters.memberNumber"]'), cw.members);
@@ -557,7 +556,7 @@
   function saveArchiveIndex() {
     store(K.arch, { v: 1, days: Object.keys(arch.days).sort().map(function (d) { var x = arch.days[d]; return { day: d, at: x.at, done: x.done, cut: x.cut, fv: x.fv || 1, n: x.rows.length }; }) });
   }
-  var ARCH_FETCH = 2;   // hentemåte: 2 = klokkeslett bekreftet av CW (3.38.6)
+  var ARCH_FETCH = 3;   // hentemåte: 3 = dato og klokkeslett satt slik CWs kode forventer, søket kontrollert (3.39.2)
   function addArchive(day, items) {
     var e = arch.days[day] || (arch.days[day] = { day: day, at: 0, done: false, cut: 0, fv: 1, rows: [] });
     var have = {};
@@ -639,30 +638,49 @@
     var m = typeof v === 'string' ? /^(\d{4}-\d{2}-\d{2})|^(\d{2})\.(\d{2})\.(\d{4})/.exec(v.trim()) : null;
     return m ? (m[1] || m[4] + '-' + m[3] + '-' + m[2]) : undefined;
   }
-  // Feltet forlates (blur, som kjører CWs vm.on…Change) først når CWs kopi har verdien (høyst 3 s), eller etter en fast pause
-  // når kopien ikke kan leses. Er kopien fortsatt tom, sendes ikke blur: CW ville bare feile; kontrollen etterpå sier fra.
-  async function commitField(node, want) {
-    var t0 = Date.now(), c;
+  // Dato og klokkeslett settes slik CWs kode forventer. CW søker på selectedFilters.fromDate/toDate (dato + klokkeslett), som bare
+  // oppdateres når et felt forlates (ng-blur: vm.onFromDateChange, onToDateChange, onFromTimeChange, onToTimeChange). Funksjonene leser
+  // CWs kopier (k-ng-model) av alle fire feltene, sammenligner fra mot til og «retter» den andre siden når fra er etter til, og
+  // onFromTimeChange/onToTimeChange feiler når den andre tiden er tom. Derfor settes alle verdiene først, så ventes det til CWs kopier
+  // har dem (eller en fast pause når de ikke kan leses), og først da forlates feltene, ett om gangen. Da er fra aldri etter til når CW
+  // sammenligner, og hver side av søket får sin dato og sitt klokkeslett. Klokkeslettene får samme dato (i dag), så CWs sammenligning
+  // av hele tidspunkter blir en sammenligning av klokkeslett.
+  function fieldValue(f, base) {
+    if (f.kind === 't') { var d = new Date(base.getTime()); d.setHours(Math.floor(f.v / 60), f.v % 60, 0, 0); return d; }
+    var p = String(f.v).split('-');
+    return new Date(+p[0], +p[1] - 1, +p[2]);
+  }
+  function fieldIs(f, c) { return f.kind === 't' ? copyMin(c) === f.v : copyDay(c) === f.v; }
+  async function setFields(fields, reverse) {
+    fields = fields.filter(function (f) { return f.node && f.v !== null && f.v !== undefined && f.v !== ''; });
+    var base = new Date();
+    base.setHours(0, 0, 0, 0);
+    fields.forEach(function (f) {
+      var w = f.kind === 't' ? timeWidget(f.node) : dateWidget(f.node);
+      if (w) { w.value(fieldValue(f, base)); if (typeof w.trigger === 'function') w.trigger('change'); }
+      setInputValue(f.node, f.kind === 't' ? L.hhmm(f.v) : noDate(f.v), true);
+    });
+    var t0 = Date.now();
     await wait(settleMs());
-    for (;;) {
-      c = cwCopy(node);
-      if (c === undefined || want(c) || Date.now() - t0 > 3000) break;
-      await wait(50);
+    while (Date.now() - t0 < 3000 && fields.some(function (f) { var c = cwCopy(f.node); return c !== undefined && !fieldIs(f, c); })) await wait(50);
+    var order = reverse ? fields.slice().reverse() : fields;
+    for (var i = 0; i < order.length; i++) {
+      var c = cwCopy(order[i].node);
+      if (c !== undefined && !fieldIs(order[i], c)) continue;   // CW har ikke fått verdien: blur ville bare få CW til å feile eller sette den tilbake
+      order[i].node.dispatchEvent(new Event('blur', { bubbles: true }));
+      await wait(Math.min(settleMs(), 60));
     }
-    if ((c === null || c === '') && !want(c)) return;
-    node.dispatchEvent(new Event('blur', { bubbles: true }));
     await wait(settleMs());
   }
-  async function setTime(node, m, base) {
-    if (!node) return;
-    var w = timeWidget(node);
-    if (w) {
-      var d = null;
-      if (m !== null) { d = base ? new Date(base.getTime()) : new Date(); d.setHours(Math.floor(m / 60), m % 60, 0, 0); }
-      w.value(d); if (typeof w.trigger === 'function') w.trigger('change');
-    }
-    setInputValue(node, m === null ? '' : L.hhmm(m), true);
-    await commitField(node, function (c) { return copyMin(c) === m; });
+  // Det CW faktisk søker på (vm.selectedFilters.fromDate/toDate), som «ÅÅÅÅ-MM-DD TT:MM»; null når det ikke kan leses.
+  function cwFilters() {
+    try {
+      var $ = jq(), n = document.querySelector('#fromDatePicker'), w = $ && n ? $(n).data('kendoDatePicker') : null, sc = w && w.$angular_scope;
+      var f = sc && typeof sc.$eval === 'function' ? sc.$eval('vm.selectedFilters') : null;
+      if (!f || typeof f !== 'object') return null;
+      var at = function (v) { var m = /^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})/.exec(String(v || '')); return m ? m[1] + ' ' + m[2] : null; };
+      return { from: at(f.fromDate), to: at(f.toDate) };
+    } catch (e) { return null; }
   }
   function partSay(t) { if (ui.partStatus) ui.partStatus.textContent = t; say(t); }
 
@@ -732,22 +750,6 @@
 
   // Dato i CWs datofelt: via Kendo-widgeten når den finnes, og i feltet (dd.mm.åååå), som når du skriver selv.
   function dateWidget(node) { var $ = jq(), w = $ && node ? $(node).data('kendoDatePicker') : null; return w && typeof w.value === 'function' ? w : null; }
-  // Som klokkeslettene: CW har ng-blur="vm.onFromDateChange()" og leser sin kopi (vm.fromDate), så blur sendes når kopien har datoen.
-  async function setDate(node, day) {
-    if (!node) return;
-    var w = dateWidget(node), p = String(day || '').split('-');
-    if (w && p.length === 3) { w.value(new Date(+p[0], +p[1] - 1, +p[2])); if (typeof w.trigger === 'function') w.trigger('change'); }
-    setInputValue(node, noDate(day), true);
-    await commitField(node, function (c) { return copyDay(c) === day; });
-  }
-  async function restoreDate(node, o) {
-    if (!node) return;
-    var w = dateWidget(node), want = w ? copyDay(o.w) : copyDay(o.t);
-    if (w) { w.value(o.w); if (typeof w.trigger === 'function') w.trigger('change'); }
-    setInputValue(node, o.t, true);
-    if (want) await commitField(node, function (c) { return copyDay(c) === want; });   // tom dato: ingen blur (CW ville feile)
-  }
-
   // Dato og klokkeslett for radene slik CW viser dem (cellen i listen; ellers rådata i norsk tid), uten pluginens tidsforskyvning.
   // Rader uten lesbar tid teller ikke.
   function cwTimes(data) {
@@ -779,10 +781,6 @@
     if (w) return v instanceof Date ? v.getHours() * 60 + v.getMinutes() : null;
     return L.mins(String(node.value || '').trim());
   }
-  // Fra og til settes i en rekkefølge der fra aldri er etter til underveis: ellers kan CWs felt nekte verdien eller tømme feltet.
-  async function inOrder(from, curTo, setFrom, setTo) {
-    if (from !== null && from !== '' && curTo !== null && curTo !== '' && from > curTo) { await setTo(); await setFrom(); } else { await setFrom(); await setTo(); }
-  }
   // Grensene CW har satt på et dato- eller tidsfelt, for feilmeldingen.
   function limits(node) {
     var $ = jq(), w = $ && node ? ($(node).data('kendoTimePicker') || $(node).data('kendoDatePicker')) : null, f = function (d) {
@@ -797,15 +795,6 @@
     } catch (e) { return ''; }
   }
   function shownVal(v, time) { return v === null || v === '' ? 'tomt' : time ? L.hhmm(v) : v; }
-  // Fra- og til-tid, ett felt om gangen. Til først (CWs onFromTimeChange leser til-tiden, feiler når den er tom, og i CW ble til-tiden
-  // satt til 00:00 når fra ble satt først ved neste dag), unntatt når ny til-tid er før nåværende fra-tid. «flip» bytter rekkefølgen.
-  async function putTimes(ti, from, to, base, flip) {
-    if (!ti.from || !ti.to) return;
-    var curFrom = readTime(ti.from), toFirst = curFrom === null || to >= curFrom || readTime(ti.to) === null;
-    if (flip) toFirst = !toFirst;
-    if (toFirst) { await setTime(ti.to, to, base); await setTime(ti.from, from, base); }
-    else { await setTime(ti.from, from, base); await setTime(ti.to, to, base); }
-  }
   // Avvik mellom ønsket og faktisk klokkeslett: i feltet, og i CWs egen kopi når den kan leses.
   function timeBad(ti, from, to) {
     var bad = [];
@@ -821,11 +810,8 @@
 
   async function setRange(day, win, ti) {
     var fd = document.querySelector('#fromDatePicker'), td = document.querySelector('#toDatePicker');
-    var dp = day.split('-'), bases = [null, new Date(+dp[0], +dp[1] - 1, +dp[2]), new Date(2000, 0, 1)];
-    var put = async function (base, flip) {
-      await inOrder(day, readDate(td), function () { return setDate(fd, day); }, function () { return setDate(td, day); });
-      await putTimes(ti, win.from, win.to, base, flip);
-    };
+    var fields = [{ node: fd, kind: 'd', v: day }, { node: td, kind: 'd', v: day }];
+    if (ti.from && ti.to) fields.push({ node: ti.from, kind: 't', v: win.from }, { node: ti.to, kind: 't', v: win.to });
     var check = function () {
       var bad = [];
       if (fd && readDate(fd) !== day) bad.push({ f: 'Dato fra', n: fd, v: shownVal(readDate(fd)) });
@@ -834,15 +820,18 @@
         var c = x[1] ? cwCopy(x[1]) : undefined, cd = c === undefined ? undefined : copyDay(c);
         if (cd !== undefined && cd !== day) bad.push({ f: x[0], n: x[1], v: shownVal(cd) });
       });
-      return bad.concat(timeBad(ti, win.from, win.to));
+      bad = bad.concat(timeBad(ti, win.from, win.to));
+      var sf = cwFilters(), timed = ti.from && ti.to;
+      if (sf) {
+        var wf = day + ' ' + L.hhmm(win.from), wt = day + ' ' + L.hhmm(win.to);
+        if (sf.from !== null && (timed ? sf.from !== wf : sf.from.slice(0, 10) !== day)) bad.push({ f: 'Søket i CW fra', v: sf.from, t: 1 });
+        if (sf.to !== null && (timed ? sf.to !== wt : sf.to.slice(0, 10) !== day)) bad.push({ f: 'Søket i CW til', v: sf.to, t: 1 });
+      }
+      return bad;
     };
-    // dagens dato først; bare når klokkeslettet ikke godtas, prøves motsatt rekkefølge, så søkedagen og en fast dato
     var bad = [];
-    for (var i = 0; i < bases.length; i++) {
-      for (var k = 0; k < 3; k++) { await put(bases[i], k === 1); bad = check(); if (!bad.length) return; }
-      if (!bad.some(function (b) { return b.t; })) break;
-    }
-    var lim = bad.map(function (b) { var l = limits(b.n); return l ? b.f.toLowerCase() + ' ' + l : ''; }).filter(Boolean);
+    for (var k = 0; k < 3; k++) { await setFields(fields, k === 1); bad = check(); if (!bad.length) return; }
+    var lim = bad.map(function (b) { var l = b.n ? limits(b.n) : ''; return l ? b.f.toLowerCase() + ' ' + l : ''; }).filter(Boolean);
     throw new Error('CW godtok ikke ' + day + ' ' + L.timeText(win) + ' i søkefeltene (' + bad.map(function (b) { return b.f + ' viser ' + b.v; }).join(', ') +
       (lim.length ? '; grenser i CW: ' + lim.join(', ') : '') + '). Kjøringen ble stoppet; ingenting fra dette søket er lagret.');
   }
@@ -950,17 +939,27 @@
     var stopped = bulk.stop && !errors.length;
     // tilbake til søket ditt
     try {
-      var oDay = function (o) { var v = o.w; return v instanceof Date ? v.getFullYear() + '-' + p2(v.getMonth() + 1) + '-' + p2(v.getDate()) : ((/(\d{2})\.(\d{2})\.(\d{4})/.exec(o.t || '') || []).slice(1).reverse().join('-')); };
-      await inOrder(oDay(orig.dFrom), readDate(td), function () { return restoreDate(fd, orig.dFrom); }, function () { return restoreDate(td, orig.dTo); });
+      // dato og klokkeslett settes tilbake samme vei som under hentingen og kontrolleres; tomme klokkeslett blir 00:00 og 23:59
+      var oDay = function (o) { var v = o.w; return v instanceof Date ? copyDay(v) : copyDay(o.t || '') || ''; };
+      var oMin = function (o, empty) { var v = o.w; return v instanceof Date ? v.getHours() * 60 + v.getMinutes() : (L.mins(String(o.t || '').trim()) === null ? empty : L.mins(String(o.t).trim())); };
+      var df = oDay(orig.dFrom), dt = oDay(orig.dTo), tf = oMin(orig.tFrom, L.DAY_WINDOW.from), tt = oMin(orig.tTo, L.DAY_WINDOW.to);
+      var back3 = [{ node: fd, kind: 'd', v: df }, { node: td, kind: 'd', v: dt }];
+      if (ti.from && ti.to) back3.push({ node: ti.from, kind: 't', v: tf }, { node: ti.to, kind: 't', v: tt });
+      var restoreBad = function () {
+        var b = timeBad(ti, tf, tt), sf = cwFilters();
+        if (df && readDate(fd) !== df) b.push({ f: 'Dato fra', v: shownVal(readDate(fd)) });
+        if (dt && readDate(td) !== dt) b.push({ f: 'Dato til', v: shownVal(readDate(td)) });
+        if (sf && ti.from && ti.to && df && dt) {
+          if (sf.from !== null && sf.from !== df + ' ' + L.hhmm(tf)) b.push({ f: 'Søket i CW fra', v: sf.from });
+          if (sf.to !== null && sf.to !== dt + ' ' + L.hhmm(tt)) b.push({ f: 'Søket i CW til', v: sf.to });
+        }
+        return b;
+      };
+      var tb = [];
+      for (var ri = 0; ri < 3; ri++) { await setFields(back3, ri === 1); tb = restoreBad(); if (!tb.length) break; }
+      if (tb.length) errors.push('Søket ditt i CW ble ikke satt helt tilbake (' + tb.map(function (b) { return b.f + ' viser ' + b.v; }).join(', ') + '). Sjekk dato og fra- og til-tid i CW før du søker selv.');
       if (si.min) setInputValue(si.min, orig.min);
       if (si.max) setInputValue(si.max, orig.max);
-      var oMin = function (o, empty) { var v = o.w; return v instanceof Date ? v.getHours() * 60 + v.getMinutes() : (L.mins(String(o.t || '').trim()) === null ? empty : L.mins(String(o.t).trim())); };
-      // klokkeslettene settes tilbake som under hentingen (dagens dato, ett felt om gangen) og kontrolleres; tomt blir 00:00 og 23:59
-      if (ti.from && ti.to) {
-        var tf = oMin(orig.tFrom, L.DAY_WINDOW.from), tt = oMin(orig.tTo, L.DAY_WINDOW.to), tb = [];
-        for (var ri = 0; ri < 3; ri++) { await putTimes(ti, tf, tt, null, ri === 1); tb = timeBad(ti, tf, tt); if (!tb.length) break; }
-        if (tb.length) errors.push('Klokkeslettene i CW ble ikke satt tilbake til ' + L.hhmm(tf) + '–' + L.hhmm(tt) + ' (' + tb.map(function (b) { return b.f + ' viser ' + b.v; }).join(', ') + '). Sjekk fra- og til-tid i CW før du søker selv.');
-      }
       if (ft && orig.free) setInputValue(ft, orig.free);
       var back = await searchNow(bulk.pause, bulk.timeout);
       if (back === null) errors.push('CW svarte ikke da søket ditt skulle hentes tilbake. Trykk Oppdater i CW.');
