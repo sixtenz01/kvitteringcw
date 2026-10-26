@@ -61,7 +61,9 @@ tp('fromTimePicker');tp('toTimePicker');
 // som CWs ng-blur="vm.onFromTimeChange()": leser kopiene (feiler når en er tom), setter søkets fra-tid og til-tidens min (dagens dato)
 window.__cwCrash=0;
 document.getElementById('fromTimePicker').addEventListener('blur',function(){var f=model.fromTimePicker,t=model.toTimePicker;
-  if(!f||!t){window.__cwCrash++;return}filt.a=hm2(f);var m=new Date();m.setHours(f.getHours(),f.getMinutes(),0,0);document.getElementById('toTimePicker').__w.kendoTimePicker.min(m)});
+  if(!f||!t){window.__cwCrash++;return}filt.a=hm2(f);
+  // __pull: CW trekker til-tiden til fra-tiden (rekkefølgen må byttes for at begge skal stå)
+  if(window.__pull){var tw=document.getElementById('toTimePicker').__w.kendoTimePicker;tw.value(new Date(f.getTime()));model.toTimePicker=tw.value();filt.b=hm2(f)}var m=new Date();m.setHours(f.getHours(),f.getMinutes(),0,0);document.getElementById('toTimePicker').__w.kendoTimePicker.min(m)});
 document.getElementById('toTimePicker').addEventListener('blur',function(){filt.b=hm2(model.toTimePicker)});
 // Angular lar kopien leses (scope().$eval), som i CW med debug-info; __noAngular slår det av
 window.angular={element:function(n){return{scope:function(){return window.__noAngular?undefined:{$eval:function(ex){return ex==='vm.fromTime'?model.fromTimePicker:ex==='vm.toTime'?model.toTimePicker:undefined}}}}}};
@@ -201,10 +203,10 @@ search();
   assert.deepStrictEqual((await page.evaluate(() => window.__searches)).slice(0, -1).map((x) => x.f).filter((v, i, a) => a.indexOf(v) === i), ['2026-09-21', '2026-09-22'], 'fortsetter der den slapp');
 
   // CW tømmer listen og viser et lastesymbol før svaret kommer: pluginen venter på svaret
-  for (const mode of [{ slow: 300 }, { slow: 300, noMask: true }, { slow: 300, rawUtc: true }, { slow: 300, stray: true }, { slow: 300, noAngular: true }]) {
+  for (const mode of [{ slow: 300 }, { slow: 300, noMask: true }, { slow: 300, rawUtc: true }, { slow: 300, stray: true }, { slow: 300, noAngular: true }, { slow: 300, pull: true }]) {
     await page.click('[data-sec=parts] button:text-is("Tøm samlet grunnlag")');
     await page.click('.kvr-modal button:text-is("Tøm")');
-    await page.evaluate((m) => { window.__slow = m.slow; window.__noMask = !!m.noMask; window.__rawUtc = !!m.rawUtc; window.__stray = !!m.stray; window.__noAngular = !!m.noAngular; if (m.noAngular) window.__kvrSearch.settle = 60; const x = document.getElementById('stray'); if (x) x.remove(); }, mode);
+    await page.evaluate((m) => { window.__slow = m.slow; window.__noMask = !!m.noMask; window.__rawUtc = !!m.rawUtc; window.__stray = !!m.stray; window.__noAngular = !!m.noAngular; window.__pull = !!m.pull; if (m.noAngular) window.__kvrSearch.settle = 60; const x = document.getElementById('stray'); if (x) x.remove(); }, mode);
     const tRun = Date.now();
     await run();
     assert.ok(Date.now() - tRun < 30000, 'ingen lang venting: ' + (Date.now() - tRun) + ' ms ' + JSON.stringify(mode));
@@ -213,7 +215,7 @@ search();
     assert.strictEqual((await idb('kvr.arch.v1:2026-09-20')).rows.length, 30);
     assert.match(await txt('[data-sec=parts]'), /Søkene mot CW \(11\)/);
   }
-  await page.evaluate(() => { window.__slow = 0; window.__noMask = false; window.__rawUtc = false; window.__stray = false; window.__noAngular = false; window.__kvrSearch.settle = 0; const x = document.getElementById('stray'); if (x) x.remove(); });
+  await page.evaluate(() => { window.__slow = 0; window.__noMask = false; window.__rawUtc = false; window.__stray = false; window.__noAngular = false; window.__pull = false; window.__kvrSearch.settle = 0; const x = document.getElementById('stray'); if (x) x.remove(); });
 
   assert.strictEqual(await page.evaluate(() => window.__clamped || 0), 0, 'fra ble aldri satt etter til');
   // søket ditt hadde klokkeslett, og widgeten har en gammel dato: settes tilbake riktig og uten at CW feiler

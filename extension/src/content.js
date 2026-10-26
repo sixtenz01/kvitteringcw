@@ -770,16 +770,19 @@
     if (!w) return '';
     try {
       var mn = typeof w.min === 'function' ? w.min() : w.options && w.options.min, mx = typeof w.max === 'function' ? w.max() : w.options && w.options.max;
+      // lik min og maks er Kendos standard (ingen grense)
+      if (mn instanceof Date && mx instanceof Date && mn.getHours() === mx.getHours() && mn.getMinutes() === mx.getMinutes()) return '';
       return mn instanceof Date || mx instanceof Date ? f(mn) + ' til ' + f(mx) : '';
     } catch (e) { return ''; }
   }
   function shownVal(v, time) { return v === null || v === '' ? 'tomt' : time ? L.hhmm(v) : v; }
-  // Fra- og til-tid, ett felt om gangen: til først når til-feltet er tomt (CWs onFromTimeChange leser begge og feiler på tom)
-  // eller fra ellers havner etter til.
-  async function putTimes(ti, from, to, base) {
+  // Fra- og til-tid, ett felt om gangen. Til først (CWs onFromTimeChange leser til-tiden, feiler når den er tom, og i CW ble til-tiden
+  // satt til 00:00 når fra ble satt først ved neste dag), unntatt når ny til-tid er før nåværende fra-tid. «flip» bytter rekkefølgen.
+  async function putTimes(ti, from, to, base, flip) {
     if (!ti.from || !ti.to) return;
-    var curTo = readTime(ti.to);
-    if (curTo === null || from > curTo) { await setTime(ti.to, to, base); await setTime(ti.from, from, base); }
+    var curFrom = readTime(ti.from), toFirst = curFrom === null || to >= curFrom || readTime(ti.to) === null;
+    if (flip) toFirst = !toFirst;
+    if (toFirst) { await setTime(ti.to, to, base); await setTime(ti.from, from, base); }
     else { await setTime(ti.from, from, base); await setTime(ti.to, to, base); }
   }
   // Avvik mellom ønsket og faktisk klokkeslett: i feltet, og i CWs egen kopi når den kan leses.
@@ -798,9 +801,9 @@
   async function setRange(day, win, ti) {
     var fd = document.querySelector('#fromDatePicker'), td = document.querySelector('#toDatePicker');
     var dp = day.split('-'), bases = [null, new Date(+dp[0], +dp[1] - 1, +dp[2]), new Date(2000, 0, 1)];
-    var put = async function (base) {
+    var put = async function (base, flip) {
       inOrder(day, readDate(td), function () { setDate(fd, day); }, function () { setDate(td, day); });
-      await putTimes(ti, win.from, win.to, base);
+      await putTimes(ti, win.from, win.to, base, flip);
     };
     var check = function () {
       var bad = [];
@@ -808,10 +811,10 @@
       if (td && readDate(td) !== day) bad.push({ f: 'Dato til', n: td, v: shownVal(readDate(td)) });
       return bad.concat(timeBad(ti, win.from, win.to));
     };
-    // dagens dato først; bare når klokkeslettet ikke godtas, prøves søkedagen og en fast dato. Hver to ganger (andre gang ligger den andre grensen riktig).
+    // dagens dato først; bare når klokkeslettet ikke godtas, prøves motsatt rekkefølge, så søkedagen og en fast dato
     var bad = [];
     for (var i = 0; i < bases.length; i++) {
-      for (var k = 0; k < 2; k++) { await put(bases[i]); bad = check(); if (!bad.length) return; }
+      for (var k = 0; k < 3; k++) { await put(bases[i], k === 1); bad = check(); if (!bad.length) return; }
       if (!bad.some(function (b) { return b.t; })) break;
     }
     var lim = bad.map(function (b) { var l = limits(b.n); return l ? b.f.toLowerCase() + ' ' + l : ''; }).filter(Boolean);
@@ -930,7 +933,7 @@
       // klokkeslettene settes tilbake som under hentingen (dagens dato, ett felt om gangen) og kontrolleres; tomt blir 00:00 og 23:59
       if (ti.from && ti.to) {
         var tf = oMin(orig.tFrom, L.DAY_WINDOW.from), tt = oMin(orig.tTo, L.DAY_WINDOW.to), tb = [];
-        for (var ri = 0; ri < 2; ri++) { await putTimes(ti, tf, tt); tb = timeBad(ti, tf, tt); if (!tb.length) break; }
+        for (var ri = 0; ri < 3; ri++) { await putTimes(ti, tf, tt, null, ri === 1); tb = timeBad(ti, tf, tt); if (!tb.length) break; }
         if (tb.length) errors.push('Klokkeslettene i CW ble ikke satt tilbake til ' + L.hhmm(tf) + '–' + L.hhmm(tt) + ' (' + tb.map(function (b) { return b.f + ' viser ' + b.v; }).join(', ') + '). Sjekk fra- og til-tid i CW før du søker selv.');
       }
       if (ft && orig.free) setInputValue(ft, orig.free);
