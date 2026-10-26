@@ -612,15 +612,19 @@
   // derfor sendes blur først etter en kort pause, ett felt om gangen, som når du skriver selv. Ellers søkte CW med forrige klokkeslett
   // (eller feilet på tom tid: «Cannot read properties of null (reading 'valueOf')»).
   function settleMs() { var h = window.__kvrSearch || {}; return h.settle >= 0 ? h.settle : 250; }
-  // CWs kopi av verdien (k-ng-model="vm.fromTime" osv.), når Angular lar den leses; ellers undefined.
-  // CW kjører uten Angulars debug-info, så scope() finnes ikke; kontrolleren (vm) finnes likevel via controller().
+  // CWs kopi av verdien (k-ng-model="vm.fromTime" osv.), når den kan leses; ellers undefined. CW kjører uten Angulars debug-info,
+  // så scope() og controller() gir ingenting; Kendo-widgeten har likevel scopet sitt ($angular_scope) når den er laget av Angular.
   function cwCopy(node) {
     try {
-      var ng = window.angular, ex = node.getAttribute('k-ng-model') || node.getAttribute('ng-model');
-      if (!ng || !ng.element || !ex) return undefined;
-      var el = ng.element(node), sc = typeof el.scope === 'function' ? el.scope() : null;
+      var ex = node.getAttribute('k-ng-model') || node.getAttribute('ng-model');
+      if (!ex) return undefined;
+      var $ = jq(), w = $ ? ($(node).data('kendoTimePicker') || $(node).data('kendoDatePicker')) : null;
+      var sc = w && w.$angular_scope;
       if (sc && typeof sc.$eval === 'function') return sc.$eval(ex);
-      var c = typeof el.controller === 'function' ? el.controller() : null, m = /^vm\.(\w+)$/.exec(ex);
+      var ng = window.angular, el = ng && ng.element ? ng.element(node) : null;
+      sc = el && typeof el.scope === 'function' ? el.scope() : null;
+      if (sc && typeof sc.$eval === 'function') return sc.$eval(ex);
+      var c = el && typeof el.controller === 'function' ? el.controller() : null, m = /^vm\.(\w+)$/.exec(ex);
       return c && m && m[1] in c ? c[m[1]] : undefined;
     } catch (e) { return undefined; }
   }

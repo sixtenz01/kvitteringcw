@@ -68,7 +68,9 @@ document.getElementById('toTimePicker').addEventListener('blur',function(){filt.
 // Angular lar kopien leses (scope().$eval), som i CW med debug-info; __noAngular slår det av
 // som i CW: uten debug-info finnes ikke scope(), men controller() gir vm; __noAngular slår det av
 var vm={get fromTime(){return model.fromTimePicker},get toTime(){return model.toTimePicker},get fromDate(){return model.fromDatePicker},get toDate(){return model.toDatePicker}};
-window.angular={element:function(n){return{scope:function(){return undefined},controller:function(){return window.__noAngular?undefined:vm}}}};
+// som i ekte CW: verken scope() eller controller() gir noe; Kendo-widgeten har $angular_scope (av med __noAngular)
+window.angular={element:function(n){return{scope:function(){return undefined},controller:function(){return undefined}}}};
+var ngScope={vm:vm,$eval:function(ex){return ex.indexOf('vm.')===0?vm[ex.slice(3)]:undefined}};
 // datofeltene som Kendo DatePicker: som i CW følger søket widgetens verdi, ikke teksten i feltet
 var p2=function(x){return String(x).padStart(2,'0')};
 // som Kendo med min/max fra CW: fra kan ikke settes etter til, og til ikke før fra (verdien blir tom)
@@ -77,6 +79,7 @@ function dp(id,other,isFrom){var n=document.getElementById(id),v=null;n.__w={ken
     v=x;n.value=x?p2(x.getDate())+'.'+p2(x.getMonth()+1)+'.'+x.getFullYear():''},trigger:function(e){if(e==='change'){var val=v;setTimeout(function(){model[id]=val},30)}}}};
   n.__set=function(t){var m=/^(\\d{2})\\.(\\d{2})\\.(\\d{4})$/.exec(t);n.__w.kendoDatePicker.value(m?new Date(+m[3],+m[2]-1,+m[1]):null)}}
 dp('fromDatePicker','toDatePicker',true);dp('toDatePicker','fromDatePicker',false);
+['fromTimePicker','toTimePicker','fromDatePicker','toDatePicker'].forEach(function(id){var w=document.getElementById(id).__w;var k=w.kendoTimePicker||w.kendoDatePicker;Object.defineProperty(k,'$angular_scope',{get:function(){return window.__noAngular?undefined:ngScope}})});
 // setInputValue: Kendo leser teksten ved change, med samme grenser
 ['fromDatePicker','toDatePicker'].forEach(function(id){var n=document.getElementById(id);n.addEventListener('change',function(){var m=/^(\\d{2})\\.(\\d{2})\\.(\\d{4})$/.exec(n.value);var w=n.__w.kendoDatePicker,c=m?new Date(+m[3],+m[2]-1,+m[1]):null,cur=w.value();if(!cur||!c||cur.getTime()!==c.getTime())w.value(c)})});
 // som CWs ng-blur="vm.onFromDateChange()": søket bruker datoen CW har lest
