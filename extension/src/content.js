@@ -604,10 +604,16 @@
   function timeInputs() { return { from: document.getElementById('fromTimePicker'), to: document.getElementById('toTimePicker') }; }
   function timeWidget(node) { var $ = jq(), w = $ && node ? $(node).data('kendoTimePicker') : null; return w && typeof w.value === 'function' ? w : null; }
   // Klokkeslett i CWs tidsfelt: via Kendo-widgeten når den finnes, og i feltet, som når du skriver selv.
-  function setTime(node, m) {
+  // Datodelen er dagens dato, som når Kendo tolker et klokkeslett du skriver; CW setter grenser på til-tiden ut fra fra-tiden,
+  // og et klokkeslett med en annen dato regnes da som utenfor grensen (CW satte til-tiden lik fra-tiden). «base» velger en annen dato.
+  function setTime(node, m, base) {
     if (!node) return;
     var w = timeWidget(node);
-    if (w) { w.value(m === null ? null : new Date(2000, 0, 1, Math.floor(m / 60), m % 60)); if (typeof w.trigger === 'function') w.trigger('change'); }
+    if (w) {
+      var d = null;
+      if (m !== null) { d = base ? new Date(base.getTime()) : new Date(); d.setHours(Math.floor(m / 60), m % 60, 0, 0); }
+      w.value(d); if (typeof w.trigger === 'function') w.trigger('change');
+    }
     setInputValue(node, m === null ? '' : L.hhmm(m));
   }
   // Var feltet tomt, settes det til hele døgnet (00:00 eller 23:59): CWs egen kode feiler når tiden blir tom
@@ -734,24 +740,45 @@
   function inOrder(from, curTo, setFrom, setTo) {
     if (from !== null && from !== '' && curTo !== null && curTo !== '' && from > curTo) { setTo(); setFrom(); } else { setFrom(); setTo(); }
   }
+  // Grensene CW har satt på et dato- eller tidsfelt, for feilmeldingen.
+  function limits(node) {
+    var $ = jq(), w = $ && node ? ($(node).data('kendoTimePicker') || $(node).data('kendoDatePicker')) : null, f = function (d) {
+      return d instanceof Date ? d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()) + ' ' + p2(d.getHours()) + ':' + p2(d.getMinutes()) : '–';
+    };
+    if (!w) return '';
+    try {
+      var mn = typeof w.min === 'function' ? w.min() : w.options && w.options.min, mx = typeof w.max === 'function' ? w.max() : w.options && w.options.max;
+      return mn instanceof Date || mx instanceof Date ? f(mn) + ' til ' + f(mx) : '';
+    } catch (e) { return ''; }
+  }
   function setRange(day, win, ti) {
     var fd = document.querySelector('#fromDatePicker'), td = document.querySelector('#toDatePicker');
-    var put = function () {
+    var dp = day.split('-'), bases = [null, new Date(+dp[0], +dp[1] - 1, +dp[2]), new Date(2000, 0, 1)];
+    var put = function (base) {
       inOrder(day, readDate(td), function () { setDate(fd, day); }, function () { setDate(td, day); });
-      if (ti.from && ti.to) inOrder(win.from, readTime(ti.to), function () { setTime(ti.from, win.from); }, function () { setTime(ti.to, win.to); });
+      if (!ti.from || !ti.to) return;
+      // til først når til-feltet er tomt (CWs onFromTimeChange leser til-tiden og feiler på tom) eller fra havner etter til
+      var curTo = readTime(ti.to), sf = function () { setTime(ti.from, win.from, base); }, st = function () { setTime(ti.to, win.to, base); };
+      if (curTo === null || win.from > curTo) { st(); sf(); } else { sf(); st(); }
     };
+    var shown = function (v, time) { return v === null || v === '' ? 'tomt' : time ? L.hhmm(v) : v; };
     var check = function () {
       var bad = [];
-      if (fd && readDate(fd) !== day) bad.push('Dato fra viser ' + (readDate(fd) || 'tomt'));
-      if (td && readDate(td) !== day) bad.push('Dato til viser ' + (readDate(td) || 'tomt'));
-      if (ti.from && ti.to && readTime(ti.from) !== win.from) bad.push('Fra-tid viser ' + (readTime(ti.from) === null ? 'tomt' : L.hhmm(readTime(ti.from))));
-      if (ti.from && ti.to && readTime(ti.to) !== win.to) bad.push('Til-tid viser ' + (readTime(ti.to) === null ? 'tomt' : L.hhmm(readTime(ti.to))));
+      if (fd && readDate(fd) !== day) bad.push({ f: 'Dato fra', n: fd, v: shown(readDate(fd)) });
+      if (td && readDate(td) !== day) bad.push({ f: 'Dato til', n: td, v: shown(readDate(td)) });
+      if (ti.from && ti.to && readTime(ti.from) !== win.from) bad.push({ f: 'Fra-tid', n: ti.from, v: shown(readTime(ti.from), true), t: 1 });
+      if (ti.from && ti.to && readTime(ti.to) !== win.to) bad.push({ f: 'Til-tid', n: ti.to, v: shown(readTime(ti.to), true), t: 1 });
       return bad;
     };
-    put();
-    var bad = check();
-    if (bad.length) { put(); bad = check(); }   // andre forsøk: nå ligger den andre grensen riktig
-    if (bad.length) throw new Error('CW godtok ikke ' + day + ' ' + L.timeText(win) + ' i søkefeltene (' + bad.join(', ') + '). Kjøringen ble stoppet; ingenting fra dette søket er lagret.');
+    // dagens dato først; bare når klokkeslettet ikke godtas, prøves søkedagen og en fast dato. Hver to ganger (andre gang ligger den andre grensen riktig).
+    var bad = [];
+    for (var i = 0; i < bases.length; i++) {
+      for (var k = 0; k < 2; k++) { put(bases[i]); bad = check(); if (!bad.length) return; }
+      if (!bad.some(function (b) { return b.t; })) break;
+    }
+    var lim = bad.map(function (b) { var l = limits(b.n); return l ? b.f.toLowerCase() + ' ' + l : ''; }).filter(Boolean);
+    throw new Error('CW godtok ikke ' + day + ' ' + L.timeText(win) + ' i søkefeltene (' + bad.map(function (b) { return b.f + ' viser ' + b.v; }).join(', ') +
+      (lim.length ? '; grenser i CW: ' + lim.join(', ') : '') + '). Kjøringen ble stoppet; ingenting fra dette søket er lagret.');
   }
 
   async function partSearch(day, win, ti) {

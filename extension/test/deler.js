@@ -51,10 +51,14 @@ function render(list){data=list.map(function(r){var o=Object.assign({uid:'u'+(++
 function iso(v){var m=/^(\\d{2})\\.(\\d{2})\\.(\\d{4})$/.exec(v||'');return m?m[3]+'-'+m[2]+'-'+m[1]:''}
 function val(sel){return document.querySelector(sel).value}
 // tidsfeltene som Kendo TimePicker: widgeten har verdien, feltet viser teksten
-function tp(id){var n=document.getElementById(id),v=null;n.__w={kendoTimePicker:{value:function(x){if(!arguments.length)return v;v=x;n.value=x?String(x.getHours()).padStart(2,'0')+':'+String(x.getMinutes()).padStart(2,'0'):''},trigger:function(){}}}}
+// som Kendo: en verdi før min blir satt til min (sammenligner hele datoen)
+function tp(id){var n=document.getElementById(id),v=null,mn=null;n.__w={kendoTimePicker:{value:function(x){if(!arguments.length)return v;if(x&&mn&&x<mn){window.__tclamp=(window.__tclamp||0)+1;x=new Date(mn.getTime())}v=x;n.value=x?String(x.getHours()).padStart(2,'0')+':'+String(x.getMinutes()).padStart(2,'0'):''},
+  min:function(x){if(!arguments.length)return mn;mn=x},trigger:function(){}}}}
 tp('fromTimePicker');tp('toTimePicker');
-// som CWs ng-blur="vm.onFromTimeChange()": feiler når tiden er tom
-window.__cwCrash=0;['fromTimePicker','toTimePicker'].forEach(function(id){var n=document.getElementById(id);n.addEventListener('blur',function(){if(!n.__w.kendoTimePicker.value())window.__cwCrash++})});
+// som CWs ng-blur="vm.onFromTimeChange()": leser til-tiden (feiler når en av dem er tom) og setter til-tidens min til fra-tiden med dagens dato
+window.__cwCrash=0;
+document.getElementById('fromTimePicker').addEventListener('blur',function(){var f=this.__w.kendoTimePicker.value(),t=document.getElementById('toTimePicker').__w.kendoTimePicker;
+  if(!f||!t.value()){window.__cwCrash++;return}var m=new Date();m.setHours(f.getHours(),f.getMinutes(),0,0);t.min(m)});
 // datofeltene som Kendo DatePicker: som i CW følger søket widgetens verdi, ikke teksten i feltet
 var p2=function(x){return String(x).padStart(2,'0')};
 // som Kendo med min/max fra CW: fra kan ikke settes etter til, og til ikke før fra (verdien blir tom)
@@ -223,6 +227,7 @@ search();
   assert.strictEqual((await page.evaluate(() => window.__searches)).length, 1, 'bare søket ditt tilbake, ingen søk med feil dato');
 
   assert.strictEqual(await page.evaluate(() => window.__cwCrash), 0, 'CW fikk aldri tom tid');
+  assert.ok(await page.evaluate(() => document.getElementById('toTimePicker').__w.kendoTimePicker.min() instanceof Date), 'CW satte grensen på til-tiden');
   assert.deepStrictEqual(apiCalls, []);
   assert.deepStrictEqual(errors, []);
   await browser.close();
