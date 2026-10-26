@@ -247,4 +247,25 @@ const mapOf = (pairs) => pairs.reduce((m, [it, s]) => (m[it.transactionId] = s, 
   assert.ok(g2.findings.some((f) => /MVA/.test(f.title) && /MVA-tabellens sum 10\.00 mot Totalt 30\.00/.test(f.detail)));
 }
 
+// ---- telefon- og kundenummer er ikke betalingsmåter
+{
+  const rows = [['7038010000010 BRØD', '', '30,00'], ['', 'Totalt', '30,00'], ['Bank:', '', '30,00'], ['Tlf.:', '', '95 871 903'], ['Kundenr.:', '', '99 999'],
+    ['Telefon:', '', '22 33 44 55'], ['Org.nr:', '', '912 345 678'], ['Ukjent nummer:', '', '12345678'], ['Kontant:', '', '20,00'], ['Kontant tilbake:', '', '20,00']];
+  const s = L.parseReceipt(rows);
+  assert.deepStrictEqual(Object.keys(s.pay).sort(), ['Bank', 'Kontant', 'Kontant tilbake'], JSON.stringify(s.pay));
+  assert.ok((s.tx || []).some((t) => /Tlf\.: 95 871 903/.test(t)), 'teksten er med i søket');
+  assert.ok(!(s.unk || []).some((t) => /tlf|kunde/i.test(t)), 'ikke ukjente linjer');
+  // store beløp med øre er fortsatt betaling
+  assert.strictEqual(L.parseReceipt([['', 'Totalt', '12 500,00'], ['Bank:', '', '12 500,00']]).pay.Bank, 12500);
+  // lagrede skanninger ryddes
+  assert.deepStrictEqual(L.cleanPay({ pay: { 'Tlf.': 95871903, 'Kundenr.': 99999, Bank: 30 } }).pay, { Bank: 30 });
+  // betalingen stemmer med totalen
+  const it = bong({ totalAmount: 30 });
+  const pop = [it];
+  for (let i = 0; i < 12; i++) pop.push(bong({ totalAmount: 10 }));
+  const scans = mapOf([[it, s]].concat(pop.slice(1).map((x) => [x, L.parseReceipt([['7038010000027 MELK', '', '10.00'], ['', 'Totalt', '10.00'], ['Kontant:', '', '10.00']])])));
+  const g = L.ledger(pop, pop, scans, L.defaultControl());
+  assert.ok(!g.findings.some((f) => f.code === 'paySum'), JSON.stringify(g.findings.map((f) => f.detail)));
+}
+
 console.log('cwdata: ok');

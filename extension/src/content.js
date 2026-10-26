@@ -5311,7 +5311,7 @@
       if (db) {
         mem = await readAll(db, 'kv');
         var raw = await readAll(db, 'scan');
-        Object.keys(raw).forEach(function (k) { if (raw[k] && (raw[k].v >= 2 && raw[k].v <= 9)) scanMap[k] = L.splitDeleted(raw[k]); });   // «(SLETTET)»-linjer i eldre skanninger
+        Object.keys(raw).forEach(function (k) { if (raw[k] && (raw[k].v >= 2 && raw[k].v <= 9)) scanMap[k] = L.splitDeleted(L.cleanPay(raw[k])); });   // «(SLETTET)»-linjer i eldre skanninger
       }
       migrateLocal();
       rules = L.sanitizeRules(store(K.rules));

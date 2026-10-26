@@ -321,11 +321,12 @@
   function unitPrice(l) { return typeof l.p === 'number' ? l.p : round2(l.a + (l.d || 0)); }
 
   function lastAmount(cells) {
-    for (var i = cells.length - 1; i > 0; i--) {
-      var a = parseAmount(cells[i]);
-      if (a !== null) return a;
-    }
-    return null;
+    var i = lastAmountAt(cells);
+    return i === -1 ? null : parseAmount(cells[i]);
+  }
+  function lastAmountAt(cells) {
+    for (var i = cells.length - 1; i > 0; i--) if (parseAmount(cells[i]) !== null) return i;
+    return -1;
   }
 
   var RABATT_ROW = /^Rabatt:\s*Kr\s*([\d.,]+)(?:\s*\(\s*([\d.,]+)\s*%\s*\))?/i;
@@ -333,7 +334,18 @@
   var KUPONG_ROW = /^Kupong\s*\(\s*(\S+)\s+-\s+(.*)\)\s*$/i;
   // Hendelser vi aldri har sett på en bong, men som bør oppdages når de dukker opp (kun tekstlinjer, ikke varenavn).
   var EVENT_WORDS = /(annull|makul|storn|parker|på\s*vent|manuell|sp[øo]r\s*pris|overstyr|prisendring|kansell|avbrut)/i;
-  var KNOWN_LABEL = /^(beskrivelse|totalt|sum|subtotal|mva|grunnlag|kj[øo]p|[øo]reavrunding|referanse|transid|retur vare|dato|tid)/i;
+  var KNOWN_LABEL = /^(beskrivelse|totalt|sum|subtotal|mva|grunnlag|kj[øo]p|[øo]reavrunding|referanse|transid|retur vare|dato|tid|tlf|telefon|mobil|kunde|medlem|org)/i;
+  // Opplysninger med tall som ikke er beløp («Tlf.: 95 87 19 03», «Kundenr.: 99 999»). De er ikke betalingsmåter.
+  var INFO_LABEL = /^(tlf|telefon|tel|mobil|kunde\s*-?\s*(nr|nummer|id)|medlems?\s*-?\s*(nr|nummer)|org\.?\s*-?\s*(nr|nummer)|ordre\s*-?\s*(nr|nummer)|bong\s*-?\s*(nr|nummer)|kvittering\w*\s*-?\s*(nr|nummer)|kasse\s*-?\s*(nr|nummer)|butikk\s*-?\s*(nr|nummer)|terminal\w*|autoris\w*)\b/i;
+  // Beløp på bongen har øre («4,00»); et heltall på fem sifre eller mer uten øre er et nummer, ikke penger.
+  function looksLikeNumber(cell, amount) { return !/\d[.,]\d{1,2}(?!\d)/.test(String(cell || '')) && Math.abs(amount) >= 10000; }
+  function infoLabel(label) { return INFO_LABEL.test(String(label || '').trim()); }
+  // Skanninger lagret før 3.38.7 kan ha slike opplysninger som betalingsmåte.
+  function cleanPay(sc) {
+    if (!sc || !sc.pay || typeof sc.pay !== 'object') return sc;
+    Object.keys(sc.pay).forEach(function (k) { if (infoLabel(k)) delete sc.pay[k]; });
+    return sc;
+  }
 
   // Standard ordliste for hendelsesord. Kan endres under Innstillinger → Hendelsesord.
   var WORDS_MAX = 1000;
@@ -455,6 +467,7 @@
       if (amount === null) { other(c0, cells); return; }
       if (/:\s*$/.test(c0)) {
         var label = c0.replace(/\s*:\s*$/, '').slice(0, 40);
+        if (infoLabel(label) || looksLikeNumber(cells[lastAmountAt(cells)], amount)) { keepTx(cells.join(' ')); last = null; return; }
         keepTx(label + ':');
         var em = EVENT_WORDS.exec(label);
         if (em && ev.length < 6) { var er = { k: em[1].toLowerCase().replace(/\s+/g, ' '), t: (label + ': ' + amount).slice(0, 80) }; if (!ev.some(function (e) { return e.t === er.t; })) ev.push(er); }
@@ -3971,7 +3984,7 @@
     findDuplicates: findDuplicates,
     sumSelected: sumSelected,
     parseReceipt: parseReceipt,
-    splitDeleted: splitDeleted,
+    splitDeleted: splitDeleted, cleanPay: cleanPay, infoLabel: infoLabel,
     pacer: pacer, paceNext: paceNext,
     dayList: dayList, splitTime: splitTime, timeText: timeText, hhmm: hhmm, DAY_WINDOW: DAY_WINDOW, archRow: archRow,
     cwChecks: cwChecks, sessions: sessions, shiftChecks: shiftChecks, copyChecks: copyChecks, shrinkChecks: shrinkChecks, CW_COMBOS: CW_COMBOS, EMP_TAG: EMP_TAG,
