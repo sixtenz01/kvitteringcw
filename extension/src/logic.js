@@ -3765,6 +3765,37 @@
     return o;
   }
 
+  // ---- fartsregulator: farten følger svartiden til CW ---------------------------------------------
+  // Mål: start på neste bong tidligst «interval» ms etter forrige start. Intervallet går ned mot min når CW svarer som normalt,
+  // og opp (×1,5, høyst max) når svartiden er over dobbel normal. Tre svar på rad over tre ganger normal gir pause; feil på rad
+  // gir pause og til slutt stopp. Normal svartid = 25 %-kvantilen av de siste 30 svarene. Svar under slowFloor ms regnes aldri som trege.
+  function pacer(o) {
+    o = o || {};
+    var min = hasNum(o.min) ? Number(o.min) : 600;
+    return { min: min, max: hasNum(o.max) ? Number(o.max) : 5000, interval: min, hist: [], base: null, slow: 0, fail: 0,
+      slowFloor: hasNum(o.slowFloor) ? Number(o.slowFloor) : 1000, pause: hasNum(o.pause) ? Number(o.pause) : 60000, failPause: 3, failStop: 6 };
+  }
+  function paceNext(p, ms, ok) {
+    if (!ok) {
+      p.fail++;
+      p.interval = Math.min(p.max, Math.max(p.min, p.interval) * 2);
+      if (p.fail >= p.failStop) return { stop: true, wait: 0, state: 'stopp' };
+      if (p.fail >= p.failPause && p.fail % p.failPause === 0) return { pause: p.pause, wait: 0, state: 'feil' };
+      return { wait: p.interval, state: 'feil' };
+    }
+    p.fail = 0;
+    p.hist.push(ms);
+    if (p.hist.length > 30) p.hist.shift();
+    if (p.hist.length >= 5) { var h = p.hist.slice().sort(function (a, b) { return a - b; }); p.base = h[Math.floor((h.length - 1) * 0.25)]; }
+    var b = p.base, slow = b !== null && ms > Math.max(3 * b, p.slowFloor);
+    p.slow = slow ? p.slow + 1 : 0;
+    if (p.slow >= 3) { p.slow = 0; p.interval = Math.min(p.max, p.interval * 2); return { pause: p.pause, wait: 0, state: 'pause' }; }
+    var state = 'normal';
+    if (b !== null && ms > Math.max(2 * b, p.slowFloor * 0.8)) { p.interval = Math.min(p.max, p.interval * 1.5); state = 'treg'; }
+    else if (b === null || ms <= 1.3 * b) p.interval = Math.max(p.min, p.interval * 0.9);
+    return { wait: Math.max(0, Math.round(p.interval - ms)), state: state };
+  }
+
   // ---- fulltekstsøk i skannet innhold ---------------------------------------------------------
   var HAY = typeof WeakMap !== 'undefined' ? new WeakMap() : null;
   function scanHay(sc) {
@@ -3934,6 +3965,7 @@
     sumSelected: sumSelected,
     parseReceipt: parseReceipt,
     splitDeleted: splitDeleted,
+    pacer: pacer, paceNext: paceNext,
     dayList: dayList, splitTime: splitTime, timeText: timeText, hhmm: hhmm, DAY_WINDOW: DAY_WINDOW, archRow: archRow,
     cwChecks: cwChecks, sessions: sessions, shiftChecks: shiftChecks, copyChecks: copyChecks, shrinkChecks: shrinkChecks, CW_COMBOS: CW_COMBOS, EMP_TAG: EMP_TAG,
     isShrink: isShrink,

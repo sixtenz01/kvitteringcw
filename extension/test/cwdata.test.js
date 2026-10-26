@@ -198,4 +198,32 @@ const mapOf = (pairs) => pairs.reduce((m, [it, s]) => (m[it.transactionId] = s, 
   assert.strictEqual(L.archRow({ x: 1 }), null);
 }
 
+// ---- fartsregulator
+{
+  const p = L.pacer();
+  const run = (ms, ok = true) => L.paceNext(p, ms, ok);
+  [400, 420, 380, 410, 400].forEach((ms) => run(ms));
+  assert.strictEqual(p.base, 400, 'normal svartid');
+  assert.strictEqual(run(400).wait, 200, 'CW svarer normalt: én bong per 0,6 s');
+  assert.strictEqual(run(100).wait, 500, 'aldri raskere enn minsteintervallet');
+  const t1 = run(1200);
+  assert.strictEqual(t1.state, 'treg'); assert.strictEqual(p.interval, 900, 'farten senkes');
+  run(1300);
+  const t3 = run(1250);
+  assert.strictEqual(t3.pause, 60000, 'tre trege svar på rad gir pause');
+  const before = p.interval;
+  for (let i = 0; i < 5; i++) run(400);
+  assert.ok(p.interval < before, 'farten tas opp igjen gradvis');
+  // små svartider (under ett sekund) regnes aldri som trege
+  const q = L.pacer({ min: 0 });
+  [10, 12, 9, 11, 10, 40, 45, 50].forEach((ms) => assert.ok(!L.paceNext(q, ms, true).pause));
+  // feil: pause etter tre på rad, stopp etter seks
+  const f = L.pacer();
+  const dec = [1, 2, 3, 4, 5, 6].map(() => L.paceNext(f, 0, false));
+  assert.deepStrictEqual(dec.map((d) => d.stop ? 'stopp' : d.pause ? 'pause' : 'vent'), ['vent', 'vent', 'pause', 'vent', 'vent', 'stopp']);
+  const g = L.pacer();
+  L.paceNext(g, 0, false); L.paceNext(g, 0, false); L.paceNext(g, 400, true);
+  assert.strictEqual(g.fail, 0, 'et svar nullstiller feiltelleren');
+}
+
 console.log('cwdata: ok');

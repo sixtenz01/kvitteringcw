@@ -96,7 +96,7 @@
   <li><strong>Analysen</strong> bruker det samlede grunnlaget sammen med listen. Omfanget sier «listen og samlet grunnlag» når det er med.</li>
   <li><strong>Stoppe og fortsette:</strong> «Stopp» avbryter etter søket eller bongen som pågår. Dager som er hentet før (unntatt i dag), hoppes over neste gang, og skannede bonger skannes ikke på nytt. «Tøm samlet grunnlag» begynner på nytt.</li>
   <li><strong>Trygt for CW:</strong> fritekst brukes ikke (feltet «Vare» må være tomt), det er pause mellom søkene, og kjøringen stopper ved første søk som ikke svarer innen ett minutt. Kommer det bonger utenfor klokkeslettene som ble søkt på, har CW ikke brukt tidsfeltene; da kuttes dagen ved 1000 bonger, og det står hvilken dag. Til slutt settes søket ditt tilbake.</li>
-  <li><strong>Tid:</strong> skanning tar omtrent 1 sekund per bong; en uke i en stor butikk tar et par timer. «Hent tilleggsdata fra CW for hver dag» legger til omtrent 20 søk per dag.</li>
+  <li><strong>Tid:</strong> skanning tar 0,6–1 sekund per bong (fartsregulatoren holder igjen når CW er treg); en uke i en stor butikk tar et par timer, mye mindre med «Rask skanning». «Hent tilleggsdata fra CW for hver dag» legger til omtrent 20 søk per dag.</li>
 </ul>
 <p><strong>Tilleggsdata fra CW.</strong> CW kan selv filtrere bongene på innhold og betaling. Knappen bruker det på søket som står i listen, slik at pluginen vet hvilke bonger CW mener har slettet vare, manuell rabatt, makulert bong og så videre, uten å skanne dem.</p>
 <ul>
@@ -131,10 +131,12 @@
   <tbody>
     <tr><td>Skann innhold (synlige)</td><td>Skanner alle bonger som passerer filtrene dine. Pluginen skanner også de som pant- og rabattfilteret ellers ville skjult, så ingen faller utenfor.</td></tr>
     <tr><td>Stopp</td><td>Avbryter skanningen. Det som er ferdig beholdes.</td></tr>
+    <tr><td>Rask skanning: bare bonger med funn fra CW</td><td>Skanner bare salg som CWs filtre har merket (slettet vare, manuell rabatt, retur, kontant tilbake …), returer og bonger som ikke er vanlige salg. Krever «Hent tilleggsdata fra CW» først; til da skannes alle. Gir mange ganger færre bonger, men tester som trenger alle salg (retur uten salg, prisavvik, kampanjevare, bongregnskap) får lav dekning og står over.</td></tr>
     <tr><td>Prøv feilede på nytt</td><td>Kjører bare de bongene som feilet sist.</td></tr>
     <tr><td>Tøm cache</td><td>Sletter alt skannet innhold og alle avviksmarkeringer. Innstillinger, notater, butikknavn og kampanjesvar beholdes.</td></tr>
     <tr><td>Varegrupper</td><td>Gruppér varer med nøkkelord (se under). Filteret på varegruppe ligger under Filtrer → Innhold.</td></tr>
   </tbody></table></div>
+<p><strong>Fartsregulator.</strong> Pluginen tar høyst én bong per 0,6 sekund. Den måler hvor lang tid CW bruker på hver bong: er svaret over dobbelt så tregt som normalt, senkes farten; tre svar på rad over tre ganger normalt (og over ett sekund) gir ett minutts pause; svarer CW ikke på seks bonger på rad, stopper skanningen. Statuslinjen viser «CW svarer på 0,5 s», og «farten er senket» når den holder igjen. Søkene i CW venter minst like lenge som forrige søk tok. Slik blir skanningen raskere når CW har kapasitet, uten å presse CW når den er travel.</p>
 <div class="callout"><b>Den gule stripen</b>
   <p>Hvis du bruker et filter merket <em>skanning</em> (pant, rabatt, spesialbetaling, vare eller varegruppe) og noen bonger ikke er skannet, vises en gul stripe med antallet som er skjult. <strong>Skann nå</strong> løser det. Statuslinjen øverst viser alltid «Skannet X av Y».</p>
 </div>
