@@ -636,37 +636,46 @@
   // og listen har stått stille en stund etterpå. En liste som er lik den før søket, eller som ikke passer med «expect»
   // (dato og klokkeslett), brukes først etter lengre stillhet. Et lastesymbol som blir stående, holder ikke søket i gang:
   // når listen er ny, passer og har stått stille i 2 s, eller symbolet har stått i 20 s, ses det bort fra det. Uten svar innen timeout: null.
-  async function searchNow(pause, timeout, expect) {
+  async function searchNow(pause, timeout, expect, say) {
     var b = document.querySelector('[ng-click="vm.applyFilters()"]');
     if (!b) throw new Error('Fant ikke OPPDATER-knappen i CW.');
     await wait(Math.max(pause, pause > 0 ? lastSearchMs : 0));
     var hook = window.__kvrSearch || {}, opt = function (k, d) { return hook[k] >= 0 ? hook[k] : d; };
     var poll = opt('poll', 150) || 150, quietN = opt('quiet', 600), emptyN = opt('empty', 4000), sameN = opt('same', 6000), misfitN = opt('misfit', 15000), stuckN = opt('stuck', 20000), busyOkN = opt('busyOk', 2000);
     var before = boundCount, key0 = idsKey(gridData()), t0 = Date.now(), old = loaders(), started = false, sawBusy = false, busySince = 0, last = null, since = 0;
+    var state = '', said = 0, seen = [];
+    var note = function (st) {
+      state = st;
+      if (say && Date.now() - said >= 1000) { said = Date.now(); say(st + ' (' + Math.round((Date.now() - t0) / 1000) + ' s)'); }
+    };
     b.click();
     while (Date.now() - t0 < timeout) {
       await wait(poll);
-      var now = Date.now(), busy = loaders().some(function (n) { return old.indexOf(n) === -1; });
+      var now = Date.now(), fresh = loaders().filter(function (n) { return old.indexOf(n) === -1; }), busy = fresh.length > 0;
+      fresh.forEach(function (n) { var c = String(n.className || n.tagName).slice(0, 60); if (seen.length < 3 && seen.indexOf(c) === -1) seen.push(c); });
       if (busy && !busySince) busySince = now;
       if (!busy && busySince) { sawBusy = true; busySince = 0; since = now; }   // stillheten regnes fra lastesymbolet forsvant
       if (busy && now - busySince > stuckN) { old = old.concat(loaders()); busy = false; busySince = 0; }
       if (busy || boundCount > before) started = true;
-      if (!started) continue;
+      if (!started) { note('venter på svar fra CW'); continue; }
       var data = gridData(), ids = idsKey(data), key = ids + '#' + data.length + '#' + domRows();
-      if (key !== last) { last = key; since = now; continue; }
+      if (key !== last) { last = key; since = now; note(busy ? 'CW laster' : 'listen tegnes'); continue; }
       var quiet = now - since;
       if (busy) {
-        if (!(boundCount > before && data.length && ids !== key0 && quiet >= busyOkN && (!expect || expect(data)))) continue;
+        if (!(boundCount > before && data.length && ids !== key0 && quiet >= busyOkN && (!expect || expect(data)))) { note('CW laster'); continue; }
       } else {
-        if (quiet < (data.length ? quietN : emptyN)) continue;
-        if (!sawBusy && ids === key0 && quiet < sameN) continue;
-        if (expect && quiet < misfitN && !expect(data)) continue;
+        if (quiet < (data.length ? quietN : emptyN)) { note(data.length ? 'listen tegnes' : 'listen er tom, venter litt'); continue; }
+        if (!sawBusy && ids === key0 && quiet < sameN) { note('listen er lik som før søket'); continue; }
+        if (expect && quiet < misfitN && !expect(data)) { note('listen viser ikke dagen og klokkeslettet det ble søkt på'); continue; }
       }
       lastSearchMs = since - t0;
+      lastSearchInfo = { wait: state, loaders: seen };
       return data;
     }
+    lastSearchInfo = { wait: state, loaders: seen };
     return null;
   }
+  var lastSearchInfo = { wait: '', loaders: [] };
 
   // Klokkeslettet slik CW har det (uten pluginens tidsforskyvning) innenfor vinduet, med ett minutts slingring.
   function inWindow(it, w) {
@@ -707,14 +716,49 @@
     return tm.every(function (x) { return x.min === null || (x.min >= win.from - 1 && x.min <= win.to + 1); });
   }
 
+  function p2(n) { return (n < 10 ? '0' : '') + n; }
+  // Verdien i CWs dato- og tidsfelt slik widgeten har den (ÅÅÅÅ-MM-DD og minutter); tomt felt gir '' og null.
+  function readDate(node) {
+    if (!node) return '';
+    var w = dateWidget(node), v = w ? w.value() : null, m;
+    if (w) return v instanceof Date ? v.getFullYear() + '-' + p2(v.getMonth() + 1) + '-' + p2(v.getDate()) : '';
+    return (m = /(\d{2})\.(\d{2})\.(\d{4})/.exec(node.value || '')) ? m[3] + '-' + m[2] + '-' + m[1] : '';
+  }
+  function readTime(node) {
+    if (!node) return null;
+    var w = timeWidget(node), v = w ? w.value() : null;
+    if (w) return v instanceof Date ? v.getHours() * 60 + v.getMinutes() : null;
+    return L.mins(String(node.value || '').trim());
+  }
+  // Fra og til settes i en rekkefølge der fra aldri er etter til underveis: ellers kan CWs felt nekte verdien eller tømme feltet.
+  function inOrder(from, curTo, setFrom, setTo) {
+    if (from !== null && from !== '' && curTo !== null && curTo !== '' && from > curTo) { setTo(); setFrom(); } else { setFrom(); setTo(); }
+  }
+  function setRange(day, win, ti) {
+    var fd = document.querySelector('#fromDatePicker'), td = document.querySelector('#toDatePicker');
+    var put = function () {
+      inOrder(day, readDate(td), function () { setDate(fd, day); }, function () { setDate(td, day); });
+      if (ti.from && ti.to) inOrder(win.from, readTime(ti.to), function () { setTime(ti.from, win.from); }, function () { setTime(ti.to, win.to); });
+    };
+    var check = function () {
+      var bad = [];
+      if (fd && readDate(fd) !== day) bad.push('Dato fra viser ' + (readDate(fd) || 'tomt'));
+      if (td && readDate(td) !== day) bad.push('Dato til viser ' + (readDate(td) || 'tomt'));
+      if (ti.from && ti.to && readTime(ti.from) !== win.from) bad.push('Fra-tid viser ' + (readTime(ti.from) === null ? 'tomt' : L.hhmm(readTime(ti.from))));
+      if (ti.from && ti.to && readTime(ti.to) !== win.to) bad.push('Til-tid viser ' + (readTime(ti.to) === null ? 'tomt' : L.hhmm(readTime(ti.to))));
+      return bad;
+    };
+    put();
+    var bad = check();
+    if (bad.length) { put(); bad = check(); }   // andre forsøk: nå ligger den andre grensen riktig
+    if (bad.length) throw new Error('CW godtok ikke ' + day + ' ' + L.timeText(win) + ' i søkefeltene (' + bad.join(', ') + '). Kjøringen ble stoppet; ingenting fra dette søket er lagret.');
+  }
+
   async function partSearch(day, win, ti) {
-    var q = function (sel) { return document.querySelector(sel); };
-    setDate(q('#fromDatePicker'), day);
-    setDate(q('#toDatePicker'), day);
-    setTime(ti.from, win.from);
-    setTime(ti.to, win.to);
-    var t0 = Date.now(), rows = await searchNow(bulk.pause, bulk.timeout, function (data) { var tm = cwTimes(data); return onDay(tm, day) && fitsWin(tm, win); });
-    bulk.log.push({ day: day, win: L.timeText(win), n: rows ? rows.length : null, ms: Date.now() - t0 });
+    setRange(day, win, ti);
+    var head = 'Henter ' + day + ' (' + L.timeText(win) + ')';
+    var t0 = Date.now(), rows = await searchNow(bulk.pause, bulk.timeout, function (data) { var tm = cwTimes(data); return onDay(tm, day) && fitsWin(tm, win); }, function (t) { partSay(head + ': ' + t); });
+    bulk.log.push({ day: day, win: L.timeText(win), n: rows ? rows.length : null, ms: Date.now() - t0, wait: lastSearchInfo.wait, loaders: lastSearchInfo.loaders.slice() });
     if (bulk.log.length > 400) bulk.log.shift();
     return rows;
   }
@@ -807,12 +851,12 @@
     var stopped = bulk.stop && !errors.length;
     // tilbake til søket ditt
     try {
-      restoreDate(fd, orig.dFrom);
-      restoreDate(td, orig.dTo);
+      var oDay = function (o) { var v = o.w; return v instanceof Date ? v.getFullYear() + '-' + p2(v.getMonth() + 1) + '-' + p2(v.getDate()) : ((/(\d{2})\.(\d{2})\.(\d{4})/.exec(o.t || '') || []).slice(1).reverse().join('-')); };
+      inOrder(oDay(orig.dFrom), readDate(td), function () { restoreDate(fd, orig.dFrom); }, function () { restoreDate(td, orig.dTo); });
       if (si.min) setInputValue(si.min, orig.min);
       if (si.max) setInputValue(si.max, orig.max);
-      restoreTime(ti.from, orig.tFrom, L.DAY_WINDOW.from);
-      restoreTime(ti.to, orig.tTo, L.DAY_WINDOW.to);
+      var oMin = function (o, empty) { var v = o.w; return v instanceof Date ? v.getHours() * 60 + v.getMinutes() : (L.mins(String(o.t || '').trim()) === null ? empty : L.mins(String(o.t).trim())); };
+      inOrder(oMin(orig.tFrom, L.DAY_WINDOW.from), readTime(ti.to), function () { restoreTime(ti.from, orig.tFrom, L.DAY_WINDOW.from); }, function () { restoreTime(ti.to, orig.tTo, L.DAY_WINDOW.to); });
       if (ft && orig.free) setInputValue(ft, orig.free);
       var back = await searchNow(bulk.pause, bulk.timeout);
       if (back === null) errors.push('CW svarte ikke da søket ditt skulle hentes tilbake. Trykk Oppdater i CW.');
@@ -848,7 +892,10 @@
       if (lastParts.searches.length) {
         var det = el('details', { class: 'kvr-hint' });
         det.appendChild(el('summary', { text: 'Søkene mot CW (' + lastParts.searches.length + ')' }));
-        det.appendChild(el('div', { text: lastParts.searches.map(function (x) { return x.day + ' ' + x.win + ': ' + (x.n === null ? 'ikke svar' : plur(x.n, 'bong', 'bonger')) + ', ' + (x.ms / 1000).toFixed(1) + ' s'; }).join(' · ') }));
+        det.appendChild(el('div', { text: lastParts.searches.map(function (x) {
+          return x.day + ' ' + x.win + ': ' + (x.n === null ? 'ikke svar' : plur(x.n, 'bong', 'bonger')) + ', ' + (x.ms / 1000).toFixed(1) + ' s' +
+            (x.ms > 5000 && x.wait ? ' (ventet på: ' + x.wait + ')' : '') + (x.loaders && x.loaders.length ? ' [lastesymbol: ' + x.loaders.join(', ') + ']' : '');
+        }).join(' · ') }));
         ui.partInfo.appendChild(det);
       }
     }

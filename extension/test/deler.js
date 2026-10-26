@@ -57,13 +57,18 @@ tp('fromTimePicker');tp('toTimePicker');
 window.__cwCrash=0;['fromTimePicker','toTimePicker'].forEach(function(id){var n=document.getElementById(id);n.addEventListener('blur',function(){if(!n.__w.kendoTimePicker.value())window.__cwCrash++})});
 // datofeltene som Kendo DatePicker: som i CW følger søket widgetens verdi, ikke teksten i feltet
 var p2=function(x){return String(x).padStart(2,'0')};
-function dp(id){var n=document.getElementById(id),v=null;n.__w={kendoDatePicker:{value:function(x){if(!arguments.length)return v;v=x;n.value=x?p2(x.getDate())+'.'+p2(x.getMonth()+1)+'.'+x.getFullYear():''},trigger:function(){}}};
-  n.__set=function(t){var m=/^(\d{2})\.(\d{2})\.(\d{4})$/.exec(t);n.__w.kendoDatePicker.value(m?new Date(+m[3],+m[2]-1,+m[1]):null)}}
-dp('fromDatePicker');dp('toDatePicker');
+// som Kendo med min/max fra CW: fra kan ikke settes etter til, og til ikke før fra (verdien blir tom)
+function dp(id,other,isFrom){var n=document.getElementById(id),v=null;n.__w={kendoDatePicker:{value:function(x){if(!arguments.length)return v;
+    var o=document.getElementById(other).__w,ov=o&&o.kendoDatePicker.value();if(x&&ov&&(isFrom?x>ov:x<ov)){window.__clamped=(window.__clamped||0)+1;x=null}
+    v=x;n.value=x?p2(x.getDate())+'.'+p2(x.getMonth()+1)+'.'+x.getFullYear():''},trigger:function(){}}};
+  n.__set=function(t){var m=/^(\\d{2})\\.(\\d{2})\\.(\\d{4})$/.exec(t);n.__w.kendoDatePicker.value(m?new Date(+m[3],+m[2]-1,+m[1]):null)}}
+dp('fromDatePicker','toDatePicker',true);dp('toDatePicker','fromDatePicker',false);
+// setInputValue: Kendo leser teksten ved change, med samme grenser
+['fromDatePicker','toDatePicker'].forEach(function(id){var n=document.getElementById(id);n.addEventListener('change',function(){var m=/^(\\d{2})\\.(\\d{2})\\.(\\d{4})$/.exec(n.value);var w=n.__w.kendoDatePicker,c=m?new Date(+m[3],+m[2]-1,+m[1]):null,cur=w.value();if(!cur||!c||cur.getTime()!==c.getTime())w.value(c)})});
 function dval(id){var w=document.getElementById(id).__w.kendoDatePicker.value();return w?w.getFullYear()+'-'+p2(w.getMonth()+1)+'-'+p2(w.getDate()):''}
 var mask=document.createElement('div');mask.className='k-loading-mask';mask.style.cssText='position:absolute;width:20px;height:20px;display:none';document.getElementById('g').appendChild(mask);
 function search(){
-  var f=dval('fromDatePicker'),t=dval('toDatePicker'),mn=val('[ng-model="vm.selectedFilters.sumMin"]'),mx=val('[ng-model="vm.selectedFilters.sumMax"]'),a=val('#fromTimePicker'),b=val('#toTimePicker');
+  var f=window.__forceDay||dval('fromDatePicker'),t=window.__forceDay||dval('toDatePicker'),mn=val('[ng-model="vm.selectedFilters.sumMin"]'),mx=val('[ng-model="vm.selectedFilters.sumMax"]'),a=val('#fromTimePicker'),b=val('#toTimePicker');
   window.__searches.push({f:f,t:t,a:a,b:b,mn:mn,mx:mx,free:val('#freetextSearchInput')});
   if(window.__ignoreTime){a='';b=''}
   var list=ALL.filter(function(r){var d=r.endDateTime.slice(0,10),h=r.endDateTime.slice(11,16);return (!f||d>=f)&&(!t||d<=t)&&(!a||h>=a)&&(!b||h<=b)&&(mn===''||r.totalAmount>=Number(mn))&&(mx===''||r.totalAmount<=Number(mx))});
@@ -199,13 +204,23 @@ search();
   }
   await page.evaluate(() => { window.__slow = 0; window.__noMask = false; window.__rawUtc = false; window.__stray = false; const x = document.getElementById('stray'); if (x) x.remove(); });
 
-  // datofeltet blir ikke satt (CW viser en annen dag): stopper uten å lagre
+  assert.strictEqual(await page.evaluate(() => window.__clamped || 0), 0, 'fra ble aldri satt etter til');
+
+  // CW viser en annen dag enn den som ble søkt på: stopper uten å lagre
   await page.click('[data-sec=parts] button:text-is("Tøm samlet grunnlag")');
   await page.click('.kvr-modal button:text-is("Tøm")');
-  await page.evaluate(() => { ['fromDatePicker', 'toDatePicker'].forEach((id) => { const w = document.getElementById(id).__w.kendoDatePicker, v0 = w.value; w.__v = new Date(2026, 8, 22); w.value = function (x) { if (!arguments.length) return w.__v; }; w.__v0 = v0; }); });
+  await page.evaluate(() => { window.__forceDay = '2026-09-22'; });
   await run();
   assert.match(await txt('[data-sec=parts]'), /Listen i CW viser 2026-09-22, ikke 2026-09-20 som det ble søkt på\. Datofeltet i CW ble trolig ikke satt/);
   assert.strictEqual(await idb('kvr.arch.v1:2026-09-20'), undefined, 'ingenting lagret');
+  await page.evaluate(() => { window.__forceDay = ''; });
+
+  // CW godtar ikke datoen i feltet: stopper før søket, med hva feltet viser
+  await page.evaluate(() => { const w = document.getElementById('fromDatePicker').__w.kendoDatePicker, set = w.value; w.value = function (x) { if (!arguments.length) return set(); set(new Date(2026, 8, 22)); }; });
+  const nBefore = await page.evaluate(() => window.__searches.length);
+  await run();
+  assert.match(await txt('[data-sec=parts]'), /CW godtok ikke 2026-09-20 hele dagen i søkefeltene \(Dato fra viser 2026-09-22, Dato til viser tomt\)\. Kjøringen ble stoppet; ingenting fra dette søket er lagret\./);
+  assert.strictEqual((await page.evaluate(() => window.__searches)).length, 1, 'bare søket ditt tilbake, ingen søk med feil dato');
 
   assert.strictEqual(await page.evaluate(() => window.__cwCrash), 0, 'CW fikk aldri tom tid');
   assert.deepStrictEqual(apiCalls, []);
