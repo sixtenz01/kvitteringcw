@@ -26,7 +26,7 @@ const receipts = {};
 ROWS.forEach((r) => { receipts[r.transactionId] = r.totalAmount === null ? `<table>${TR('Kontant:', '1000.00')}${TR('Sum', '1000.00')}</table>` : `<table>${TR('7038010000010 VARE', r.totalAmount.toFixed(2))}${TR('Bank:', r.totalAmount.toFixed(2))}</table>`; });
 
 const html = `<!doctype html><html><head><meta charset="utf-8"></head><body>
-<input id="fromDatePicker"><input id="toDatePicker"><input id="freetextSearchInput"><input id="receiptNumber">
+<input id="fromDatePicker" k-ng-model="vm.fromDate"><input id="toDatePicker" k-ng-model="vm.toDate"><input id="freetextSearchInput"><input id="receiptNumber">
 <input ng-model="vm.selectedFilters.memberNumber"><input ng-model="vm.selectedFilters.externalLoyaltyNumber">
 <input type="number" ng-model="vm.selectedFilters.sumMin"><input type="number" ng-model="vm.selectedFilters.sumMax">
 <input id="fromTimePicker" data-role="timepicker" k-ng-model="vm.fromTime"><input id="toTimePicker" data-role="timepicker" k-ng-model="vm.toTime">
@@ -53,7 +53,7 @@ function val(sel){return document.querySelector(sel).value}
 // tidsfeltene som Kendo TimePicker: widgeten har verdien, feltet viser teksten
 // som Kendo: en verdi før min blir satt til min (sammenligner hele datoen)
 // CWs egen kopi av klokkeslettet (k-ng-model) oppdateres litt etter widgetens change
-var model={fromTimePicker:null,toTimePicker:null},filt={a:'',b:''};window.__filt=filt;
+var model={fromTimePicker:null,toTimePicker:null,fromDatePicker:new Date(2026,8,22),toDatePicker:new Date(2026,8,22)},filt={a:'',b:'',f:'2026-09-22',t:'2026-09-22'};window.__filt=filt;
 function hm2(d){return d?String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'):''}
 function tp(id){var n=document.getElementById(id),v=null,mn=null;n.__w={kendoTimePicker:{value:function(x){if(!arguments.length)return v;if(x&&mn&&x<mn){window.__tclamp=(window.__tclamp||0)+1;x=new Date(mn.getTime())}v=x;n.value=hm2(x)},
   min:function(x){if(!arguments.length)return mn;mn=x},trigger:function(e){if(e==='change'){var val=v;setTimeout(function(){model[id]=val},30)}}}}}
@@ -66,21 +66,25 @@ document.getElementById('fromTimePicker').addEventListener('blur',function(){var
   if(window.__pull){var tw=document.getElementById('toTimePicker').__w.kendoTimePicker;tw.value(new Date(f.getTime()));model.toTimePicker=tw.value();filt.b=hm2(f)}var m=new Date();m.setHours(f.getHours(),f.getMinutes(),0,0);document.getElementById('toTimePicker').__w.kendoTimePicker.min(m)});
 document.getElementById('toTimePicker').addEventListener('blur',function(){filt.b=hm2(model.toTimePicker)});
 // Angular lar kopien leses (scope().$eval), som i CW med debug-info; __noAngular slår det av
-window.angular={element:function(n){return{scope:function(){return window.__noAngular?undefined:{$eval:function(ex){return ex==='vm.fromTime'?model.fromTimePicker:ex==='vm.toTime'?model.toTimePicker:undefined}}}}}};
+// som i CW: uten debug-info finnes ikke scope(), men controller() gir vm; __noAngular slår det av
+var vm={get fromTime(){return model.fromTimePicker},get toTime(){return model.toTimePicker},get fromDate(){return model.fromDatePicker},get toDate(){return model.toDatePicker}};
+window.angular={element:function(n){return{scope:function(){return undefined},controller:function(){return window.__noAngular?undefined:vm}}}};
 // datofeltene som Kendo DatePicker: som i CW følger søket widgetens verdi, ikke teksten i feltet
 var p2=function(x){return String(x).padStart(2,'0')};
 // som Kendo med min/max fra CW: fra kan ikke settes etter til, og til ikke før fra (verdien blir tom)
 function dp(id,other,isFrom){var n=document.getElementById(id),v=null;n.__w={kendoDatePicker:{value:function(x){if(!arguments.length)return v;
     var o=document.getElementById(other).__w,ov=o&&o.kendoDatePicker.value();if(x&&ov&&(isFrom?x>ov:x<ov)){window.__clamped=(window.__clamped||0)+1;x=null}
-    v=x;n.value=x?p2(x.getDate())+'.'+p2(x.getMonth()+1)+'.'+x.getFullYear():''},trigger:function(){}}};
+    v=x;n.value=x?p2(x.getDate())+'.'+p2(x.getMonth()+1)+'.'+x.getFullYear():''},trigger:function(e){if(e==='change'){var val=v;setTimeout(function(){model[id]=val},30)}}}};
   n.__set=function(t){var m=/^(\\d{2})\\.(\\d{2})\\.(\\d{4})$/.exec(t);n.__w.kendoDatePicker.value(m?new Date(+m[3],+m[2]-1,+m[1]):null)}}
 dp('fromDatePicker','toDatePicker',true);dp('toDatePicker','fromDatePicker',false);
 // setInputValue: Kendo leser teksten ved change, med samme grenser
 ['fromDatePicker','toDatePicker'].forEach(function(id){var n=document.getElementById(id);n.addEventListener('change',function(){var m=/^(\\d{2})\\.(\\d{2})\\.(\\d{4})$/.exec(n.value);var w=n.__w.kendoDatePicker,c=m?new Date(+m[3],+m[2]-1,+m[1]):null,cur=w.value();if(!cur||!c||cur.getTime()!==c.getTime())w.value(c)})});
+// som CWs ng-blur="vm.onFromDateChange()": søket bruker datoen CW har lest
+['fromDatePicker','toDatePicker'].forEach(function(id){document.getElementById(id).addEventListener('blur',function(){var d=model[id];filt[id==='fromDatePicker'?'f':'t']=d?d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate()):''})});
 function dval(id){var w=document.getElementById(id).__w.kendoDatePicker.value();return w?w.getFullYear()+'-'+p2(w.getMonth()+1)+'-'+p2(w.getDate()):''}
 var mask=document.createElement('div');mask.className='k-loading-mask';mask.style.cssText='position:absolute;width:20px;height:20px;display:none';document.getElementById('g').appendChild(mask);
 function search(){
-  var f=window.__forceDay||dval('fromDatePicker'),t=window.__forceDay||dval('toDatePicker'),mn=val('[ng-model="vm.selectedFilters.sumMin"]'),mx=val('[ng-model="vm.selectedFilters.sumMax"]'),a=filt.a,b=filt.b;
+  var f=window.__forceDay||filt.f,t=window.__forceDay||filt.t,mn=val('[ng-model="vm.selectedFilters.sumMin"]'),mx=val('[ng-model="vm.selectedFilters.sumMax"]'),a=filt.a,b=filt.b;
   window.__searches.push({f:f,t:t,a:a,b:b,mn:mn,mx:mx,free:val('#freetextSearchInput')});
   if(window.__ignoreTime){a='';b=''}
   var list=ALL.filter(function(r){var d=r.endDateTime.slice(0,10),h=r.endDateTime.slice(11,16);return (!f||d>=f)&&(!t||d<=t)&&(!a||h>=a)&&(!b||h<=b)&&(mn===''||r.totalAmount>=Number(mn))&&(mx===''||r.totalAmount<=Number(mx))});
@@ -230,7 +234,9 @@ search();
   await run();
   const back = await sums();
   assert.deepStrictEqual([back.a, back.b], ['08:00', '20:00'], 'klokkeslettene ditt er satt tilbake');
-  assert.deepStrictEqual(await page.evaluate(() => window.__filt), { a: '08:00', b: '20:00' }, 'CW søker med klokkeslettene dine');
+  const fl = await page.evaluate(() => window.__filt);
+  assert.deepStrictEqual([fl.a, fl.b], ['08:00', '20:00'], 'CW søker med klokkeslettene dine');
+  assert.deepStrictEqual([fl.f, fl.t], ['2026-09-22', '2026-09-22'], 'og med datoene dine');
   assert.ok(!/ble ikke satt tilbake/.test(await txt('[data-sec=parts]')));
   assert.strictEqual(await page.evaluate(() => window.__cwCrash), crash0, 'CW feilet ikke ved tilbakestillingen');
   await page.evaluate(() => {
@@ -253,7 +259,7 @@ search();
   await page.evaluate(() => { const w = document.getElementById('fromDatePicker').__w.kendoDatePicker, set = w.value; w.value = function (x) { if (!arguments.length) return set(); set(new Date(2026, 8, 22)); }; });
   const nBefore = await page.evaluate(() => window.__searches.length);
   await run();
-  assert.match(await txt('[data-sec=parts]'), /CW godtok ikke 2026-09-20 hele dagen i søkefeltene \(Dato fra viser 2026-09-22, Dato til viser tomt\)\. Kjøringen ble stoppet; ingenting fra dette søket er lagret\./);
+  assert.match(await txt('[data-sec=parts]'), /CW godtok ikke 2026-09-20 hele dagen i søkefeltene \(Dato fra viser 2026-09-22, Dato til viser tomt[^)]*\)\. Kjøringen ble stoppet; ingenting fra dette søket er lagret\./);
   assert.strictEqual((await page.evaluate(() => window.__searches)).length, 1, 'bare søket ditt tilbake, ingen søk med feil dato');
 
   assert.strictEqual(await page.evaluate(() => window.__cwCrash), 0, 'CW fikk aldri tom tid');

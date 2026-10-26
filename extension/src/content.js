@@ -331,10 +331,11 @@
     ms.trigger('change');
   }
 
-  function cwSearch() {
-    var q = function (sel) { return document.querySelector(sel); };
-    if (cw.dateFrom) setInputValue(q('#fromDatePicker'), noDate(cw.dateFrom));
-    if (cw.dateTo) setInputValue(q('#toDatePicker'), noDate(cw.dateTo));
+  // Datoene settes som i «Hent og skann i deler»: via datovelgeren, i trygg rekkefølge, og CW får verdien før feltet forlates.
+  async function cwSearch() {
+    var q = function (sel) { return document.querySelector(sel); }, fd = q('#fromDatePicker'), td = q('#toDatePicker');
+    if (cw.dateFrom && cw.dateTo) await inOrder(cw.dateFrom, readDate(td), function () { return setDate(fd, cw.dateFrom); }, function () { return setDate(td, cw.dateTo); });
+    else { if (cw.dateFrom) await setDate(fd, cw.dateFrom); if (cw.dateTo) await setDate(td, cw.dateTo); }
     var nums = Object.keys(cw.stores).filter(function (k) { return cw.stores[k]; });
     if (nums.length) setCwStores(nums);
     if (cw.members) setInputValue(q('[ng-model="vm.selectedFilters.memberNumber"]'), cw.members);
@@ -611,11 +612,16 @@
   // derfor sendes blur først etter en kort pause, ett felt om gangen, som når du skriver selv. Ellers søkte CW med forrige klokkeslett
   // (eller feilet på tom tid: «Cannot read properties of null (reading 'valueOf')»).
   function settleMs() { var h = window.__kvrSearch || {}; return h.settle >= 0 ? h.settle : 250; }
-  // CWs kopi av verdien (k-ng-model eller ng-model på feltet), når Angular lar den leses; ellers undefined.
+  // CWs kopi av verdien (k-ng-model="vm.fromTime" osv.), når Angular lar den leses; ellers undefined.
+  // CW kjører uten Angulars debug-info, så scope() finnes ikke; kontrolleren (vm) finnes likevel via controller().
   function cwCopy(node) {
     try {
-      var ng = window.angular, ex = node.getAttribute('k-ng-model') || node.getAttribute('ng-model'), sc = ng && ng.element && ex ? ng.element(node).scope() : null;
-      return sc && typeof sc.$eval === 'function' ? sc.$eval(ex) : undefined;
+      var ng = window.angular, ex = node.getAttribute('k-ng-model') || node.getAttribute('ng-model');
+      if (!ng || !ng.element || !ex) return undefined;
+      var el = ng.element(node), sc = typeof el.scope === 'function' ? el.scope() : null;
+      if (sc && typeof sc.$eval === 'function') return sc.$eval(ex);
+      var c = typeof el.controller === 'function' ? el.controller() : null, m = /^vm\.(\w+)$/.exec(ex);
+      return c && m && m[1] in c ? c[m[1]] : undefined;
     } catch (e) { return undefined; }
   }
   function copyMin(v) {
@@ -623,16 +629,23 @@
     if (v === null || v === '') return null;
     return typeof v === 'string' ? L.mins(v.trim().slice(0, 5)) : undefined;
   }
-  async function commitTime(node, m) {
-    var t0 = Date.now();
+  function copyDay(v) {
+    if (v instanceof Date) return isNaN(v.getTime()) ? '' : v.getFullYear() + '-' + p2(v.getMonth() + 1) + '-' + p2(v.getDate());
+    if (v === null || v === '') return '';
+    var m = typeof v === 'string' ? /^(\d{4}-\d{2}-\d{2})|^(\d{2})\.(\d{2})\.(\d{4})/.exec(v.trim()) : null;
+    return m ? (m[1] || m[4] + '-' + m[3] + '-' + m[2]) : undefined;
+  }
+  // Feltet forlates (blur, som kjører CWs vm.on…Change) først når CWs kopi har verdien (høyst 3 s), eller etter en fast pause
+  // når kopien ikke kan leses. Er kopien fortsatt tom, sendes ikke blur: CW ville bare feile; kontrollen etterpå sier fra.
+  async function commitField(node, want) {
+    var t0 = Date.now(), c;
     await wait(settleMs());
-    // vent til CWs kopi har verdien (høyst 3 s), når den kan leses
     for (;;) {
-      var c = cwCopy(node), cm = c === undefined ? undefined : copyMin(c);
-      if (cm === undefined || cm === m || Date.now() - t0 > 3000) break;
+      c = cwCopy(node);
+      if (c === undefined || want(c) || Date.now() - t0 > 3000) break;
       await wait(50);
     }
-    if (m !== null && cm === null) return;   // CW har ikke fått verdien: blur ville bare få CW til å feile; kontrollen etterpå sier fra
+    if ((c === null || c === '') && !want(c)) return;
     node.dispatchEvent(new Event('blur', { bubbles: true }));
     await wait(settleMs());
   }
@@ -645,7 +658,7 @@
       w.value(d); if (typeof w.trigger === 'function') w.trigger('change');
     }
     setInputValue(node, m === null ? '' : L.hhmm(m), true);
-    await commitTime(node, m);
+    await commitField(node, function (c) { return copyMin(c) === m; });
   }
   function partSay(t) { if (ui.partStatus) ui.partStatus.textContent = t; say(t); }
 
@@ -715,18 +728,22 @@
 
   // Dato i CWs datofelt: via Kendo-widgeten når den finnes, og i feltet (dd.mm.åååå), som når du skriver selv.
   function dateWidget(node) { var $ = jq(), w = $ && node ? $(node).data('kendoDatePicker') : null; return w && typeof w.value === 'function' ? w : null; }
-  function setDate(node, day) {
+  // Som klokkeslettene: CW har ng-blur="vm.onFromDateChange()" og leser sin kopi (vm.fromDate), så blur sendes når kopien har datoen.
+  async function setDate(node, day) {
     if (!node) return;
     var w = dateWidget(node), p = String(day || '').split('-');
     if (w && p.length === 3) { w.value(new Date(+p[0], +p[1] - 1, +p[2])); if (typeof w.trigger === 'function') w.trigger('change'); }
-    setInputValue(node, noDate(day));
+    setInputValue(node, noDate(day), true);
+    await commitField(node, function (c) { return copyDay(c) === day; });
   }
-  function restoreDate(node, o) {
+  async function restoreDate(node, o) {
     if (!node) return;
-    var w = dateWidget(node);
+    var w = dateWidget(node), want = w ? copyDay(o.w) : copyDay(o.t);
     if (w) { w.value(o.w); if (typeof w.trigger === 'function') w.trigger('change'); }
-    setInputValue(node, o.t);
+    setInputValue(node, o.t, true);
+    if (want) await commitField(node, function (c) { return copyDay(c) === want; });   // tom dato: ingen blur (CW ville feile)
   }
+
   // Dato og klokkeslett for radene slik CW viser dem (cellen i listen; ellers rådata i norsk tid), uten pluginens tidsforskyvning.
   // Rader uten lesbar tid teller ikke.
   function cwTimes(data) {
@@ -759,8 +776,8 @@
     return L.mins(String(node.value || '').trim());
   }
   // Fra og til settes i en rekkefølge der fra aldri er etter til underveis: ellers kan CWs felt nekte verdien eller tømme feltet.
-  function inOrder(from, curTo, setFrom, setTo) {
-    if (from !== null && from !== '' && curTo !== null && curTo !== '' && from > curTo) { setTo(); setFrom(); } else { setFrom(); setTo(); }
+  async function inOrder(from, curTo, setFrom, setTo) {
+    if (from !== null && from !== '' && curTo !== null && curTo !== '' && from > curTo) { await setTo(); await setFrom(); } else { await setFrom(); await setTo(); }
   }
   // Grensene CW har satt på et dato- eller tidsfelt, for feilmeldingen.
   function limits(node) {
@@ -802,13 +819,17 @@
     var fd = document.querySelector('#fromDatePicker'), td = document.querySelector('#toDatePicker');
     var dp = day.split('-'), bases = [null, new Date(+dp[0], +dp[1] - 1, +dp[2]), new Date(2000, 0, 1)];
     var put = async function (base, flip) {
-      inOrder(day, readDate(td), function () { setDate(fd, day); }, function () { setDate(td, day); });
+      await inOrder(day, readDate(td), function () { return setDate(fd, day); }, function () { return setDate(td, day); });
       await putTimes(ti, win.from, win.to, base, flip);
     };
     var check = function () {
       var bad = [];
       if (fd && readDate(fd) !== day) bad.push({ f: 'Dato fra', n: fd, v: shownVal(readDate(fd)) });
       if (td && readDate(td) !== day) bad.push({ f: 'Dato til', n: td, v: shownVal(readDate(td)) });
+      [['Dato fra i CW', fd], ['Dato til i CW', td]].forEach(function (x) {
+        var c = x[1] ? cwCopy(x[1]) : undefined, cd = c === undefined ? undefined : copyDay(c);
+        if (cd !== undefined && cd !== day) bad.push({ f: x[0], n: x[1], v: shownVal(cd) });
+      });
       return bad.concat(timeBad(ti, win.from, win.to));
     };
     // dagens dato først; bare når klokkeslettet ikke godtas, prøves motsatt rekkefølge, så søkedagen og en fast dato
@@ -926,7 +947,7 @@
     // tilbake til søket ditt
     try {
       var oDay = function (o) { var v = o.w; return v instanceof Date ? v.getFullYear() + '-' + p2(v.getMonth() + 1) + '-' + p2(v.getDate()) : ((/(\d{2})\.(\d{2})\.(\d{4})/.exec(o.t || '') || []).slice(1).reverse().join('-')); };
-      inOrder(oDay(orig.dFrom), readDate(td), function () { restoreDate(fd, orig.dFrom); }, function () { restoreDate(td, orig.dTo); });
+      await inOrder(oDay(orig.dFrom), readDate(td), function () { return restoreDate(fd, orig.dFrom); }, function () { return restoreDate(td, orig.dTo); });
       if (si.min) setInputValue(si.min, orig.min);
       if (si.max) setInputValue(si.max, orig.max);
       var oMin = function (o, empty) { var v = o.w; return v instanceof Date ? v.getHours() * 60 + v.getMinutes() : (L.mins(String(o.t || '').trim()) === null ? empty : L.mins(String(o.t).trim())); };
