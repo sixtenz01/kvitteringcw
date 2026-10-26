@@ -29,7 +29,7 @@ const html = `<!doctype html><html><head><meta charset="utf-8"></head><body>
 <input id="fromDatePicker"><input id="toDatePicker"><input id="freetextSearchInput"><input id="receiptNumber">
 <input ng-model="vm.selectedFilters.memberNumber"><input ng-model="vm.selectedFilters.externalLoyaltyNumber">
 <input type="number" ng-model="vm.selectedFilters.sumMin"><input type="number" ng-model="vm.selectedFilters.sumMax">
-<input id="fromTimePicker" data-role="timepicker"><input id="toTimePicker" data-role="timepicker">
+<input id="fromTimePicker" data-role="timepicker" k-ng-model="vm.fromTime"><input id="toTimePicker" data-role="timepicker" k-ng-model="vm.toTime">
 <button ng-click="vm.resetFilters()">Nullstill</button><button ng-click="vm.applyFilters()" id="apply">Oppdater</button>
 <div class="k-grid-header"><table><thead><tr><th>DATO</th><th>SUM</th></tr></thead></table></div>
 <div id="g" data-role="grid"><table><tbody></tbody></table></div>
@@ -52,13 +52,19 @@ function iso(v){var m=/^(\\d{2})\\.(\\d{2})\\.(\\d{4})$/.exec(v||'');return m?m[
 function val(sel){return document.querySelector(sel).value}
 // tidsfeltene som Kendo TimePicker: widgeten har verdien, feltet viser teksten
 // som Kendo: en verdi før min blir satt til min (sammenligner hele datoen)
-function tp(id){var n=document.getElementById(id),v=null,mn=null;n.__w={kendoTimePicker:{value:function(x){if(!arguments.length)return v;if(x&&mn&&x<mn){window.__tclamp=(window.__tclamp||0)+1;x=new Date(mn.getTime())}v=x;n.value=x?String(x.getHours()).padStart(2,'0')+':'+String(x.getMinutes()).padStart(2,'0'):''},
-  min:function(x){if(!arguments.length)return mn;mn=x},trigger:function(){}}}}
+// CWs egen kopi av klokkeslettet (k-ng-model) oppdateres litt etter widgetens change
+var model={fromTimePicker:null,toTimePicker:null},filt={a:'',b:''};window.__filt=filt;
+function hm2(d){return d?String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'):''}
+function tp(id){var n=document.getElementById(id),v=null,mn=null;n.__w={kendoTimePicker:{value:function(x){if(!arguments.length)return v;if(x&&mn&&x<mn){window.__tclamp=(window.__tclamp||0)+1;x=new Date(mn.getTime())}v=x;n.value=hm2(x)},
+  min:function(x){if(!arguments.length)return mn;mn=x},trigger:function(e){if(e==='change'){var val=v;setTimeout(function(){model[id]=val},30)}}}}}
 tp('fromTimePicker');tp('toTimePicker');
-// som CWs ng-blur="vm.onFromTimeChange()": leser til-tiden (feiler når en av dem er tom) og setter til-tidens min til fra-tiden med dagens dato
+// som CWs ng-blur="vm.onFromTimeChange()": leser kopiene (feiler når en er tom), setter søkets fra-tid og til-tidens min (dagens dato)
 window.__cwCrash=0;
-document.getElementById('fromTimePicker').addEventListener('blur',function(){var f=this.__w.kendoTimePicker.value(),t=document.getElementById('toTimePicker').__w.kendoTimePicker;
-  if(!f||!t.value()){window.__cwCrash++;return}var m=new Date();m.setHours(f.getHours(),f.getMinutes(),0,0);t.min(m)});
+document.getElementById('fromTimePicker').addEventListener('blur',function(){var f=model.fromTimePicker,t=model.toTimePicker;
+  if(!f||!t){window.__cwCrash++;return}filt.a=hm2(f);var m=new Date();m.setHours(f.getHours(),f.getMinutes(),0,0);document.getElementById('toTimePicker').__w.kendoTimePicker.min(m)});
+document.getElementById('toTimePicker').addEventListener('blur',function(){filt.b=hm2(model.toTimePicker)});
+// Angular lar kopien leses (scope().$eval), som i CW med debug-info; __noAngular slår det av
+window.angular={element:function(n){return{scope:function(){return window.__noAngular?undefined:{$eval:function(ex){return ex==='vm.fromTime'?model.fromTimePicker:ex==='vm.toTime'?model.toTimePicker:undefined}}}}}};
 // datofeltene som Kendo DatePicker: som i CW følger søket widgetens verdi, ikke teksten i feltet
 var p2=function(x){return String(x).padStart(2,'0')};
 // som Kendo med min/max fra CW: fra kan ikke settes etter til, og til ikke før fra (verdien blir tom)
@@ -72,7 +78,7 @@ dp('fromDatePicker','toDatePicker',true);dp('toDatePicker','fromDatePicker',fals
 function dval(id){var w=document.getElementById(id).__w.kendoDatePicker.value();return w?w.getFullYear()+'-'+p2(w.getMonth()+1)+'-'+p2(w.getDate()):''}
 var mask=document.createElement('div');mask.className='k-loading-mask';mask.style.cssText='position:absolute;width:20px;height:20px;display:none';document.getElementById('g').appendChild(mask);
 function search(){
-  var f=window.__forceDay||dval('fromDatePicker'),t=window.__forceDay||dval('toDatePicker'),mn=val('[ng-model="vm.selectedFilters.sumMin"]'),mx=val('[ng-model="vm.selectedFilters.sumMax"]'),a=val('#fromTimePicker'),b=val('#toTimePicker');
+  var f=window.__forceDay||dval('fromDatePicker'),t=window.__forceDay||dval('toDatePicker'),mn=val('[ng-model="vm.selectedFilters.sumMin"]'),mx=val('[ng-model="vm.selectedFilters.sumMax"]'),a=filt.a,b=filt.b;
   window.__searches.push({f:f,t:t,a:a,b:b,mn:mn,mx:mx,free:val('#freetextSearchInput')});
   if(window.__ignoreTime){a='';b=''}
   var list=ALL.filter(function(r){var d=r.endDateTime.slice(0,10),h=r.endDateTime.slice(11,16);return (!f||d>=f)&&(!t||d<=t)&&(!a||h>=a)&&(!b||h<=b)&&(mn===''||r.totalAmount>=Number(mn))&&(mx===''||r.totalAmount<=Number(mx))});
@@ -102,7 +108,7 @@ search();
   page.on('console', (m) => { if (/DBG/.test(m.text())) console.log(m.text()); });
   page.on('pageerror', (e) => { errors.push(e.message); console.error('PAGEERROR', e.message); });
   await page.addInitScript((cap) => { window.__kvrScan = { settle: 0, poll: 10 }; window.__kvrParts = { pause: 0, timeout: 1500, cut: cap }; window.__kvrCwx = { pause: 0, timeout: 1500 };
-    window.__kvrSearch = { poll: 20, quiet: 100, empty: 300, same: 400, misfit: 600, stuck: 1000, busyOk: 200 }; }, CAP);
+    window.__kvrSearch = { poll: 20, quiet: 100, empty: 300, same: 400, misfit: 600, stuck: 1000, busyOk: 200, settle: 0 }; }, CAP);
   await page.route('https://chainweb.coop.no/**', (r) => {
     if (r.request().url().indexOf('/Api/') !== -1) { apiCalls.push(r.request().url()); return r.fulfill({ status: 404, body: '' }); }
     return r.fulfill({ contentType: 'text/html; charset=utf-8', body: html });
@@ -176,7 +182,8 @@ search();
   await page.evaluate(() => { window.__ignoreTime = true; });
   await run();
   const s3 = (await page.evaluate(() => window.__searches)).slice(0, -1).map((x) => x.f + ' ' + x.a + '–' + x.b);
-  assert.deepStrictEqual(s3, ['2026-09-20 00:00–23:59', '2026-09-21 00:00–23:59', '2026-09-21 00:00–11:59', '2026-09-22 00:00–23:59']);
+  assert.deepStrictEqual(s3, ['2026-09-20 00:00–23:59', '2026-09-21 00:00–23:59', '2026-09-21 00:00–11:59', '2026-09-21 00:00–11:59', '2026-09-22 00:00–23:59'], 'ett nytt forsøk før dagen kuttes');
+  assert.match(await page.evaluate(() => document.querySelector('[data-sec=parts]').textContent), /2026-09-21 00:00–11:59: 50 bonger, [\d.]+ s \(søkt to ganger\)/);
   assert.match(await txt('[data-sec=parts]'), /CW brukte ikke klokkeslett-feltene for 2026-09-21 \(bonger utenfor 00:00–11:59\)\. Dagen er kuttet ved 1000 bonger\./);
   assert.match(await txt('[data-sec=parts]'), /Kuttet ved 1000: 2026-09-21/);
 
@@ -194,10 +201,10 @@ search();
   assert.deepStrictEqual((await page.evaluate(() => window.__searches)).slice(0, -1).map((x) => x.f).filter((v, i, a) => a.indexOf(v) === i), ['2026-09-21', '2026-09-22'], 'fortsetter der den slapp');
 
   // CW tømmer listen og viser et lastesymbol før svaret kommer: pluginen venter på svaret
-  for (const mode of [{ slow: 300 }, { slow: 300, noMask: true }, { slow: 300, rawUtc: true }, { slow: 300, stray: true }]) {
+  for (const mode of [{ slow: 300 }, { slow: 300, noMask: true }, { slow: 300, rawUtc: true }, { slow: 300, stray: true }, { slow: 300, noAngular: true }]) {
     await page.click('[data-sec=parts] button:text-is("Tøm samlet grunnlag")');
     await page.click('.kvr-modal button:text-is("Tøm")');
-    await page.evaluate((m) => { window.__slow = m.slow; window.__noMask = !!m.noMask; window.__rawUtc = !!m.rawUtc; window.__stray = !!m.stray; const x = document.getElementById('stray'); if (x) x.remove(); }, mode);
+    await page.evaluate((m) => { window.__slow = m.slow; window.__noMask = !!m.noMask; window.__rawUtc = !!m.rawUtc; window.__stray = !!m.stray; window.__noAngular = !!m.noAngular; if (m.noAngular) window.__kvrSearch.settle = 60; const x = document.getElementById('stray'); if (x) x.remove(); }, mode);
     const tRun = Date.now();
     await run();
     assert.ok(Date.now() - tRun < 30000, 'ingen lang venting: ' + (Date.now() - tRun) + ' ms ' + JSON.stringify(mode));
@@ -206,7 +213,7 @@ search();
     assert.strictEqual((await idb('kvr.arch.v1:2026-09-20')).rows.length, 30);
     assert.match(await txt('[data-sec=parts]'), /Søkene mot CW \(11\)/);
   }
-  await page.evaluate(() => { window.__slow = 0; window.__noMask = false; window.__rawUtc = false; window.__stray = false; const x = document.getElementById('stray'); if (x) x.remove(); });
+  await page.evaluate(() => { window.__slow = 0; window.__noMask = false; window.__rawUtc = false; window.__stray = false; window.__noAngular = false; window.__kvrSearch.settle = 0; const x = document.getElementById('stray'); if (x) x.remove(); });
 
   assert.strictEqual(await page.evaluate(() => window.__clamped || 0), 0, 'fra ble aldri satt etter til');
 

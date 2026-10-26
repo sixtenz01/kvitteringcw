@@ -309,11 +309,11 @@
   }
 
   // ---- CW-søk (samme kontrollene som den gamle pluginen) ---------------------
-  function setInputValue(node, value) {
+  function setInputValue(node, value, noBlur) {
     if (!node) return;
     var d = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
     if (d && d.set) d.set.call(node, value); else node.value = value;
-    ['input', 'change', 'blur'].forEach(function (ev) { node.dispatchEvent(new Event(ev, { bubbles: true })); });
+    (noBlur ? ['input', 'change'] : ['input', 'change', 'blur']).forEach(function (ev) { node.dispatchEvent(new Event(ev, { bubbles: true })); });
   }
 
   function noDate(s) {
@@ -548,16 +548,17 @@
       if (!d || !/^\d{4}-\d{2}-\d{2}$/.test(d.day)) return;
       var v = store(archKey(d.day));
       var rows = v && Array.isArray(v.rows) ? v.rows.map(L.archRow).filter(Boolean) : [];
-      arch.days[d.day] = { day: d.day, at: Number(d.at) || 0, done: !!d.done, cut: Number(d.cut) || 0, rows: rows };
+      arch.days[d.day] = { day: d.day, at: Number(d.at) || 0, done: !!d.done, cut: Number(d.cut) || 0, fv: Number(d.fv) || 1, rows: rows };
     });
     archVer++;
   }
   function archCount() { return Object.keys(arch.days).reduce(function (a, d) { return a + arch.days[d].rows.length; }, 0); }
   function saveArchiveIndex() {
-    store(K.arch, { v: 1, days: Object.keys(arch.days).sort().map(function (d) { var x = arch.days[d]; return { day: d, at: x.at, done: x.done, cut: x.cut, n: x.rows.length }; }) });
+    store(K.arch, { v: 1, days: Object.keys(arch.days).sort().map(function (d) { var x = arch.days[d]; return { day: d, at: x.at, done: x.done, cut: x.cut, fv: x.fv || 1, n: x.rows.length }; }) });
   }
+  var ARCH_FETCH = 2;   // hentemåte: 2 = klokkeslett bekreftet av CW (3.38.6)
   function addArchive(day, items) {
-    var e = arch.days[day] || (arch.days[day] = { day: day, at: 0, done: false, cut: 0, rows: [] });
+    var e = arch.days[day] || (arch.days[day] = { day: day, at: 0, done: false, cut: 0, fv: 1, rows: [] });
     var have = {};
     e.rows.forEach(function (r, i) { have[r.transactionId] = i; });
     items.forEach(function (it) {
@@ -606,7 +607,35 @@
   // Klokkeslett i CWs tidsfelt: via Kendo-widgeten når den finnes, og i feltet, som når du skriver selv.
   // Datodelen er dagens dato, som når Kendo tolker et klokkeslett du skriver; CW setter grenser på til-tiden ut fra fra-tiden,
   // og et klokkeslett med en annen dato regnes da som utenfor grensen (CW satte til-tiden lik fra-tiden). «base» velger en annen dato.
-  function setTime(node, m, base) {
+  // CW leser klokkeslettet når feltet mister fokus (ng-blur="vm.onFromTimeChange()"), men sin egen kopi av verdien oppdateres litt etter;
+  // derfor sendes blur først etter en kort pause, ett felt om gangen, som når du skriver selv. Ellers søkte CW med forrige klokkeslett
+  // (eller feilet på tom tid: «Cannot read properties of null (reading 'valueOf')»).
+  function settleMs() { var h = window.__kvrSearch || {}; return h.settle >= 0 ? h.settle : 250; }
+  // CWs kopi av verdien (k-ng-model eller ng-model på feltet), når Angular lar den leses; ellers undefined.
+  function cwCopy(node) {
+    try {
+      var ng = window.angular, ex = node.getAttribute('k-ng-model') || node.getAttribute('ng-model'), sc = ng && ng.element && ex ? ng.element(node).scope() : null;
+      return sc && typeof sc.$eval === 'function' ? sc.$eval(ex) : undefined;
+    } catch (e) { return undefined; }
+  }
+  function copyMin(v) {
+    if (v instanceof Date) return isNaN(v.getTime()) ? null : v.getHours() * 60 + v.getMinutes();
+    if (v === null || v === '') return null;
+    return typeof v === 'string' ? L.mins(v.trim().slice(0, 5)) : undefined;
+  }
+  async function commitTime(node, m) {
+    var t0 = Date.now();
+    await wait(settleMs());
+    // vent til CWs kopi har verdien (høyst 3 s), når den kan leses
+    for (;;) {
+      var c = cwCopy(node), cm = c === undefined ? undefined : copyMin(c);
+      if (cm === undefined || cm === m || Date.now() - t0 > 3000) break;
+      await wait(50);
+    }
+    node.dispatchEvent(new Event('blur', { bubbles: true }));
+    await wait(settleMs());
+  }
+  async function setTime(node, m, base) {
     if (!node) return;
     var w = timeWidget(node);
     if (w) {
@@ -614,16 +643,18 @@
       if (m !== null) { d = base ? new Date(base.getTime()) : new Date(); d.setHours(Math.floor(m / 60), m % 60, 0, 0); }
       w.value(d); if (typeof w.trigger === 'function') w.trigger('change');
     }
-    setInputValue(node, m === null ? '' : L.hhmm(m));
+    setInputValue(node, m === null ? '' : L.hhmm(m), true);
+    await commitTime(node, m);
   }
-  // Var feltet tomt, settes det til hele døgnet (00:00 eller 23:59): CWs egen kode feiler når tiden blir tom
-  // («Cannot read properties of null (reading 'valueOf')»), og da kunne forrige klokkeslett blitt hengende i søket.
-  function restoreTime(node, o, empty) {
+  // Var feltet tomt, settes det til hele døgnet (00:00 eller 23:59): CWs egen kode feiler når tiden blir tom,
+  // og da kunne forrige klokkeslett blitt hengende i søket.
+  async function restoreTime(node, o, empty) {
     if (!node) return;
     var w = timeWidget(node), has = w ? !!o.w : !!o.t;
-    if (!has) { setTime(node, empty); return; }
+    if (!has) { await setTime(node, empty); return; }
     if (w) { w.value(o.w); if (typeof w.trigger === 'function') w.trigger('change'); }
-    setInputValue(node, o.t);
+    setInputValue(node, o.t, true);
+    await commitTime(node, w ? copyMin(o.w) : L.mins(String(o.t || '').trim()));
   }
   function partSay(t) { if (ui.partStatus) ui.partStatus.textContent = t; say(t); }
 
@@ -751,15 +782,16 @@
       return mn instanceof Date || mx instanceof Date ? f(mn) + ' til ' + f(mx) : '';
     } catch (e) { return ''; }
   }
-  function setRange(day, win, ti) {
+  async function setRange(day, win, ti) {
     var fd = document.querySelector('#fromDatePicker'), td = document.querySelector('#toDatePicker');
     var dp = day.split('-'), bases = [null, new Date(+dp[0], +dp[1] - 1, +dp[2]), new Date(2000, 0, 1)];
-    var put = function (base) {
+    var put = async function (base) {
       inOrder(day, readDate(td), function () { setDate(fd, day); }, function () { setDate(td, day); });
       if (!ti.from || !ti.to) return;
-      // til først når til-feltet er tomt (CWs onFromTimeChange leser til-tiden og feiler på tom) eller fra havner etter til
-      var curTo = readTime(ti.to), sf = function () { setTime(ti.from, win.from, base); }, st = function () { setTime(ti.to, win.to, base); };
-      if (curTo === null || win.from > curTo) { st(); sf(); } else { sf(); st(); }
+      // til først når til-feltet er tomt (CWs onFromTimeChange leser begge og feiler på tom) eller fra ellers havner etter til
+      var curTo = readTime(ti.to);
+      if (curTo === null || win.from > curTo) { await setTime(ti.to, win.to, base); await setTime(ti.from, win.from, base); }
+      else { await setTime(ti.from, win.from, base); await setTime(ti.to, win.to, base); }
     };
     var shown = function (v, time) { return v === null || v === '' ? 'tomt' : time ? L.hhmm(v) : v; };
     var check = function () {
@@ -768,12 +800,17 @@
       if (td && readDate(td) !== day) bad.push({ f: 'Dato til', n: td, v: shown(readDate(td)) });
       if (ti.from && ti.to && readTime(ti.from) !== win.from) bad.push({ f: 'Fra-tid', n: ti.from, v: shown(readTime(ti.from), true), t: 1 });
       if (ti.from && ti.to && readTime(ti.to) !== win.to) bad.push({ f: 'Til-tid', n: ti.to, v: shown(readTime(ti.to), true), t: 1 });
+      [['Fra-tid i CW', ti.from, win.from], ['Til-tid i CW', ti.to, win.to]].forEach(function (x) {
+        if (!x[1] || !ti.from || !ti.to) return;
+        var c = cwCopy(x[1]), cm = c === undefined ? undefined : copyMin(c);
+        if (cm !== undefined && cm !== x[2]) bad.push({ f: x[0], n: x[1], v: shown(cm, true), t: 1 });
+      });
       return bad;
     };
     // dagens dato først; bare når klokkeslettet ikke godtas, prøves søkedagen og en fast dato. Hver to ganger (andre gang ligger den andre grensen riktig).
     var bad = [];
     for (var i = 0; i < bases.length; i++) {
-      for (var k = 0; k < 2; k++) { put(bases[i]); bad = check(); if (!bad.length) return; }
+      for (var k = 0; k < 2; k++) { await put(bases[i]); bad = check(); if (!bad.length) return; }
       if (!bad.some(function (b) { return b.t; })) break;
     }
     var lim = bad.map(function (b) { var l = limits(b.n); return l ? b.f.toLowerCase() + ' ' + l : ''; }).filter(Boolean);
@@ -781,11 +818,16 @@
       (lim.length ? '; grenser i CW: ' + lim.join(', ') : '') + '). Kjøringen ble stoppet; ingenting fra dette søket er lagret.');
   }
 
+  // Passer ikke listen med dagen og klokkeslettet, søkes det én gang til med feltene satt på nytt (CW kan ha brukt verdiene fra forrige søk).
   async function partSearch(day, win, ti) {
-    setRange(day, win, ti);
-    var head = 'Henter ' + day + ' (' + L.timeText(win) + ')';
-    var t0 = Date.now(), rows = await searchNow(bulk.pause, bulk.timeout, function (data) { var tm = cwTimes(data); return onDay(tm, day) && fitsWin(tm, win); }, function (t) { partSay(head + ': ' + t); });
-    bulk.log.push({ day: day, win: L.timeText(win), n: rows ? rows.length : null, ms: Date.now() - t0, wait: lastSearchInfo.wait, loaders: lastSearchInfo.loaders.slice() });
+    var head = 'Henter ' + day + ' (' + L.timeText(win) + ')', t0 = Date.now(), rows = null, again = 0;
+    var fit = function (data) { var tm = cwTimes(data); return onDay(tm, day) && fitsWin(tm, win); };
+    for (; again < 2; again++) {
+      await setRange(day, win, ti);
+      rows = await searchNow(bulk.pause, bulk.timeout, fit, function (t) { partSay(head + (again ? ', nytt forsøk' : '') + ': ' + t); });
+      if (rows === null || fit(rows) || bulk.stop) break;
+    }
+    bulk.log.push({ day: day, win: L.timeText(win), n: rows ? rows.length : null, ms: Date.now() - t0, wait: lastSearchInfo.wait, loaders: lastSearchInfo.loaders.slice(), again: again > 0 });
     if (bulk.log.length > 400) bulk.log.shift();
     return rows;
   }
@@ -822,7 +864,8 @@
     try {
       for (var di = 0; di < days.length && !bulk.stop; di++) {
         var day = days[di];
-        if (arch.days[day] && arch.days[day].done && day < today) { skipped++; continue; }
+        // dager hentet før 3.38.6 kan mangle bonger (CW søkte med forrige klokkeslett) og hentes på nytt
+        if (arch.days[day] && arch.days[day].done && (arch.days[day].fv || 1) >= ARCH_FETCH && day < today) { skipped++; continue; }
         if (bulk.extra) {
           // tilleggsdata for hele dagen først (søk uten klokkeslett, så CWs filtre ett om gangen), så rask skanning vet hvilke bonger som trengs
           var whole = await partSearch(day, L.DAY_WINDOW, ti);
@@ -870,7 +913,7 @@
         if (bulk.stop) break;
         var e = arch.days[day];
         dayN = e ? e.rows.length : 0;
-        if (e) { e.done = true; e.cut = cutHere; e.at = Date.now(); saveArchiveIndex(); }
+        if (e) { e.done = true; e.cut = cutHere; e.fv = ARCH_FETCH; e.at = Date.now(); saveArchiveIndex(); }
         nRows += dayN; nCut += cutHere;
         log.push(day + ': ' + plur(dayN, 'bong', 'bonger') + (cutHere ? ' (kuttet)' : ''));
       }
@@ -883,7 +926,9 @@
       if (si.min) setInputValue(si.min, orig.min);
       if (si.max) setInputValue(si.max, orig.max);
       var oMin = function (o, empty) { var v = o.w; return v instanceof Date ? v.getHours() * 60 + v.getMinutes() : (L.mins(String(o.t || '').trim()) === null ? empty : L.mins(String(o.t).trim())); };
-      inOrder(oMin(orig.tFrom, L.DAY_WINDOW.from), readTime(ti.to), function () { restoreTime(ti.from, orig.tFrom, L.DAY_WINDOW.from); }, function () { restoreTime(ti.to, orig.tTo, L.DAY_WINDOW.to); });
+      var rFrom = function () { return restoreTime(ti.from, orig.tFrom, L.DAY_WINDOW.from); }, rTo = function () { return restoreTime(ti.to, orig.tTo, L.DAY_WINDOW.to); };
+      var cTo = readTime(ti.to);
+      if (cTo !== null && oMin(orig.tFrom, L.DAY_WINDOW.from) > cTo) { await rTo(); await rFrom(); } else { await rFrom(); await rTo(); }
       if (ft && orig.free) setInputValue(ft, orig.free);
       var back = await searchNow(bulk.pause, bulk.timeout);
       if (back === null) errors.push('CW svarte ikke da søket ditt skulle hentes tilbake. Trykk Oppdater i CW.');
@@ -911,7 +956,8 @@
       var scanned = 0, cut = days.filter(function (d) { return arch.days[d].cut; });
       days.forEach(function (d) { arch.days[d].rows.forEach(function (r) { if (scanMap[r.transactionId]) scanned++; }); });
       ui.partInfo.appendChild(hintEl('Samlet grunnlag: ' + n + ' bonger fra ' + plur(days.length, 'dag', 'dager') + ' (' + days[0] + (days.length > 1 ? ' – ' + days[days.length - 1] : '') + '), ' + scanned + ' skannet. ' +
-        (cut.length ? 'Kuttet ved 1000: ' + cut.join(', ') + '. ' : '') + 'Analysen bruker det sammen med listen. Medlemsnummer for bonger som ikke står i listen, finnes bare til siden lastes på nytt.'));
+        (cut.length ? 'Kuttet ved 1000: ' + cut.join(', ') + '. ' : '') +
+        (days.some(function (d) { return arch.days[d].done && (arch.days[d].fv || 1) < ARCH_FETCH; }) ? 'Dager hentet med eldre versjon kan mangle bonger og hentes på nytt neste gang. ' : '') + 'Analysen bruker det sammen med listen. Medlemsnummer for bonger som ikke står i listen, finnes bare til siden lastes på nytt.'));
     }
     if (lastParts) {
       if (lastParts.log.length) ui.partInfo.appendChild(hintEl('Sist: ' + lastParts.log.join(' · ') + ' (' + Math.round(lastParts.sec / 60) + ' min).'));
@@ -921,7 +967,7 @@
         det.appendChild(el('summary', { text: 'Søkene mot CW (' + lastParts.searches.length + ')' }));
         det.appendChild(el('div', { text: lastParts.searches.map(function (x) {
           return x.day + ' ' + x.win + ': ' + (x.n === null ? 'ikke svar' : plur(x.n, 'bong', 'bonger')) + ', ' + (x.ms / 1000).toFixed(1) + ' s' +
-            (x.ms > 5000 && x.wait ? ' (ventet på: ' + x.wait + ')' : '') + (x.loaders && x.loaders.length ? ' [lastesymbol: ' + x.loaders.join(', ') + ']' : '');
+            (x.again ? ' (søkt to ganger)' : '') + (x.ms > 5000 && x.wait ? ' (ventet på: ' + x.wait + ')' : '') + (x.loaders && x.loaders.length ? ' [lastesymbol: ' + x.loaders.join(', ') + ']' : '');
         }).join(' · ') }));
         ui.partInfo.appendChild(det);
       }
