@@ -226,4 +226,25 @@ const mapOf = (pairs) => pairs.reduce((m, [it, s]) => (m[it.transactionId] = s, 
   assert.strictEqual(g.fail, 0, 'et svar nullstiller feiltelleren');
 }
 
+// ---- MVA-tabellen har ikke pantelapper, men Totalt har dem
+{
+  const rows = [['Beskrivelse', '', 'Beløp'], ['RETUR VARE'], ['399 PANTELAPP', '', '-2.00'], ['RETUR VARE'], ['399 PANTELAPP', '', '-18.00'],
+    ['7038010000010 COOP SKOLEBRØDSTANG', '', '23.94'], ['Rabatt: Kr 15.96 (40.0%)'], ['Rabatt årsak: Datovare'], ['Øreavrunding', '', '0.06'], ['', 'Totalt', '4.00'], ['Kontant:', '', '4.00'],
+    ['MVA-grunnlag', 'MVA-%', 'MVA', 'Sum'], ['20.82', '15 %', '3.12', '23.94']];
+  const s = L.parseReceipt(rows);
+  assert.strictEqual(s.tot, 4); assert.strictEqual(s.mv.length, 1);
+  const it = bong({ totalAmount: 4 });
+  const cfg = L.defaultControl();
+  const pop = [it];
+  for (let i = 0; i < 12; i++) { const x = bong({ totalAmount: 10 }); pop.push(x); }
+  const scans = mapOf([[it, s]].concat(pop.slice(1).map((x) => [x, L.parseReceipt([['7038010000027 MELK', '', '10.00'], ['', 'Totalt', '10.00'], ['Kontant:', '', '10.00'], ['MVA-grunnlag', 'MVA-%', 'MVA', 'Sum'], ['8.70', '15 %', '1.30', '10.00']])])));
+  const g = L.ledger(pop, pop, scans, cfg);
+  assert.ok(!g.findings.some((f) => f.code === 'vat' || /MVA/.test(f.title)), JSON.stringify(g.findings.map((f) => f.detail)));
+  // en bong der MVA-tabellen virkelig ikke stemmer, flagges fortsatt
+  const bad = L.parseReceipt([['7038010000010 BRØD', '', '30.00'], ['', 'Totalt', '30.00'], ['Kontant:', '', '30.00'], ['MVA-grunnlag', 'MVA-%', 'MVA', 'Sum'], ['8.70', '15 %', '1.30', '10.00']]);
+  const b = bong({ totalAmount: 30 });
+  const g2 = L.ledger([b], pop.concat([b]), Object.assign({}, scans, mapOf([[b, bad]])), cfg);
+  assert.ok(g2.findings.some((f) => /MVA/.test(f.title) && /MVA-tabellens sum 10\.00 mot Totalt 30\.00/.test(f.detail)));
+}
+
 console.log('cwdata: ok');

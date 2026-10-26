@@ -3054,7 +3054,14 @@
             if (typeof v.m === 'number' && typeof v.s === 'number' && Math.abs(v.g + v.m - v.s) > vatTol) { r.vatOK = false; r.vatBad.push('grunnlag ' + money(v.g) + ' + MVA ' + money(v.m) + ' ≠ sum ' + money(v.s)); }
             if (typeof v.r === 'number' && rates.length && rates.indexOf(v.r) === -1) r.rateBad.push(v.r);
           });
-          if (hasS && (Math.abs(vs - sc.tot) > Math.max(vatTol, 0) + Math.abs(rnd) + 0.001 * sc.mv.length)) { r.vatOK = false; r.vatBad.push('MVA-tabellens sum ' + money(vs) + ' mot Totalt ' + money(sc.tot)); }
+          // Pant er uten MVA: pantelapper (og noen ganger pantesalg) står ikke i MVA-tabellen, men er med i Totalt.
+          var pantRet = round2(sc.items.filter(function (l) { return isPantText(l) && l.a < 0; }).reduce(function (a, l) { return a + l.a; }, 0));
+          var pantAll = round2(sc.items.filter(isPantText).reduce(function (a, l) { return a + l.a; }, 0));
+          var vTol = Math.max(vatTol, 0) + Math.abs(rnd) + 0.001 * sc.mv.length;
+          if (hasS && ![sc.tot, sc.tot - pantRet, sc.tot - pantAll].some(function (x) { return Math.abs(vs - x) <= vTol; })) {
+            r.vatOK = false;
+            r.vatBad.push('MVA-tabellens sum ' + money(vs) + ' mot Totalt ' + money(sc.tot) + (pantAll ? ' (også uten pant ' + money(pantAll) + ')' : ''));
+          }
         }
       }
       rows.push(r);
