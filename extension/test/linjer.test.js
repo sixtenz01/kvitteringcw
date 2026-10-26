@@ -363,13 +363,31 @@ const mapOf = (pairs) => pairs.reduce((m, [it, s]) => (m[it.transactionId] = s, 
   set[5][0].totalAmount = 50; set[5][1].items[0].a = 50;
   const its = set.map((x) => x[0]), map = mapOf(set);
   const r = L.cardChecks(its, its, map, CT());
-  assert.strictEqual(r.findings.length, 1);
-  assert.deepStrictEqual(r.findings[0].ids.sort(), [its[0], its[1], its[2]].map((x) => x.transactionId).sort());
-  assert.match(r.findings[0].detail, /VISA …1234: 3 returer innen 30 dager, totalt 300\.00 kr \(kasserer A ×2, B ×1\)/);
+  const same = r.findings.filter((x) => x.code === 'cardRet');
+  assert.strictEqual(same.length, 1);
+  assert.deepStrictEqual(same[0].ids.sort(), [its[0], its[1], its[2]].map((x) => x.transactionId).sort());
+  assert.match(same[0].detail, /VISA …1234: 3 returer innen 30 dager, totalt 300\.00 kr \(kasserer A ×2, B ×1\)/);
+  // åpen retur: hver retur til Mastercard flagges (standard), Visa ikke
+  const open = r.findings.filter((x) => x.code === 'openRet');
+  assert.deepStrictEqual(open.map((x) => x.ids[0]).sort(), [its[3], its[4]].map((x) => x.transactionId).sort());
+  assert.match(open[0].detail, /100\.00 kr tilbake til Mastercard …1234\. Mastercard har åpen retur/);
+  assert.deepStrictEqual([r.open.n, r.open.sum, r.refunds.visa.n, r.refunds.mastercard.n], [2, 200, 3, 2]);
+  assert.strictEqual(L.cardChecks(its, its, map, Object.assign(CT(), { openRetSchemes: '' })).findings.filter((x) => x.code === 'openRet').length, 0, 'tom liste = av');
+  assert.strictEqual(L.cardChecks(its, its, map, Object.assign(CT(), { openRetSchemes: 'Visa, Mastercard' })).findings.filter((x) => x.code === 'openRet').length, 5);
+  assert.strictEqual(L.RISK_WEIGHTS['Retur til kort med åpen retur'], 3);
+  // filteret «Retur til kort»
+  const F = (v) => its.filter((it) => L.matches(it, Object.assign(L.defaultFilters(), { cardRet: v }), { scan: map })).length;
+  assert.deepStrictEqual([F('*'), F('visa'), F('mastercard'), F('amex'), F('?')], [5, 3, 2, 0, 0]);
+  // leverandør fra betalingsmåten når kortlinjen mangler; salg er ikke retur
+  const pr = bong({ totalAmount: -59 }), ps = sc([{ c: EAN, n: 'RETUR', a: -59 }], { pay: { Mastercard: -59 } });
+  assert.deepStrictEqual(L.cardRefund(pr, ps).schemes, ['mastercard']);
+  assert.strictEqual(L.cardRefund(its[5], map[its[5].transactionId]), null);
+  assert.strictEqual(L.cardRefund(bong({ totalAmount: -10 }), sc([{ c: EAN, n: 'RETUR', a: -10 }], { pay: { Kontant: -10 } })), null, 'kontant retur er ikke retur til kort');
   assert.deepStrictEqual([r.returns, r.withCard], [5, 5]);
   assert.strictEqual(r.rows[0].best, 3);
-  assert.strictEqual(L.cardChecks(its, its, map, Object.assign(CT(), { cardRetDays: '10' })).findings.length, 0, 'innen 10 dager er det bare to');
-  assert.strictEqual(L.cardChecks(its, its, map, Object.assign(CT(), { cardRetN: '' })).findings.length, 0);
+  const sameOf = (cfg) => L.cardChecks(its, its, map, Object.assign(CT(), cfg)).findings.filter((x) => x.code === 'cardRet').length;
+  assert.strictEqual(sameOf({ cardRetDays: '10' }), 0, 'innen 10 dager er det bare to');
+  assert.strictEqual(sameOf({ cardRetN: '' }), 0);
   assert.strictEqual(L.cardChecks(its, its, mapOf(set.map(([i, s]) => [i, Object.assign({}, s, { v: 5 })])), CT()).scanned, 0, 'v5 har ikke kortdata');
   // samme siste fire hos ulik leverandør er ikke samme kort
   assert.strictEqual(r.rows.filter((x) => /1234/.test(x.label)).length, 2);

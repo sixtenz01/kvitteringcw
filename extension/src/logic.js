@@ -111,6 +111,7 @@
       discFrom: '',
       discTo: '',
       special: '',
+      cardRet: '',
       bong: '',
       item: '',
       text: '',
@@ -239,6 +240,11 @@
       var words = f.special === '*' ? wordList((ctx && ctx.specialWords) || DEFAULT_SPECIAL) : [String(f.special).toLowerCase()];
       if (!specialHits(ss, words).length) return false;
     }
+    if (f.cardRet) {
+      var cr = cardRefund(item, ctx && ctx.scan && ctx.scan[item.transactionId]);
+      if (!cr) return false;
+      if (f.cardRet !== '*' && cr.schemes.indexOf(f.cardRet === '?' ? '' : f.cardRet) === -1) return false;
+    }
     return true;
   }
 
@@ -364,6 +370,23 @@
     if (!m) return '';
     var x = m[1].toLowerCase().replace(/\s+/g, '');
     return x === 'americanexpress' ? 'amex' : x;
+  }
+  var SCHEME_LABELS = { visa: 'Visa', mastercard: 'Mastercard', maestro: 'Maestro', bankaxept: 'BankAxept', amex: 'American Express', diners: 'Diners', jcb: 'JCB', unionpay: 'UnionPay' };
+  function schemeLabel(k) { return k ? SCHEME_LABELS[k] || k : 'Ukjent kortleverandør'; }
+  // Kortleverandører fra en liste med navn (komma): «Mastercard, Visa» → ['mastercard', 'visa'].
+  function schemeList(text) { var out = []; wordList(text).forEach(function (w) { var k = cardScheme(w); if (k && out.indexOf(k) === -1) out.push(k); }); return out; }
+  // Retur til kort: bongen er en retur (Totalt under null) og har kort (kortlinje på bongen, eller betalingsmåte med kortleverandørens navn
+  // og negativt beløp). Leverandøren kommer fra det som står på bongen; tom streng = kort uten lesbar leverandør.
+  function cardRefund(item, sc) {
+    if (!sc || !(sc.v >= 6) || sc.settle) return null;
+    var tot = typeof sc.tot === 'number' ? sc.tot : item && item.totalAmount;
+    if (!(typeof tot === 'number' && tot < 0)) return null;
+    var schemes = [], cards = sc.cd || [];
+    cards.forEach(function (c) { var k = c.s || ''; if (schemes.indexOf(k) === -1) schemes.push(k); });
+    Object.keys(sc.pay || {}).forEach(function (l) { var k = cardScheme(l); if (k && sc.pay[l] < 0 && schemes.indexOf(k) === -1) schemes.push(k); });
+    if (!schemes.length) return null;
+    if (schemes.length > 1 && schemes.indexOf('') !== -1) schemes.splice(schemes.indexOf(''), 1);
+    return { schemes: schemes, cards: cards, amount: round2(-tot) };
   }
 
   var MAX_ITEMS = 500, MAX_NAME = 80, MAX_PAY = 20;
@@ -1026,6 +1049,7 @@
     ['campBongs', 'Mulig kampanje: samme vare med rabatt på ≥ antall bonger (tom = av)', '2'], ['campCashiers', 'Mulig kampanje: hos ≥ antall kasserere', '2'], ['campDay', 'Kampanjedag: andel bonger med rabatt ≥ % (tom = av)', '40'], ['campAuto', 'Kampanjevare automatisk (tom = spør)', '1'], ['campCoupon', 'Rabatt på vare med kupong på bongen er kampanje (tom = av)', '1'], ['campMulti', 'To like varer med samme rabatt på samme bong er kampanje (tom = av)', '1'],
     ['askDevPct', 'Spør pris avviker fra dagens salg ≥ % (tom = av)', '5'], ['askMinN', 'Spør pris: minst antall salg av varen samme dag', '3'], ['askN', 'Spør pris: kasserer ved ≥ antall bonger (tom = av)', '5'],
     ['cardRetN', 'Returer på samme kort ≥ antall (tom = av)', '3'], ['cardRetDays', 'Returer på samme kort innen dager', '30'],
+    ['openRetSchemes', 'Åpen retur: kortleverandører der hver retur til kort flagges (komma, tom = av)', 'Mastercard'],
     ['manualWords', 'Manuell kvittering: ord (komma, tom = av)', 'manuell kvittering, manuell bong, til gode, tilgode'], ['manualDays', 'Manuell kvittering: match innen dager', '3'],
     ['paceSec', 'Tempo: maks sekunder mellom bonger i en serie (tom = av)', '25'], ['paceN', 'Tempo: serie på minst antall bonger', '4'],
     ['paceMinuteN', 'Tempo uten sekunder: bonger i samme minutt på én kasse (tom = av)', '6'], ['zeroN', '0-kr-bonger: kasserer ved ≥ antall (tom = av)', '5'],
@@ -1158,10 +1182,11 @@
       sf('askMinN', 'ctl', 'num', 'Minst antall salg av varen samme dag', 'stk'),
       sf('askN', 'ctl', 'num', 'Marker kasserer ved', 'bonger', '', true)
     ], weights: ['Spør pris avviker fra dagens salg', 'Mange spør pris'] },
-    { id: 'card', title: 'Kort: gjentatte returer', text: 'Returer der samme kort (kortleverandør, utstedernr og siste fire siffer) går igjen. Bruker bare det som er trykt på bongen. Format er ikke bekreftet; krever skanning på nytt (versjon 6).', fields: [
+    { id: 'card', title: 'Kort: returer', text: 'Returer der samme kort (kortleverandør, utstedernr og siste fire siffer) går igjen, og returer til kortleverandører med åpen retur (penger tilbake til kortet uten kobling til et kjøp). Bruker bare det som er trykt på bongen. Format er ikke bekreftet; krever skanning på nytt (versjon 6).', fields: [
       sf('cardRetN', 'ctl', 'num', 'Returer på samme kort: flagg ved', 'stk', '', true),
-      sf('cardRetDays', 'ctl', 'num', 'Innen', 'dager')
-    ], weights: ['Gjentatte returer på samme kort'] },
+      sf('cardRetDays', 'ctl', 'num', 'Innen', 'dager'),
+      sf('openRetSchemes', 'ctl', 'text', 'Åpen retur: flagg hver retur til', '', 'Kortleverandører (komma), for eksempel Mastercard. Tom = av.', true)
+    ], weights: ['Gjentatte returer på samme kort', 'Retur til kort med åpen retur'] },
     { id: 'manual', title: 'Manuell kvittering og til gode-lapp', text: 'Bonger som er manuelle eller betalt med til gode-lapp, og som har samme beløp som en annen bong i butikken. Ordene er ikke bekreftet i ekte data. Krever skanning.', fields: [
       sf('manualWords', 'ctl', 'text', 'Ord (komma)', '', 'Treff på starten av et ord i linjer, betalingsmåter og tekstlinjer.', true),
       sf('manualDays', 'ctl', 'num', 'Samme beløp innen', 'dager')
@@ -1517,7 +1542,7 @@
     'Manuell pantelapp': 3, 'Mange manuelle pantelapper': 3, 'Pantelapp slettet': 4, 'Pantelapp innløst flere ganger': 4,
     'Varelinjer slettet, pant utbetalt kontant': 5, 'Makulert vare ikke solgt på ny': 3, 'Mange makulerte varelinjer': 3,
     'Spesialbetaling på bong': 3, 'Mange spesialbetalinger': 3, 'Høy rabattprosent': 3, 'Rabatt uten treff på andre salg': 4,
-    'Spør pris avviker fra dagens salg': 3, 'Mange spør pris': 2, 'Gjentatte returer på samme kort': 4, 'Manuell kvittering matcher annen bong': 4,
+    'Spør pris avviker fra dagens salg': 3, 'Mange spør pris': 2, 'Gjentatte returer på samme kort': 4, 'Retur til kort med åpen retur': 3, 'Manuell kvittering matcher annen bong': 4,
     'Bonger i rask rekkefølge': 2, 'Mange 0-kr-bonger': 2, 'Overvåket vare i retur': 3, 'Overvåket vare slettet': 3, 'Mange overvåkede varer hos kasserer': 2,
     'Retur av vare uten kjøp på kortet': 4, 'Retur av vare uten kjøp av medlemmet': 3, 'Retur av vare uten salg samme dag': 1,
     'Topptekst stemmer ikke med listen': 3, 'Samme autorisasjonskode på flere bonger': 3, 'Makulert linje på bong': 2,
@@ -2937,11 +2962,24 @@
   }
 
   // Gjentatte returer på samme kort (samme kortleverandør, utstedernr og siste fire siffer). Krever skanning med kortdata (v6).
+  // Retur til kortleverandør med åpen retur (standard Mastercard): kortet kan få penger tilbake uten kobling til et kjøp, så hver slik retur flagges.
   function cardChecks(items, pop, scanMap, cfg) {
-    var res = { findings: [], rows: [], returns: 0, withCard: 0, scanned: 0, sales: 0, coverage: 1 };
+    var res = { findings: [], rows: [], returns: 0, withCard: 0, scanned: 0, sales: 0, coverage: 1, refunds: {}, open: { schemes: schemeList(cfg.openRetSchemes), n: 0, sum: 0 } };
     var nMin = cnum(cfg.cardRetN, null), days = cnum(cfg.cardRetDays, 30);
     var scope = {}, g = {};
     items.forEach(function (it) { scope[it.transactionId] = true; });
+    items.forEach(function (it) {
+      var cr = it.receiptType === 1 ? cardRefund(it, scanMap && scanMap[it.transactionId]) : null;
+      if (!cr) return;
+      cr.schemes.forEach(function (k) { var r = res.refunds[k] || (res.refunds[k] = { n: 0, sum: 0 }); r.n++; r.sum = round2(r.sum + cr.amount); });
+      var hit = cr.schemes.filter(function (k) { return res.open.schemes.indexOf(k) !== -1; });
+      if (!hit.length) return;
+      res.open.n++; res.open.sum = round2(res.open.sum + cr.amount);
+      var cards = cr.cards.filter(function (c) { return hit.indexOf(c.s) !== -1; }).map(function (c) { return (c.f ? c.f + '…' : '…') + c.n; });
+      res.findings.push({ kind: 'Kort', code: 'openRet', title: 'Retur til kort med åpen retur', flag: true, cashier: it.cashierNumber,
+        detail: whereText(it) + ': ' + money(cr.amount) + ' kr tilbake til ' + hit.map(schemeLabel).join(' og ') + (cards.length ? ' ' + cards.join(', ') : '') + '. ' + hit.map(schemeLabel).join(' og ') + ' har åpen retur: pengene kan gå til et annet kort enn det som ble brukt ved kjøpet.',
+        ids: [it.transactionId] });
+    });
     pop.forEach(function (it) {
       if (it.receiptType !== 1) return;
       res.sales++;
@@ -4005,7 +4043,7 @@
     specialChecks: specialChecks,
     specialHits: specialHits,
     askPrice: askPrice,
-    cardChecks: cardChecks,
+    cardChecks: cardChecks, cardRefund: cardRefund, schemeLabel: schemeLabel, schemeList: schemeList, SCHEME_LABELS: SCHEME_LABELS,
     manualReceipts: manualReceipts,
     cancelled: cancelled,
     netNp: netNp,

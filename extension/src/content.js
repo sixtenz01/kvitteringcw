@@ -1554,7 +1554,7 @@
     if (harvestGridStores()) refreshStoreMap();
     var items = recs.map(function (r) { return r.item; });
     var dup = L.findDuplicates(L.splitCopies(items, scanMap).items);   // en bongkopi er ikke et duplikatkjøp
-    var bf = Object.assign({}, filters, { pant: '', disc: '', discFrom: '', discTo: '', special: '', item: '', groups: [] });
+    var bf = Object.assign({}, filters, { pant: '', disc: '', discFrom: '', discTo: '', special: '', cardRet: '', item: '', groups: [] });
     var ctx = { dupIds: dup.ids, scan: scanMap, groupsOf: groupsOf, anom: anomMap, notes: notes, specialWords: ctlCfg.specialWords };
     var visible = 0;
     ensureColumn();
@@ -1628,7 +1628,7 @@
     ui.scanTxt.textContent = 'Skannet ' + (base.length - none) + ' av ' + base.length + (old ? ' (' + old + ' eldre skanninger tas på nytt)' : '') + (quick !== null ? ' · rask skanning: ' + quick + ' gjenstår' : '');
     ui.scanNow.style.display = missing > 0 ? '' : 'none';
     ui.scanNow.disabled = scanning;
-    var hide = filters.pant || filters.item || filters.text || filters.pay || filters.special || filters.groups.length ? none : 0;
+    var hide = filters.pant || filters.item || filters.text || filters.pay || filters.special || filters.cardRet || filters.groups.length ? none : 0;
     if (filters.disc || filters.discFrom || filters.discTo) hide = none + noDisc;
     ui.scanWarn.style.display = hide > 0 ? '' : 'none';
     ui.scanWarnTxt.textContent = hide + ' kvitteringer ' + ((filters.disc || filters.discFrom || filters.discTo) && noDisc ? 'mangler skanning eller rabattdata' : 'er ikke skannet') + ' og skjules av dette filteret.';
@@ -1683,6 +1683,7 @@
     if (f.disc) add('Rabatt: ' + (({ any: 'har rabatt', noreason: 'uten årsak', reason: 'med årsak', coupon: 'har kupong' }[f.disc] || (f.disc.indexOf('r:') === 0 ? 'årsak ' + f.disc.slice(2) : f.disc))), function () { f.disc = ''; });
     if (f.discFrom || f.discTo) add('Rabatt % ' + rng(f.discFrom, f.discTo), function () { f.discFrom = ''; f.discTo = ''; });
     if (f.special) add('Spesial: ' + (f.special === '*' ? 'alle ord' : f.special), function () { f.special = ''; });
+    if (f.cardRet) add('Retur til kort' + (f.cardRet === '*' ? '' : ': ' + (f.cardRet === '?' ? 'ukjent leverandør' : L.schemeLabel(f.cardRet))), function () { f.cardRet = ''; });
     if (f.pant) add('Pant: ' + ({ any: 'pant/retur', sale: 'salg', 'return': 'retur' }[f.pant] || f.pant), function () { f.pant = ''; });
     if (f.note) add('Notat: ' + ({ any: 'har notat', oppfolging: 'til oppfølging', sjekket: 'sjekket' }[f.note] || f.note), function () { f.note = ''; });
     if (f.groups.length) add('Gruppe: ' + f.groups.join(', '), function () { f.groups = []; });
@@ -2447,6 +2448,14 @@
       var cr = C.rows.filter(function (r) { return r.n > 1; }).slice(0, 10).map(function (r) { return [r.label, { t: r.n, bad: r.flag }, r.best, fmt(r.sum), Object.keys(r.cashiers).map(function (k) { return k + ' ×' + r.cashiers[k]; }).join(', ')]; });
       if (cr.length) box.appendChild(tbl(['Kort', 'Returer', 'Innen ' + ctlCfg.cardRetDays + ' d', 'Sum kr', 'Kasserer'], cr));
     }
+    box.appendChild(el('b', { class: 'kvr-subh', text: 'Retur til kort per leverandør' }));
+    var rk = Object.keys(C.refunds).sort(function (a, b) { return C.refunds[b].n - C.refunds[a].n; });
+    box.appendChild(hintEl((C.open.schemes.length ? 'Åpen retur (hver retur flagges): ' + C.open.schemes.map(L.schemeLabel).join(', ') + '. ' + plur(C.open.n, 'retur', 'returer') + ' til slike kort, ' + fmt(C.open.sum) + ' kr. ' : 'Åpen retur er av (Innstillinger → Kort: returer). ') +
+      'Leverandøren leses fra kortlinjen på bongen eller fra betalingsmåten. Velg en rad for å vise bongene.'));
+    if (rk.length) box.appendChild(tbl(['Leverandør', 'Returer', 'Sum kr'], rk.map(function (k) {
+      var open = C.open.schemes.indexOf(k) !== -1;
+      return [{ node: btn(L.schemeLabel(k) + (open ? ' (åpen retur)' : ''), function () { filters.cardRet = k || '?'; writeForm(); apply(); say('Viser returer til ' + L.schemeLabel(k) + '.'); }, 'kvr-ent') }, { t: C.refunds[k].n, bad: open }, fmt(C.refunds[k].sum)];
+    })));
     box.appendChild(el('b', { class: 'kvr-subh', text: 'Manuell kvittering og til gode-lapp' }));
     box.appendChild(hintEl(M.words.length ? M.manual + ' bonger med ordene «' + M.words.join('», «') + '» blant ' + M.scanned + ' skannede; ' + M.findings.length + ' har samme beløp som en annen bong innen ' + ctlCfg.manualDays + ' dager. Ordene er ikke bekreftet i ekte data; se Diagnostikk.' : 'Av: ordlisten er tom under Innstillinger.'));
     renderTempo(box, R.tempo);
@@ -3857,6 +3866,7 @@
     filters.discFrom = ui.discFrom.value;
     filters.discTo = ui.discTo.value;
     filters.special = ui.special.value;
+    filters.cardRet = ui.cardRet.value;
     filters.note = ui.note.value;
     filters.sort = ui.sort.value;
   }
@@ -3874,6 +3884,7 @@
     ui.pant.value = filters.pant;
     ui.disc.value = filters.disc;
     ui.special.value = filters.special;
+    ui.cardRet.value = filters.cardRet || '';
     ui.note.value = filters.note;
     ui.sort.value = filters.sort;
   }
@@ -4830,6 +4841,10 @@
     ui.discTo = input('number', { step: '1', min: '0', placeholder: 'til %' });
     ui.special = el('select', { 'aria-label': 'Spesialbetaling' }, [el('option', { value: '', text: 'Alle' })]);
     ui.special.addEventListener('change', onChange);
+    ui.cardRet = el('select', { 'aria-label': 'Retur til kort' }, [el('option', { value: '', text: 'Alle' }), el('option', { value: '*', text: 'Retur til kort (alle leverandører)' })]
+      .concat(Object.keys(L.SCHEME_LABELS).map(function (k) { return el('option', { value: k, text: 'Retur til ' + L.SCHEME_LABELS[k] }); }))
+      .concat([el('option', { value: '?', text: 'Retur til kort, ukjent leverandør' })]));
+    ui.cardRet.addEventListener('change', onChange);
     ui.scanBtn = btn('Skann innhold (synlige)', scanVisible, 'kvr-primary');
     ui.stopBtn = btn('Stopp', function () { cancelScan = true; });
     ui.stopBtn.disabled = true;
@@ -4877,7 +4892,8 @@
       pfield('Varegruppe', ui.groups, true),
       el('div', { class: 'kvr-row' }, [field('Pant', ui.pant, true), field('Rabatt', ui.disc, true)]),
       el('div', { class: 'kvr-row' }, [field('Rabatt % fra', ui.discFrom, true), field('Rabatt % til', ui.discTo, true)]),
-      field('Spesialbetaling (eget/internt forbruk, utbetaling …)', ui.special, true)
+      field('Spesialbetaling (eget/internt forbruk, utbetaling …)', ui.special, true),
+      field('Retur til kort (kortleverandør)', ui.cardRet, true)
     ], true);
     var secGroups = section('groups', 'Varegrupper', [
       el('div', { class: 'kvr-hint', text: 'Sum per varegruppe for valgte kvitteringer:' }), ui.groupSums,
