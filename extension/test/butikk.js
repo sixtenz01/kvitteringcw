@@ -76,7 +76,17 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   assert.deepStrictEqual(await labels(), ['1001 – Coop Mega Kolbotn', '1002 – Extra Testby', '1003 – Coop Prix Test', '1004']);
   // innholdsfiltrene ligger under Filtrer, Skann har bare skanning og varegrupper
   const filt = await page.innerText('[data-sec=content]');
-  assert.match(filt, /INNHOLD[\s\S]*Vare[\s\S]*Varegruppe[\s\S]*Pant[\s\S]*Rabatt[\s\S]*Spesialbetaling/);
+  assert.match(filt, /INNHOLD[\s\S]*Betalingsmåte[\s\S]*Pant[\s\S]*Rabatt[\s\S]*Retur til kort[\s\S]*Spesialbetaling[\s\S]*Søk i bongen[\s\S]*Vare[\s\S]*Varegruppe/, 'feltene i alfabetisk rekkefølge');
+  // seksjonene i Filtrer og valgene i listene er alfabetiske; «Alle» står først
+  await page.click('.kvr-tab:has-text("Filtrer")');
+  const secs = await page.$$eval('#kvr-panel [data-sec]', (n) => n.map((x) => x.getAttribute('data-sec')));
+  const order = ['store', 'time', 'content', 'who', 'sum'].map((k) => secs.indexOf(k));
+  assert.ok(order.every((v, i) => v !== -1 && (i === 0 || v > order[i - 1])), 'seksjoner: Butikk, Dato og tid, Innhold, Kasse/kasserer/type, Sum/medlem/bong ' + JSON.stringify(secs));
+  const optsOf = (label) => page.$eval('#kvr-panel select[aria-label="' + label + '"]', (s) => Array.from(s.options).map((o) => o.text));
+  const sorted = (a) => a.slice(1).every((t, i, arr) => i === 0 || arr[i - 1].localeCompare(t, 'nb', { numeric: true, sensitivity: 'base' }) <= 0);
+  for (const l of ['Pant', 'Rabatt']) { const o = await optsOf(l); assert.ok(o[0] === 'Alle' && sorted(o), l + ': ' + o.join(' | ')); }
+  const cr = await optsOf('Retur til kort');
+  assert.ok(cr[0] === 'Alle' && cr[1] === 'Retur til kort (alle leverandører)' && sorted(cr.slice(1)), cr.join(' | '));
   assert.ok(!(await page.$('[data-sec=scan] select')), 'ingen filtervalg igjen i Skann');
   assert.deepStrictEqual(errors, []);
   assert.deepStrictEqual(apiCalls, []);

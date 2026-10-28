@@ -1522,8 +1522,9 @@
     return Object.keys(box.sel).filter(function (k) { return box.sel[k]; });
   }
 
+  // alfabetisk for visning; «Uten gruppe» sist. Rekkefølgen i regelsettet (prioritet) er uendret.
   function groupNames() {
-    return rules.map(function (r) { return r.name; }).concat([L.NO_GROUP]);
+    return rules.map(function (r) { return r.name; }).sort(function (a, b) { return a.localeCompare(b, 'nb', { numeric: true, sensitivity: 'base' }); }).concat([L.NO_GROUP]);
   }
 
   function refreshOptions() {
@@ -2095,6 +2096,15 @@
   var REL_LABEL = { none: 'Behold datoer', yesterday: 'I går', today: 'I dag', last7: 'Siste 7 dager', lastweek: 'Forrige uke' };
 
   function opt(v, t) { return el('option', { value: v, text: t }); }
+  // Valgene i en nedtrekksliste i alfabetisk rekkefølge. «Alle» ('' og '*') står først.
+  function sortSelect(sel) {
+    var all = Array.prototype.slice.call(sel.options), fixed = all.filter(function (o) { return o.value === '' || o.value === '*'; });
+    var rest = all.filter(function (o) { return fixed.indexOf(o) === -1; }).sort(function (a, b) { return a.text.localeCompare(b.text, 'nb', { numeric: true, sensitivity: 'base' }); });
+    var cur = sel.value;
+    fixed.concat(rest).forEach(function (o) { sel.appendChild(o); });
+    sel.value = cur;
+    return sel;
+  }
 
   function waitFor(fn, ms) {
     return new Promise(function (res) {
@@ -3912,6 +3922,7 @@
     if (words.length) ui.special.appendChild(el('option', { value: '*', text: 'Alle ordene i listen' }));
     words.forEach(function (w) { ui.special.appendChild(el('option', { value: w, text: w.charAt(0).toUpperCase() + w.slice(1) })); });
     if (cur && cur !== '*' && words.indexOf(cur) === -1) ui.special.appendChild(el('option', { value: cur, text: cur }));
+    sortSelect(ui.special);
     ui.special.value = cur;
   }
 
@@ -4820,16 +4831,16 @@
     var mem = check('Kun med medlem'); ui.onlyMember = mem.box;
     var dp = check('Kun mulige duplikater'); ui.onlyDup = dp.box;
     ui.bong = input('text', { placeholder: 'bongnr, f.eks. 1005-6-123' });
-    ui.note = el('select', {}, [opt('', 'Alle'), opt('any', 'Har notat eller status'), opt('oppfolging', 'Til oppfølging'), opt('sjekket', 'Sjekket')]);
+    ui.note = sortSelect(el('select', {}, [opt('', 'Alle'), opt('any', 'Har notat eller status'), opt('oppfolging', 'Til oppfølging'), opt('sjekket', 'Sjekket')]));
     ui.note.addEventListener('change', onChange);
     ui.item = input('text', { placeholder: 'EAN eller varenavn (skannede)' });
     ui.text = input('text', { placeholder: 'ord, EAN, beløp, kortnr, referanse …' });
     ui.pay = el('select', { 'aria-label': 'Betalingsmåte' }, [el('option', { value: '', text: 'Alle' })]);
     ui.pay.addEventListener('change', onChange);
+    // feltene i alfabetisk rekkefølge (fra og til står sammen)
     var secSum = section('sum', 'Sum, medlem og bong', [
-      el('div', { class: 'kvr-row' }, [field('Sum fra', ui.sumMin), field('Sum til', ui.sumMax)]),
-      neg.node, field('Medlemssøk', ui.member), mem.node, dp.node,
-      field('Bongnr', ui.bong), field('Notat/status', ui.note)
+      field('Bongnr', ui.bong), mem.node, dp.node, field('Medlemssøk', ui.member), neg.node, field('Notat/status', ui.note),
+      el('div', { class: 'kvr-row' }, [field('Sum fra', ui.sumMin), field('Sum til', ui.sumMax)])
     ], true);
 
     // --- Skanning og pant
@@ -4839,6 +4850,7 @@
       el('option', { value: 'sale', text: 'Har pant (salg)' }),
       el('option', { value: 'return', text: 'Har panteretur' })
     ]);
+    sortSelect(ui.pant);
     ui.pant.addEventListener('change', onChange);
     ui.disc = el('select', { 'aria-label': 'Rabatt' }, [
       el('option', { value: '', text: 'Alle' }),
@@ -4847,6 +4859,7 @@
       el('option', { value: 'reason', text: 'Rabatt med årsak' }),
       el('option', { value: 'coupon', text: 'Har kupong (kampanje)' })
     ].concat(L.DISC_REASONS.map(function (r) { return el('option', { value: 'r:' + r, text: 'Årsak: ' + r }); })));
+    sortSelect(ui.disc);
     ui.disc.addEventListener('change', onChange);
     ui.discFrom = input('number', { step: '1', min: '0', placeholder: 'fra %' });
     ui.discTo = input('number', { step: '1', min: '0', placeholder: 'til %' });
@@ -4855,6 +4868,7 @@
     ui.cardRet = el('select', { 'aria-label': 'Retur til kort' }, [el('option', { value: '', text: 'Alle' }), el('option', { value: '*', text: 'Retur til kort (alle leverandører)' })]
       .concat(Object.keys(L.SCHEME_LABELS).map(function (k) { return el('option', { value: k, text: 'Retur til ' + L.SCHEME_LABELS[k] }); }))
       .concat([el('option', { value: '?', text: 'Retur til kort, ukjent leverandør' })]));
+    sortSelect(ui.cardRet);
     ui.cardRet.addEventListener('change', onChange);
     ui.scanBtn = btn('Skann innhold (synlige)', scanVisible, 'kvr-primary');
     ui.stopBtn = btn('Stopp', function () { cancelScan = true; });
@@ -4897,14 +4911,14 @@
       ]), fileIn]);
     var secContent = section('content', 'Innhold', [
       hintEl('Filtre som leser innholdet på kvitteringene. De krever at kvitteringene er skannet: bruk «Skann nå» øverst, eller fanen Skann.'),
-      field('Søk i bongen (alt innhold, flere ord)', ui.text, true),
-      field('Vare (EAN eller navn)', ui.item, true),
       field('Betalingsmåte', ui.pay, true),
-      pfield('Varegruppe', ui.groups, true),
       el('div', { class: 'kvr-row' }, [field('Pant', ui.pant, true), field('Rabatt', ui.disc, true)]),
       el('div', { class: 'kvr-row' }, [field('Rabatt % fra', ui.discFrom, true), field('Rabatt % til', ui.discTo, true)]),
+      field('Retur til kort (kortleverandør)', ui.cardRet, true),
       field('Spesialbetaling (eget/internt forbruk, utbetaling …)', ui.special, true),
-      field('Retur til kort (kortleverandør)', ui.cardRet, true)
+      field('Søk i bongen (alt innhold, flere ord)', ui.text, true),
+      field('Vare (EAN eller navn)', ui.item, true),
+      pfield('Varegruppe', ui.groups, true)
     ], true);
     var secGroups = section('groups', 'Varegrupper', [
       el('div', { class: 'kvr-hint', text: 'Sum per varegruppe for valgte kvitteringer:' }), ui.groupSums,
@@ -5224,7 +5238,7 @@
 
     var tabDefs = [
       ['cw', 'Hent', [hintEl('Henter nye kvitteringer fra Lindbak (hele journalen). Resultatet kan så filtreres under «Filtrer».'), secCw, secParts]],
-      ['filter', 'Filtrer', [hintEl('Filtrerer kvitteringene som allerede er listet. Ingenting hentes på nytt.'), secStore, secTime, secWho, secSum, secContent, secSaved]],
+      ['filter', 'Filtrer', [hintEl('Filtrerer kvitteringene som allerede er listet. Ingenting hentes på nytt.'), secStore, secTime, secContent, secWho, secSum, secSaved]],
       ['content', 'Skann', [el('p', { class: 'kvr-intro', text: 'Skann leser innholdet i kvitteringene: varer, pant, rabatt og betaling. Filtrer listen først, så skanner du bare det som er synlig. Filtrene som bruker innholdet ligger under «Filtrer» → Innhold.' }), secScan, secGroups]],
       ['analyse', 'Analyse', [subNav, subHost]],
       ['more', 'Mer', [moreNav, moreHost]]
