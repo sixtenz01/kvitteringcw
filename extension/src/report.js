@@ -2,7 +2,7 @@
   'use strict';
 
   var L = typeof module !== 'undefined' && module.exports ? require('./logic.js') : root.KvLogic;
-  var VERSION = '3.40.0';
+  var VERSION = '3.41.0';
 
   // ---- SHA-256 (ren JS, så rapporten ikke avhenger av crypto.subtle) -------------------
   var K256 = [
@@ -129,7 +129,7 @@
       var rows = g.fields.map(function (f) {
         var cur = (f.src === 'anom' ? anom : ctl)[f.k], def = (f.src === 'anom' ? da : dc)[f.k];
         var off = f.kind === 'flag' ? !(f.src === 'anom' ? cur : cur !== '') : (f.off && String(cur) === '');
-        return { label: f.label, value: off ? 'av' : f.kind === 'flag' ? 'på' : String(cur) + (f.unit && f.kind !== 'time' ? ' ' + f.unit : ''), off: off, changed: String(cur) !== String(def) };
+        return { k: f.k, label: f.label, value: off ? 'av' : f.kind === 'flag' ? 'på' : String(cur) + (f.unit && f.kind !== 'time' ? ' ' + f.unit : ''), off: off, changed: String(cur) !== String(def) };
       });
       var ws = g.weights.map(function (w) { var v = Number((weights || {})[w]); return { title: w === 'Regel' ? 'Treff på egne regler' : w, value: v, changed: v !== L.RISK_WEIGHTS[w] }; });
       var changed = rows.filter(function (r) { return r.changed; }).length + ws.filter(function (r) { return r.changed; }).length;
@@ -260,21 +260,15 @@
       { cells: ['Kasser', uniq(function (it) { return it.workstationNumber; }).join(', ')] }
     ], 'meta').replace('<tr><th></th><th></th></tr>', ''));
 
-    P('<h2>3. Dekningsgrad og begrensninger</h2>');
-    P(table(['Datagrunnlag', { t: 'Dekket', n: true }, { t: 'Totalt', n: true }, { t: 'Andel', n: true }], [
-      { cells: ['Salg med skannet innhold', { t: cov.salesScanned, n: true }, { t: cov.sales, n: true }, { t: cov.sales ? pctText(cov.salesScanned / cov.sales) : '–', n: true }] },
-      { cells: ['Salg med rabattdata', { t: cov.salesDisc, n: true }, { t: cov.sales, n: true }, { t: cov.sales ? pctText(cov.salesDisc / cov.sales) : '–', n: true }] },
-      { cells: ['Salg med Totalt, MVA og betalingsreferanse (ny skanning)', { t: cov.salesV5, n: true }, { t: cov.sales, n: true }, { t: cov.sales ? pctText(cov.salesV5 / cov.sales) : '–', n: true }] },
-      { cells: ['Salg med kortdata (skanning versjon 6)', { t: cov.salesV6, n: true }, { t: cov.sales, n: true }, { t: cov.sales ? pctText(cov.salesV6 / cov.sales) : '–', n: true }] },
-      { cells: ['Salg med enhetspris og kjøpeutbytte (ny skanning)', { t: cov.salesV4, n: true }, { t: cov.sales, n: true }, { t: cov.sales ? pctText(cov.salesV4 / cov.sales) : '–', n: true }] },
-      { cells: ['Kassaoppgjør lest', { t: cov.settleScanned, n: true }, { t: cov.settle, n: true }, { t: cov.settle ? pctText(cov.settleScanned / cov.settle) : '–', n: true }] }
-    ]));
-    P('<ul>' + lim.map(function (t) { return '<li>' + esc(t) + '</li>'; }).join('') + '</ul>');
-
-    P('<h2>4. Metode: tester, terskler og poeng</h2>');
+    P('<h2>3. Metode: tester, terskler og poeng</h2>');
     P('<p class="hint">Verdiene er de som gjaldt da analysen ble kjørt. Gule rader er endret fra standard. «av» betyr at testen ikke ble kjørt. Samme verdier ligger i innstillinger.json og kan leses inn under Mer → Innstillinger → Importer.</p>');
     var cfgLine = function (label, value, changed, off) { return '<div' + (changed ? ' class="chg"' : '') + '>' + esc(label) + ': <b>' + (off ? '<span class="off">av</span>' : esc(value)) + '</b></div>'; };
-    P(table(['Test', 'Terskler', 'Poeng'], settingsTbl.map(function (g) {
+    var hidG = L.REPORT_HIDDEN_GROUPS || [], hidF = L.REPORT_HIDDEN_FIELDS || [], hidT = L.REPORT_HIDDEN_TITLES || [];
+    var shownTbl = settingsTbl.filter(function (g) { return hidG.indexOf(g.id) === -1; }).map(function (g) {
+      var rows = g.rows.filter(function (r) { return hidF.indexOf(r.k) === -1; }), ws = g.weights.filter(function (w) { return hidT.indexOf(w.title) === -1; });
+      return Object.assign({}, g, { rows: rows, weights: ws, changed: rows.filter(function (r) { return r.changed; }).length + ws.filter(function (w) { return w.changed; }).length });
+    });
+    P(table(['Test', 'Terskler', 'Poeng'], shownTbl.map(function (g) {
       return { cells: [
         { html: '<b>' + esc(g.title) + '</b>' + (g.changed ? '<div class="hint">' + g.changed + ' endret</div>' : '') },
         { html: g.rows.length ? g.rows.map(function (r) { return cfgLine(r.label, r.value, r.changed, r.off); }).join('') : '<span class="off">–</span>' },
@@ -283,7 +277,7 @@
     }), 'cfg'));
     P('<p class="hint">Risikonivå: høy fra 8 poeng, middels fra 4. Risikoscore er summen av poeng for avvikene på en kvittering; tester som måler samme forhold (for eksempel pant og kontant tilbake, eller flere rabattflagg) teller bare det høyeste poenget. RRS (Receipt Risk Score, 0–100) = 100 × (1 − 2^(−poeng/8)): 4 poeng = 29, 8 = 50, 16 = 75.</p>');
 
-    P('<h2>5. Funn</h2>');
+    P('<h2>4. Funn</h2>');
     if (!m.findings.length) P('<p>Ingen funn med gjeldende terskler.</p>');
     else {
       var grouped = {};
@@ -304,7 +298,7 @@
     var evNo = {};
     m.evidence.files.forEach(function (e, i) { evNo[e.id] = i + 1; });
     var evLink = function (id, path) { return '<a href="#bevis-' + evNo[id] + '">Se bilde ' + evNo[id] + '</a><br><a class="hash" href="' + esc(path) + '">' + esc(path.replace('bevis/', '')) + '</a>'; };
-    P('<h2>6. Flaggede kvitteringer (rangert)</h2>');
+    P('<h2>5. Flaggede kvitteringer (rangert)</h2>');
     if (!ranked.length) P('<p>Ingen flaggede kvitteringer.</p>');
     else {
       P(table(['Risiko', 'Bongnr', 'Tidspunkt', 'Kasse', 'Kasserer', { t: 'Sum', n: true }, 'Avvik og forklaring', 'Status / notat', 'Bevis'], ranked.map(function (r) {
@@ -319,7 +313,7 @@
       }), 'flag'));
     }
 
-    P('<h2>7. Bevis (bong-PNG)</h2>');
+    P('<h2>6. Bevis (bong-PNG)</h2>');
     var evs = m.evidence.files;
     if (!evs.length) P('<p>Ingen bevis-PNG er tatt med.</p>');
     else {
@@ -331,7 +325,7 @@
     }
 
     var nl = m.notelog && m.notelog.list && m.notelog.list.length ? logVerify(m.notelog) : null;
-    P('<h2>8. Kontrollsummer og verifisering</h2>');
+    P('<h2>7. Kontrollsummer og verifisering</h2>');
     P(table(['Fil', 'SHA-256'], [
       { cells: ['data/kvitteringer.csv (alle kvitteringer i datagrunnlaget, sortert på bong-ID)', { html: '<span class="hash">' + h.receipts + '</span>' }] },
       { cells: ['data/innhold.json (skannet bonginnhold, sortert på bong-ID)', { html: '<span class="hash">' + h.content + '</span>' }] },
@@ -341,7 +335,7 @@
     ].concat(h.notelog ? [{ cells: ['data/notatlogg.json (alle endringer av notater og status, hash-kjede: ' + nl.n + ' hendelser, ' + (nl.ok ? 'kjeden er ubrutt, hodekontrollsum ' + nl.head.slice(0, 16) + '…' : 'KJEDEN ER BRUTT ved hendelse ' + (nl.at + 1)) + ')', { html: '<span class="hash">' + h.notelog + '</span>' }] }] : [])));
     P('<p><b>Slik verifiserer du:</b> pakk ut ZIP-filen og kjør <span class="hash">sha256sum -c KONTROLLSUM.txt</span> (Windows: <span class="hash">certutil -hashfile fil SHA256</span>). Alle filer skal gi OK. Kontrollsummen for selve ZIP-filen vises i panelet ved eksport og kan noteres i saken.</p>');
     P('<p><b>Slik gjentar du analysen:</b> les inn innstillinger.json (Mer → Innstillinger → Importer), hent samme omfang i CW, skann og kjør analysen. Samme data gir samme kvitteringer.csv og samme funn.</p>');
-    P('<h2>9. Forbehold</h2><ul><li>Funn er indikasjoner som må vurderes og forklares, ikke bevis for misligheter.</li><li>Kontrollsummene viser at innholdet i denne eksporten ikke er endret etter at den ble laget. De sier ikke at dataene i Lindbak er riktige.</li><li>Rapporten inneholder kasserernumre og bildet av kvitteringer. Medlemsnummer er ikke med i bevisbildene eller i datafilene (bare om kvitteringen hadde medlem).</li><li>Kvitteringsdata er lest ut fra visningen i Lindbak Chain Web; endringer i Lindbaks oppsett kan påvirke tolkningen.</li></ul>');
+    P('<h2>8. Forbehold</h2><ul><li>Funn er indikasjoner som må vurderes og forklares, ikke bevis for misligheter.</li><li>Kontrollsummene viser at innholdet i denne eksporten ikke er endret etter at den ble laget. De sier ikke at dataene i Lindbak er riktige.</li><li>Rapporten inneholder kasserernumre og bildet av kvitteringer. Medlemsnummer er ikke med i bevisbildene eller i datafilene (bare om kvitteringen hadde medlem).</li><li>Kvitteringsdata er lest ut fra visningen i Lindbak Chain Web; endringer i Lindbaks oppsett kan påvirke tolkningen.</li></ul>');
     P('</div></body></html>');
     return out.join('\n');
   }
@@ -354,6 +348,7 @@
   }
 
   function build(m) {
+    if (L.reportHidden) m = Object.assign({}, m, { findings: m.findings.filter(function (f) { return !L.reportHidden(f); }) });
     var inScope = {};
     m.items.forEach(function (it) { inScope[it.transactionId] = true; });
     var all = unionOf(m.pop, m.items), itemOf = {};

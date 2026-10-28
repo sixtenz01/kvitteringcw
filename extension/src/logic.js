@@ -232,7 +232,14 @@
       var rs = ctx && ctx.scan && ctx.scan[item.transactionId];
       if (!rs || !(rs.v >= 3)) return false;
       var lo = hasNum(f.discFrom) ? Number(f.discFrom) : 0, hi = hasNum(f.discTo) ? Number(f.discTo) : Infinity;
-      if (!rs.items.some(function (l) { var r = discRate(l); return r !== null && r >= lo && r <= hi; })) return false;
+      // valgt årsak og prosent må gjelde samme linje («med årsak» og 71–100 % = linjer med årsak og 71–100 %)
+      var same = function (l) {
+        if (f.disc === 'noreason') return !l.dr;
+        if (f.disc === 'reason') return !!l.dr;
+        if (f.disc && f.disc.indexOf('r:') === 0) return reasonName(l.dr) === f.disc.slice(2);
+        return true;
+      };
+      if (!rs.items.some(function (l) { var r = discRate(l); return r !== null && r >= lo && r <= hi && same(l); })) return false;
     }
     if (f.special) {
       var ss = ctx && ctx.scan && ctx.scan[item.transactionId];
@@ -1012,7 +1019,7 @@
   var CONTROL_FIELDS = [
     ['closeTime', 'Stengetid (HH:MM)', '22:00'], ['closeWindow', 'Minutter før stenging', '60'],
     ['smallReturn', 'Liten retur ≤ kr', '100'], ['smallReturnN', 'Små returer ≥ antall', '3'],
-    ['cashNoSaleN', 'Kontant tilbake uten salg ≥ antall', ''], ['repeatN', 'Samme beløp ≥ antall', '3'],
+    ['cashNoSaleN', 'Kontant tilbake uten salg ≥ antall', ''], ['repeatN', 'Samme beløp ≥ antall', '3'], ['repeatBank', 'Samme beløp: bare bankbetaling (tom = bongsum)', '1'],
     ['repeatMin', 'Gjentatt beløp ≥ kr', '50'],
     ['pantMin', 'Pantebeløp ≥ kr', '20'], ['pantRatio', 'Panteretur > salg ×', '1'],
     ['openFrom', 'Åpner (HH:MM)', '06:00'], ['openTo', 'Stenger (HH:MM)', '23:00'],
@@ -1023,8 +1030,8 @@
     ['diffMin', 'Kassadifferanse teller fra kr', '1'], ['diffTotal', 'Kassadiff. minus totalt ≥ kr', '100'],
     ['benfordMin', 'Benford: minst antall bonger', '100'], ['benfordCashMin', 'Benford: minst per kasserer', '50'],
     ['benfordMad', 'Benford: avvik (MAD) over', '0.015'], ['roundShare', 'Runde beløp: andel % over', '5'], ['roundMinN', 'Runde beløp: minst antall', '20'],
-    ['discPct', 'Rabatt uten årsak ≥ % (tom = av)', '30'], ['discCash', 'Rabatt: sammenlign kasserere (tom = av)', '1'],
-    ['discWatch', 'Overvåkede rabattårsaker (tekstnr, tom = av)', '2,4,5'], ['discWatchPct', 'Overvåket: rabatt ≥ %', '0'],
+    ['discPct', 'Rabatt uten årsak ≥ % (tom = av)', ''], ['discCash', 'Rabatt: sammenlign kasserere (tom = av)', ''],
+    ['discWatch', 'Overvåkede rabattårsaker (tekstnr, tom = av)', '1,2,3,4,5,6'], ['discWatchPct', 'Overvåket: rabatt ≥ %', '41'], ['discWatchPctTo', 'Overvåket: rabatt ≤ % (tom = ingen øvre grense)', '69'],
     ['discWatchKr', 'Overvåket: rabatt ≥ kr', '0'], ['discWatchN', 'Overvåket: kasserer ved ≥ antall bonger (tom = av)', '3'],
     ['memberStoreMin', 'Medlem i to butikker innen min (tom = av)', '30'], ['memberDayN', 'Samme medlemsnr samme dag ≥ antall (tom = av)', '4'],
     ['memberN', 'Samme medlemsnr totalt ≥ antall (tom = av)', '15'], ['memberCashN', 'Medlemsnr hos én kasserer ≥ antall (tom = av)', '5'],
@@ -1041,11 +1048,12 @@
     ['corrRho', 'Retur og kassadiff.: ρ under − (tom = av)', '0.5'], ['corrDays', 'Retur og kassadiff.: minst antall dager', '8'],
     ['lappManualMin', 'Manuell pantelapp (kode 99) fra kr (tom = av)', '50'], ['lappManualN', 'Manuell pantelapp: kasserer ved ≥ antall bonger (tom = av)', '5'],
     ['lappDel', 'Pantelapp slettet på bong (tom = av)', '1'], ['lappDelCodes', 'Pantelapp slettet: koder (komma, tom = alle)', '399'], ['lappReuseMin', 'Samme pantelapp-sum på flere bonger innen min (tom = av)', ''],
-    ['voidCashOn', 'Slettede varelinjer, pant og kontant tilbake (tom = av)', ''], ['voidResaleMin', 'Makulert vare: nytt salg innen min (tom = av)', '120'], ['voidLineOn', 'Makulert linje på bong (tom = av)', '1'],
+    ['voidCashOn', 'Slettede varelinjer, pant og kontant tilbake (tom = av)', ''], ['voidResaleMin', 'Makulert vare: nytt salg innen min (tom = av)', '120'], ['voidResaleDay', 'Makulert vare: sjekk mot salg samme dag (tom = innen minuttene)', '1'], ['voidLineOn', 'Makulert linje på bong (tom = av)', '1'],
     ['voidCashN', 'Makulerte varelinjer: kasserer ved ≥ antall (tom = av)', '5'],
     ['specialWords', 'Spesialbetaling: ord (komma, tom = av)', DEFAULT_SPECIAL], ['specialN', 'Spesialbetaling: kasserer ved ≥ antall bonger (tom = av)', '3'],
-    ['discHiFrom', 'Høy rabatt fra % (tom = av)', '70'], ['discHiTo', 'Høy rabatt til %', '100'],
-    ['discMatchPct', 'Rabatt uten treff på andre salg: fra % (tom = av)', '30'], ['discMatchNR', 'Treff-test: bare rabatt uten årsak (tom = alle)', '1'],
+    ['discHiFrom', 'Høy rabatt fra % (tom = av)', '71'], ['discHiTo', 'Høy rabatt til %', '100'],
+    ['discOneN', 'Rabatt med årsak: varen solgt av færre enn antall kasserere samme dag (tom = av)', '2'],
+    ['discMatchPct', 'Rabatt uten treff på andre salg: fra % (tom = av)', ''], ['discMatchNR', 'Treff-test: bare rabatt uten årsak (tom = alle)', '1'],
     ['campBongs', 'Mulig kampanje: samme vare med rabatt på ≥ antall bonger (tom = av)', '2'], ['campCashiers', 'Mulig kampanje: hos ≥ antall kasserere', '2'], ['campDay', 'Kampanjedag: andel bonger med rabatt ≥ % (tom = av)', '40'], ['campAuto', 'Kampanjevare automatisk (tom = spør)', '1'], ['campCoupon', 'Rabatt på vare med kupong på bongen er kampanje (tom = av)', '1'], ['campMulti', 'To like varer med samme rabatt på samme bong er kampanje (tom = av)', '1'],
     ['askDevPct', 'Spør pris avviker fra dagens salg ≥ % (tom = av)', '5'], ['askMinN', 'Spør pris: minst antall salg av varen samme dag', '3'], ['askN', 'Spør pris: kasserer ved ≥ antall bonger (tom = av)', '5'],
     ['cardRetN', 'Returer på samme kort ≥ antall (tom = av)', '3'], ['cardRetDays', 'Returer på samme kort innen dager', '30'],
@@ -1083,7 +1091,8 @@
       sf('closeTime', 'ctl', 'time', 'Stengetid', 'HH:MM'),
       sf('closeWindow', 'ctl', 'num', 'Tidsrom før stenging', 'min'),
       sf('cashNoSaleN', 'ctl', 'num', 'Kontant tilbake uten salg: flagg ved', 'stk', 'Gjentatt samme dag på samme kasse.', true),
-      sf('repeatN', 'ctl', 'num', 'Samme beløp gjentatt: flagg ved', 'stk', 'Samme bongsum flere ganger på samme kasse.', true),
+      sf('repeatN', 'ctl', 'num', 'Samme beløp gjentatt: flagg ved', 'stk', 'Samme beløp flere ganger hos samme kasserer samme dag.', true),
+      sf('repeatBank', 'ctl', 'flag', 'Samme beløp: bare bankbetaling', '', 'Sammenligner beløpet betalt med bank (kort) på skannede bonger. Av = bongsummen fra listen, også kontant.'),
       sf('repeatMin', 'ctl', 'num', 'Gjentatt beløp er minst', 'kr')
     ], weights: ['Små returer før stenging', 'Kontant tilbake uten salg flere ganger', 'Samme beløp gjentatt'] },
     { id: 'falseRet', title: 'Falsk retur', text: 'Retur uten salg, kortkjøp refundert kontant og salg og retur av samme beløp.', fields: [
@@ -1112,15 +1121,17 @@
       sf('digitMin', 'ctl', 'num', 'Siste siffer: minst antall bonger per kasserer', 'stk', 'Siste siffer i totalbeløpet (ører) sammenlignes med de andre kassererne.'),
       sf('digitP', 'ctl', 'num', 'Siste siffer: p under', '', 'Signifikansgrense for χ²-testen. 0,001 gir sjelden falsk alarm.', true)
     ], weights: ['Avvikende sifferfordeling', 'Mange runde beløp', 'Avvikende siste siffer'] },
-    { id: 'disc', title: 'Rabatt', text: 'Rabatt uten årsak, overvåkede årsaker (tekstnr 1 Datovare, 2 Feil pris, 3 Prisløfte, 4 Reserveløsning kupong, 5 Annen rabattårsak, 6 Best før) og sammenligning av kasserere.', fields: [
+    { id: 'disc', title: 'Rabatt', text: 'Rabatt flagges bare når linjen har rabattårsak (tekstnr 1 Datovare, 2 Feil pris, 3 Prisløfte, 4 Reserveløsning kupong, 5 Annen rabattårsak, 6 Best før); en kampanjevare kan ha rabatt uten årsak. Overvåket spenn (standard 41–69 %), høy rabatt (standard 71–100 %) og rabatt på vare som bare én kasserer har solgt den dagen. Testene for rabatt uten årsak er av som standard.', fields: [
       sf('discPct', 'ctl', 'num', 'Rabatt uten årsak fra', '%', 'Flagger bongen når en rabattlinje uten årsak er minst dette.', true),
       sf('discCash', 'ctl', 'flag', 'Sammenlign kasserere (rabatt uten årsak)', '', 'Markerer kasserere som ligger over butikksnittet (se Kassererprofil).'),
       sf('discWatch', 'ctl', 'text', 'Overvåkede årsaker (tekstnr, komma)', '', 'For eksempel 2,4,5.', true),
-      sf('discWatchPct', 'ctl', 'num', 'Overvåket: rabatt minst', '%'),
+      sf('discWatchPct', 'ctl', 'num', 'Overvåket: rabatt fra', '%', 'Rabattlinjer med overvåket årsak og prosent mellom fra og til flagges. Standard 41–69 %, så vanlig datovare på 40 % ikke flagges.'),
+      sf('discWatchPctTo', 'ctl', 'num', 'Overvåket: rabatt til', '%', 'Tom = ingen øvre grense.'),
       sf('discWatchKr', 'ctl', 'num', 'Overvåket: rabatt minst', 'kr'),
       sf('discWatchN', 'ctl', 'num', 'Overvåket: marker kasserer ved', 'bonger', '', true),
-      sf('discHiFrom', 'ctl', 'num', 'Høy rabatt: overvåk fra', '%', 'Flagger rabattlinjer med prosent mellom fra og til, med eller uten årsak.', true),
+      sf('discHiFrom', 'ctl', 'num', 'Høy rabatt (med årsak): overvåk fra', '%', 'Flagger rabattlinjer med årsak og prosent mellom fra og til.', true),
       sf('discHiTo', 'ctl', 'num', 'Høy rabatt: overvåk til', '%'),
+      sf('discOneN', 'ctl', 'num', 'Rabatt med årsak: flagg når varen er solgt av færre enn', 'kasserere', 'Alle salg av varen (EAN) i butikken samme dag telles. Én kasserer med ett salg flagges; selger to kasserere varen samme dag, flagges den ikke. Krever at minst 80 % av dagens salg i butikken er skannet.', true),
       sf('discMatchPct', 'ctl', 'num', 'Rabatt uten treff på andre salg: fra', '%', 'Varen har rabatt på denne bongen, men ingen andre bonger i butikken samme dag har varen med samme rabatt.', true),
       sf('discMatchNR', 'ctl', 'flag', 'Treff-testen gjelder bare rabatt uten årsak', '', 'Av = alle rabatter, også med årsak.'),
       sf('campBongs', 'ctl', 'num', 'Mulig kampanje: samme vare med rabatt på minst', 'bonger', 'Over alle innlastede dager og butikker. Bongen flagges med notat om mulig sentral kampanje, og du blir spurt om det stemmer.', true),
@@ -1129,7 +1140,7 @@
       sf('campCoupon', 'ctl', 'flag', 'Rabatt på vare med kupong på samme bong er kampanje', '', 'Står varen i en «Kupong (id - navn)»-linje på samme bong (for eksempel fra Coop-appen), regnes rabatten som kampanje og flagges ikke.'),
       sf('campMulti', 'ctl', 'flag', 'To like varer med samme rabatt på samme bong er kampanje', '', 'Minst to linjer av samme vare med samme rabattprosent på én bong (multipakk, «2 for X»). En linje med «Antall: 2» telles ikke.'),
       sf('campDay', 'ctl', 'num', 'Kampanjedag: andel bonger med rabatt over', '%', 'Minst 30 salg den dagen. Rabatter den dagen får notat om mulig kampanjedag.', true)
-    ], weights: ['Rabatt uten årsak', 'Mange rabatter uten årsak', 'Rabatt med overvåket årsak', 'Mange rabatter med overvåket årsak', 'Høy rabattprosent', 'Rabatt uten treff på andre salg'] },
+    ], weights: ['Rabatt uten årsak', 'Mange rabatter uten årsak', 'Rabatt med overvåket årsak', 'Mange rabatter med overvåket årsak', 'Høy rabattprosent', 'Rabatt med årsak, varen solgt av én kasserer', 'Rabatt uten treff på andre salg'] },
     { id: 'member', title: 'Medlemsnummer', text: 'Misbruk av medlemsnummer, for eksempel at en ansatt taster sitt eget på kunders kjøp. Bruker bare listen fra CW og trenger ikke skanning. Gjelder alle innlastede bonger i valgte butikker.', fields: [
       sf('memberStoreMin', 'ctl', 'num', 'Samme medlemsnr i to butikker innen', 'min', 'Samme nummer i ulike butikker så tett i tid at det er usannsynlig.', true),
       sf('memberDayN', 'ctl', 'num', 'Samme medlemsnr samme dag: flagg ved', 'bonger', '', true),
@@ -1170,7 +1181,8 @@
     { id: 'voids', title: 'Slettede og makulerte varelinjer', text: 'Varelinjer som er slettet med motlinje på bongen. Dekker pant som betales ut kontant etter at varene er slettet, og makulerte varer (EAN) som ikke selges på nytt. Krever skanning.', fields: [
       sf('voidLineOn', 'ctl', 'flag', 'Makulert linje på bong', '', 'Flagger hver bong med en varelinje og motlinje (makulert eller slettet), også når varen selges på nytt eller hele bongen er makulert.'),
       sf('voidCashOn', 'ctl', 'flag', 'Slettede varelinjer, pant og kontant tilbake', '', 'Bong der varelinjene er slettet og bare pant og kontant tilbake står igjen.'),
-      sf('voidResaleMin', 'ctl', 'num', 'Makulert vare: nytt salg innen', 'min', 'Samme vare solgt på en annen bong i butikken innen så mange minutter før eller etter. Krever at minst 80 % av salgene er skannet.', true),
+      sf('voidResaleDay', 'ctl', 'flag', 'Makulert vare: sjekk mot salg samme dag', '', 'Slettet vare som ikke er solgt på noen annen bong i butikken samme dag, flagges. Funnet sier om varen er registrert som svinn eller internt forbruk samme dag. Krever at minst 80 % av salgene er skannet.'),
+      sf('voidResaleMin', 'ctl', 'num', 'Makulert vare: nytt salg innen', 'min', 'Brukes når «samme dag» er av: samme vare solgt på en annen bong i butikken innen så mange minutter før eller etter.', true),
       sf('voidCashN', 'ctl', 'num', 'Makulerte varelinjer: marker kasserer ved', 'linjer', '', true)
     ], weights: ['Makulert linje på bong', 'Varelinjer slettet, pant utbetalt kontant', 'Makulert vare ikke solgt på ny', 'Mange makulerte varelinjer'] },
     { id: 'special', title: 'Spesialbetalinger', text: 'Bonger med ord som eget forbruk, internt forbruk, utbetaling, finansiering eller sjekk i betalingsmåte, linjenavn eller tekstlinje. Ordene kan også søkes på under Skann. Krever skanning.', fields: [
@@ -1354,6 +1366,15 @@
   function groupInto(map, key, it) { (map[key] = map[key] || []).push(it); }
 
   // Mønstre: små returer før stenging, kontant tilbake uten salg flere ganger, samme beløp gjentatt.
+  // Beløp betalt med bank (kort) på bongen: «Bank» og betalingsmåter med kortleverandørens navn. null når bongen ikke er skannet
+  // eller ikke har bankbetaling.
+  function bankPaid(sc) {
+    if (!sc || !sc.pay) return null;
+    var sum = 0, any = false;
+    Object.keys(sc.pay).forEach(function (k) { if (/^bank/i.test(k) || cardScheme(k)) { sum += sc.pay[k]; any = true; } });
+    sum = round2(sum);
+    return any && sum > 0 ? sum : null;
+  }
   function patterns(items, scanMap, cfg) {
     var out = [];
     var scanOf = function (it) { return scanMap && scanMap[it.transactionId]; };
@@ -1394,16 +1415,19 @@
       });
     }
     if (hasNum(cfg.repeatN)) {
-      var g3 = {}, min = cnum(cfg.repeatMin, 50);
+      // bare bankbetaling (standard): beløpet betalt med bank/kort på skannede bonger; ellers bongsummen fra listen
+      var g3 = {}, min = cnum(cfg.repeatMin, 50), bankOnly = hasNum(cfg.repeatBank);
       items.forEach(function (it) {
-        if (!isSale(it) || Math.abs(it.totalAmount) < min || pantOnly(scanOf(it))) return;
-        groupInto(g3, dayOf(it) + '|' + it.cashierNumber + '|' + it.totalAmount, it);
+        if (!isSale(it) || pantOnly(scanOf(it))) return;
+        var amt = bankOnly ? bankPaid(scanOf(it)) : it.totalAmount;
+        if (amt === null || Math.abs(amt) < min) return;
+        groupInto(g3, dayOf(it) + '|' + it.cashierNumber + '|' + amt, it);
       });
       Object.keys(g3).forEach(function (k) {
         if (g3[k].length < Number(cfg.repeatN)) return;
         var p = k.split('|');
         out.push({ kind: 'Mønster', code: 'repeatAmount', title: 'Samme beløp gjentatt', flag: true,
-          detail: 'Kasserer ' + p[1] + ' ' + p[0] + ': ' + p[2] + ' kr × ' + g3[k].length,
+          detail: 'Kasserer ' + p[1] + ' ' + p[0] + ': ' + money(Number(p[2])) + ' kr' + (bankOnly ? ' betalt med bank' : '') + ' × ' + g3[k].length,
           ids: g3[k].map(function (x) { return x.transactionId; }) });
       });
     }
@@ -1541,7 +1565,7 @@
     'Avvikende siste siffer': 2, 'Løpenummer avviker fra tid': 3, 'Retur og kassadifferanse henger sammen': 4,
     'Manuell pantelapp': 3, 'Mange manuelle pantelapper': 3, 'Pantelapp slettet': 4, 'Pantelapp innløst flere ganger': 4,
     'Varelinjer slettet, pant utbetalt kontant': 5, 'Makulert vare ikke solgt på ny': 3, 'Mange makulerte varelinjer': 3,
-    'Spesialbetaling på bong': 3, 'Mange spesialbetalinger': 3, 'Høy rabattprosent': 3, 'Rabatt uten treff på andre salg': 4,
+    'Spesialbetaling på bong': 3, 'Mange spesialbetalinger': 3, 'Høy rabattprosent': 3, 'Rabatt med årsak, varen solgt av én kasserer': 3, 'Rabatt uten treff på andre salg': 4,
     'Spør pris avviker fra dagens salg': 3, 'Mange spør pris': 2, 'Gjentatte returer på samme kort': 4, 'Retur til kort med åpen retur': 3, 'Manuell kvittering matcher annen bong': 4,
     'Bonger i rask rekkefølge': 2, 'Mange 0-kr-bonger': 2, 'Overvåket vare i retur': 3, 'Overvåket vare slettet': 3, 'Mange overvåkede varer hos kasserer': 2,
     'Retur av vare uten kjøp på kortet': 4, 'Retur av vare uten kjøp av medlemmet': 3, 'Retur av vare uten salg samme dag': 1,
@@ -1570,7 +1594,7 @@
   // Tester som måler samme forhold teller bare det høyeste poenget per bong, ellers får én hendelse poeng flere ganger.
   var FAMILIES = {
     kontant: ['Stor panteretur', 'Mange pantelapper', 'Kontant tilbake uten salg', 'Kontant tilbake uten salg flere ganger', 'Varelinjer slettet, pant utbetalt kontant'],
-    rabatt: ['Rabatt uten årsak', 'Rabatt med overvåket årsak', 'Høy rabattprosent', 'Rabatt uten treff på andre salg'],
+    rabatt: ['Rabatt uten årsak', 'Rabatt med overvåket årsak', 'Høy rabattprosent', 'Rabatt med årsak, varen solgt av én kasserer', 'Rabatt uten treff på andre salg'],
     regnskap: ['Linjer stemmer ikke med totalen', 'Betaling stemmer ikke med totalen', 'MVA stemmer ikke', 'Ugyldig MVA-sats'],
     pris: ['Avvikende pris på vare', 'Spør pris avviker fra dagens salg'],
     differanse: ['Kassadifferanse', 'Gjentatte kassadifferanser'],
@@ -1611,6 +1635,28 @@
       out.push({ id: it.transactionId, item: it, reasons: r, score: riskScore(r, weights) });
     });
     return out.sort(function (a, b) { return b.score - a.score || (a.item.endDateTime < b.item.endDateTime ? 1 : -1); });
+  }
+
+  // Tas ikke med i rapportutskriften: tallanalyse (Benford, runde beløp, siste siffer), kassaoppgjør og kassadifferanse.
+  // Bongene rangeres og kassererne får poeng uten disse testene, så rapporten henger sammen; analysen i panelet er uendret.
+  var REPORT_HIDDEN_KINDS = ['Tallanalyse', 'Kassaoppgjør', 'Kassadifferanse'];
+  var REPORT_HIDDEN_GROUPS = ['numbers', 'diff', 'afterSettle'];
+  var REPORT_HIDDEN_FIELDS = ['settleDiff'];
+  var REPORT_HIDDEN_TITLES = ['Kassadifferanse', 'Gjentatte kassadifferanser', 'Retur og kassadifferanse henger sammen', 'Salg etter kassaoppgjør',
+    'Avvikende sifferfordeling', 'Mange runde beløp', 'Avvikende siste siffer'];
+  function reportHidden(f) { return REPORT_HIDDEN_KINDS.indexOf(f.kind) !== -1; }
+  function reportView(items, anomMap, findings, weights) {
+    var titles = REPORT_HIDDEN_TITLES.concat((findings || []).filter(reportHidden).map(function (f) { return f.title; }));
+    var anom = {}, extra = {};
+    Object.keys(anomMap || {}).forEach(function (id) { var r = anomMap[id].filter(function (t) { return titles.indexOf(t) === -1; }); if (r.length) anom[id] = r; });
+    var its = items.filter(function (it) { return it.receiptType !== 2; });
+    var fs = (findings || []).filter(function (f) { return !reportHidden(f); });
+    fs.forEach(function (f) {
+      if (f.flag || !f.cashier) return;
+      var e = extra[f.cashier] || (extra[f.cashier] = { points: 0, notes: [] });
+      e.points += reasonWeight(f.title, weights); e.notes.push(f.title.toLowerCase());
+    });
+    return { items: its, anom: anom, findings: fs, extra: extra, ranked: rankReceipts(its, anom, weights) };
   }
 
   function rankCashiers(items, anomMap, weights, profile, extra) {
@@ -2133,7 +2179,8 @@
       if (sc.discN) d.withDisc++;
       sc.items.forEach(function (l) {
         var r = discRate(l);
-        if (r === null || !isCampCode(l.c)) return;
+        // en kampanjevare har rabatt uten årsak; rabatt med årsak er gitt av kassereren og regnes aldri som kampanje
+        if (r === null || l.dr || !isCampCode(l.c)) return;
         var k = campKey(l.c), e = item[k] || (item[k] = { key: k, c: l.c, name: l.n, rateBongs: {}, bongs: {}, cashiers: {}, stores: {}, days: {}, nrBongs: {}, coupon: 0 });
         var cHit = cpnOn && !!couponFor(sc, l), mHit = multiOn && multiBuy(sc, l);
         if (cHit) { e.coupon++; couponLines++; }
@@ -2178,7 +2225,7 @@
       day: function (it) { var d = day[it.storeNumber + '|' + dayOf(it)]; return d && d.flag ? d : null; },
       // '' = ingen kampanje, 'mulig' = kan være kampanje (ikke avgjort), 'kampanje' = bekreftet, automatisk kampanjevare eller kupong på bongen
       line: function (it, l) {
-        if (discRate(l) === null || !isCampCode(l.c)) return '';
+        if (discRate(l) === null || l.dr || !isCampCode(l.c)) return '';
         var k = campKey(l.c), e = byKey[k];
         if (dec[k] === 'kampanje') return 'kampanje';
         if (dec[k] === 'ikke') return '';
@@ -2194,7 +2241,8 @@
 
   function discounts(items, scanMap, cfg, popArg, decisions) {
     var pctMin = cnum(cfg.discPct, null), cashCmp = hasNum(cfg.discCash), f = cnum(cfg.profFactor, 1.5), minN = cnum(cfg.profMin, 5);
-    var watch = watchReasons(cfg), wPct = cnum(cfg.discWatchPct, 0), wKr = cnum(cfg.discWatchKr, 0), wN = cnum(cfg.discWatchN, null);
+    var watch = watchReasons(cfg), wPct = cnum(cfg.discWatchPct, 0), wTo = cnum(cfg.discWatchPctTo, null), wKr = cnum(cfg.discWatchKr, 0), wN = cnum(cfg.discWatchN, null);
+    var oneN = cnum(cfg.discOneN, null);
     var fresh = function () { return { n: 0, withDisc: 0, disc: 0, withNR: 0, nr: 0, withCpn: 0, cpn: 0, cpnSum: 0, withW: 0 }; };
     var acc = {}, tot = fresh(), camps = {}, findings = [], scannedSales = 0, sales = 0, reasons = {}, matrix = {};
     var pop = popArg || items, camp = campaigns(pop, scanMap, cfg, decisions);
@@ -2211,6 +2259,23 @@
         });
       });
     }
+    // salg per vare, butikk og dag: hvilke kasserere som har solgt varen, og hvor stor del av dagens salg som er skannet
+    var soldBy = {}, dayCov = {};
+    if (oneN !== null) {
+      pop.forEach(function (it) {
+        if (!isSale(it)) return;
+        var dk = it.storeNumber + '|' + dayOf(it), dc = dayCov[dk] || (dayCov[dk] = { n: 0, sc: 0 }), sc = scanMap && scanMap[it.transactionId];
+        dc.n++;
+        if (!hasDisc(sc)) return;
+        dc.sc++;
+        sc.items.forEach(function (l) {
+          if (!l.c || l.a <= 0 || isPantText(l)) return;
+          var k = dk + '|' + l.c, e = soldBy[k] || (soldBy[k] = { cashiers: {}, n: 0 });
+          e.cashiers[it.cashierNumber] = true; e.n++;
+        });
+      });
+    }
+    var oneSkip = 0;
     var skipped = 0;
     items.forEach(function (it) {
       if (!isSale(it)) return;
@@ -2242,7 +2307,11 @@
         e.n++; e.sum = round2(e.sum + (c.a || 0));
       });
       if (watch.length) {
-        var wl = sc.items.filter(function (l) { return l.d && watch.indexOf(reasonName(l.dr)) !== -1 && (l.dp === undefined || l.dp >= wPct) && l.d >= wKr; });
+        var wl = sc.items.filter(function (l) {
+          if (!l.d || !l.dr || watch.indexOf(reasonName(l.dr)) === -1 || l.d < wKr) return false;
+          var r = discRate(l);
+          return r === null ? !wPct && wTo === null : r >= wPct && (wTo === null || r <= wTo);
+        });
         if (wl.length) {
           a.withW++; tot.withW++;
           findings.push({ kind: 'Rabatt', code: 'discWatch', title: 'Rabatt med overvåket årsak', flag: true,
@@ -2269,12 +2338,26 @@
       };
       var withCamp = function (f, lines) { var n = noteFor(lines); if (n.keys.length) f.camp = n.keys; f.detail += n.text; findings.push(f); };
       if (hiFrom !== null) {
-        var hi = sc.items.filter(function (l) { var r = discRate(l); return r !== null && r >= hiFrom && r <= hiTo; });
+        var hi = sc.items.filter(function (l) { var r = discRate(l); return l.dr && r !== null && r >= hiFrom && r <= hiTo; });
         var hiK = hi.filter(function (l) { return !sure(l); });
         skipped += hi.length - hiK.length;
         if (hiK.length) withCamp({ kind: 'Rabatt', code: 'discHigh', title: 'Høy rabattprosent', flag: true,
-          detail: whereText(it) + ': ' + hiK.map(function (l) { return l.n + ' −' + l.d + ' kr (' + String(discRate(l)).replace('.', ',') + ' %)' + (l.dr ? ', årsak ' + reasonName(l.dr) : ', uten årsak'); }).join(', ') + ' (grense ' + hiFrom + '–' + hiTo + ' %).',
+          detail: whereText(it) + ': ' + hiK.map(function (l) { return l.n + ' −' + l.d + ' kr (' + String(discRate(l)).replace('.', ',') + ' %), årsak ' + reasonName(l.dr); }).join(', ') + ' (grense ' + hiFrom + '–' + hiTo + ' %).',
           ids: [it.transactionId] }, hiK);
+      }
+      if (oneN !== null) {
+        var dk = it.storeNumber + '|' + dayOf(it), dc = dayCov[dk];
+        var oneL = sc.items.filter(function (l) { return l.d && l.dr && l.c && !isPantText(l); });
+        if (oneL.length && dc && dc.n && dc.sc / dc.n < 0.8) oneSkip += oneL.length;
+        else {
+          var one = oneL.filter(function (l) { var e = soldBy[dk + '|' + l.c]; return !e || Object.keys(e.cashiers).length < oneN; });
+          if (one.length) findings.push({ kind: 'Rabatt', code: 'discOne', title: 'Rabatt med årsak, varen solgt av én kasserer', flag: true, cashier: it.cashierNumber,
+            detail: whereText(it) + ': ' + one.map(function (l) {
+              var e = soldBy[dk + '|' + l.c], r = discRate(l), cs = e ? Object.keys(e.cashiers) : [String(it.cashierNumber)];
+              return l.n + ' −' + l.d + ' kr' + (r !== null ? ' (' + String(r).replace('.', ',') + ' %)' : '') + ', årsak ' + reasonName(l.dr) + ': solgt ' + ((e ? e.n : 1) === 1 ? '1 gang' : e.n + ' ganger') + ' i butikken denne dagen, bare av kasserer ' + cs.join(', ');
+            }).join('; ') + '. Selger flere kasserere varen samme dag, flagges den ikke.',
+            ids: [it.transactionId] });
+        }
       }
       if (matchPct !== null) {
         var un = [], unLines = [];
@@ -2331,7 +2414,7 @@
     var matrixRows = Object.keys(matrix).sort(numCmp).map(function (id) { return { id: id, counts: matrix[id] }; });
     var campRows = Object.keys(camps).map(function (k) { return camps[k]; }).sort(function (a, b) { return b.n - a.n || String(a.id).localeCompare(String(b.id)); });
     return { rows: rows, total: { n: tot.n, withDisc: tot.withDisc, disc: round2(tot.disc), withW: tot.withW, withNR: tot.withNR, nr: round2(tot.nr), withCpn: tot.withCpn, cpn: tot.cpn, cpnSum: round2(tot.cpnSum), share: storeShare },
-      camp: { items: camp.itemRows, days: camp.dayRows, skipped: skipped, pending: camp.itemRows.filter(function (e) { return !e.status; }).length, confirmed: camp.itemRows.filter(function (e) { return e.status === 'kampanje'; }).length, auto: camp.itemRows.filter(function (e) { return e.status === 'auto'; }).length, others: camp.others.slice(0, 30), otherN: camp.others.length, coupon: camp.couponLines, multi: camp.multiLines, scan: camp.scan, denied: camp.itemRows.filter(function (e) { return e.status === 'ikke'; }).length }, watch: watch, campaigns: campRows, reasons: reasonRows, matrix: { cols: cols, rows: matrixRows }, findings: findings, coverage: sales ? scannedSales / sales : 1, sales: sales, scanned: scannedSales };
+      camp: { items: camp.itemRows, days: camp.dayRows, skipped: skipped, pending: camp.itemRows.filter(function (e) { return !e.status; }).length, confirmed: camp.itemRows.filter(function (e) { return e.status === 'kampanje'; }).length, auto: camp.itemRows.filter(function (e) { return e.status === 'auto'; }).length, others: camp.others.slice(0, 30), otherN: camp.others.length, coupon: camp.couponLines, multi: camp.multiLines, scan: camp.scan, denied: camp.itemRows.filter(function (e) { return e.status === 'ikke'; }).length }, watch: watch, campaigns: campRows, reasons: reasonRows, matrix: { cols: cols, rows: matrixRows }, findings: findings, coverage: sales ? scannedSales / sales : 1, sales: sales, scanned: scannedSales, oneSkip: oneSkip };
   }
 
   // ---- medlemsnummer, pris per vare, kjøpeutbytte og hendelsesord ----------------------------
@@ -2355,6 +2438,30 @@
   function whereText(it) { return 'Kasse ' + it.workstationNumber + ' ' + parseDT(it.endDateTime).time + ' kasserer ' + it.cashierNumber; }
 
   // Misbruk av medlemsnummer, kun fra listen (gridet). pop = alle innlastede bonger i valgte butikker.
+  // Vurdering av et medlemsnummer med funn: veier tegn på misbruk (kassereren taster sitt eller et kjent nummer på andres kjøp)
+  // mot tegn på en vanlig fast kunde eller en husstand som deler nummer. Gir nivå høy, middels eller lav med begrunnelse.
+  function memberVerdict(arr, cash, top, topShare, topNormal, row, fs) {
+    var pts = 0, why = [], codes = {};
+    fs.forEach(function (f) { codes[f.code] = true; });
+    var cashiers = Object.keys(cash).length, dayN = row.days, perDay = arr.length / Math.max(dayN, 1);
+    var maxDay = 0, dc = {};
+    arr.forEach(function (it) { var d = dayOf(it); dc[d] = (dc[d] || 0) + 1; if (dc[d] > maxDay) maxDay = dc[d]; });
+    // bonger på samme kasse med under 15 min mellom: én kunde handler sjelden flere ganger på rad, en kasserer kan taste nummeret på flere kunder
+    var close = 0;
+    for (var i = 1; i < arr.length; i++) if (arr[i].workstationNumber === arr[i - 1].workstationNumber && arr[i].storeNumber === arr[i - 1].storeNumber && tsMin(arr[i]) - tsMin(arr[i - 1]) <= 15) close++;
+    if (codes.empOwn) { pts += 4; why.push('kassereren har tastet sitt eget nummer'); }
+    if (codes.empUse) { pts += 1; why.push('nummeret tilhører en ansatt'); }
+    if (codes.memberCash) { pts += 2; why.push(Math.round(topShare * 100) + ' % av bongene hos kasserer ' + top + ' (vanlig ' + Math.round(topNormal * 100) + ' %)'); }
+    if (close >= 2) { pts += 2; why.push(close + ' ganger under 15 min mellom bongene på samme kasse'); }
+    if (maxDay >= 5) { pts += 2; why.push(maxDay + ' bonger på én dag'); } else if (maxDay >= 3) { pts += 1; why.push(maxDay + ' bonger på én dag'); }
+    if (codes.memberStores) { pts += 1; why.push('brukt i to butikker nesten samtidig (kan være en husstand som deler nummer)'); }
+    if (cashiers >= 4 && topShare < 0.5) { pts -= 2; why.push('brukt hos ' + cashiers + ' kasserere, ingen med over halvparten'); }
+    if (dayN >= 5 && perDay <= 1.5 && !codes.memberCash) { pts -= 2; why.push('jevnt fordelt på ' + dayN + ' dager (' + String(Math.round(perDay * 10) / 10).replace('.', ',') + ' bonger per dag)'); }
+    var level = pts >= 3 ? 'høy' : pts >= 1 ? 'middels' : 'lav';
+    return { level: level, points: pts, label: level === 'høy' ? 'sterk indikasjon på misbruk' : level === 'middels' ? 'mulig misbruk, bør sjekkes' : 'trolig fast kunde eller felles husstand',
+      why: why.length ? why.join('; ') : 'ingen tydelige tegn i bruksmønsteret' };
+  }
+
   function memberChecks(items, pop, cfg) {
     var findings = [], byM = {}, salesAll = 0, byCashAll = {};
     pop.forEach(function (it) {
@@ -2370,7 +2477,7 @@
     var ids = function (arr) { return arr.map(function (x) { return x.transactionId; }); };
     Object.keys(byM).forEach(function (mk) {
       var arr = byM[mk].slice().sort(function (a, b) { return tsMin(a) - tsMin(b); });
-      var days = {}, stores = {}, cash = {};
+      var days = {}, stores = {}, cash = {}, first0 = findings.length;
       arr.forEach(function (it) {
         (days[dayOf(it)] = days[dayOf(it)] || []).push(it);
         stores[it.storeNumber] = true;
@@ -2425,6 +2532,15 @@
           findings.push({ kind: 'Medlem', code: 'empUse', title: 'Ansatt-medlemsnr brukt', flag: true,
             detail: 'Ansattnummer ' + mk + ' brukt på ' + other.length + ' bonger (kasserere ' + Object.keys(other.reduce(function (o, x) { o[x.cashierNumber] = 1; return o; }, {})).join(', ') + ')', ids: ids(other) });
         }
+      }
+      if (findings.length > first0) {
+        var v = memberVerdict(arr, cash, top, topShare, salesAll ? byCashAll[top] / salesAll : 0, row, findings.slice(first0));
+        row.verdict = v.level;
+        findings.slice(first0).forEach(function (f) {
+          f.verdict = v.level;
+          f.detail += '. Vurdering: ' + v.label + ' – ' + v.why + '.';
+          if (v.level === 'lav' && f.code !== 'empOwn') f.flag = false;   // trolig uskyldig: vises, men gir ikke poeng
+        });
       }
     });
     rows.sort(function (a, b) { return b.flags.length - a.flags.length || b.n - a.n; });
@@ -2787,10 +2903,17 @@
   function voidChecks(items, pop, scanMap, cfg) {
     var res = { findings: [], rows: [], voided: 0, bongs: 0, unresolved: 0, resold: 0, combos: 0, scanned: 0, sales: 0, coverage: 1, applicable: false };
     var combo = hasNum(cfg.voidCashOn), win = cnum(cfg.voidResaleMin, null), cashN = cnum(cfg.voidCashN, null), lineOn = hasNum(cfg.voidLineOn);
-    var scope = {}, sold = {}, per = {};
+    var dayMode = hasNum(cfg.voidResaleDay), resaleOn = dayMode || win !== null;
+    var scope = {}, sold = {}, per = {}, shr = {};
     items.forEach(function (it) { scope[it.transactionId] = true; });
     var scans = {};
     pop.forEach(function (it) {
+      // svinn og internt forbruk (11, 13): hvilke varer som er skrevet av, per butikk og dag
+      if (isShrink(it)) {
+        var ss = scanMap && scanMap[it.transactionId];
+        if (ss) (ss.items || []).forEach(function (l) { if (isEan(l.c)) (shr[it.storeNumber + '|' + dayOf(it) + '|' + l.c] = shr[it.storeNumber + '|' + dayOf(it) + '|' + l.c] || []).push(it); });
+        return;
+      }
       if (it.receiptType !== 1) return;
       res.sales++;
       var sc = scanMap && scanMap[it.transactionId];
@@ -2799,7 +2922,7 @@
       scans[it.transactionId] = sc;
       var net = {};
       sc.items.forEach(function (l) { if (isEan(l.c)) net[l.c] = (net[l.c] || 0) + (l.a > 0 ? 1 : l.a < 0 ? -1 : 0); });
-      Object.keys(net).forEach(function (c) { if (net[c] > 0) (sold[it.storeNumber + '|' + c] = sold[it.storeNumber + '|' + c] || []).push({ id: it.transactionId, t: tsMin(it) }); });
+      Object.keys(net).forEach(function (c) { if (net[c] > 0) (sold[it.storeNumber + '|' + c] = sold[it.storeNumber + '|' + c] || []).push({ id: it.transactionId, t: tsMin(it), day: dayOf(it) }); });
     });
     res.coverage = res.sales ? res.scanned / res.sales : 1;
     res.applicable = res.coverage >= 0.8;
@@ -2826,15 +2949,23 @@
         res.findings.push({ kind: 'Slettede linjer', code: 'voidCash', title: 'Varelinjer slettet, pant utbetalt kontant', flag: true,
           detail: whereText(it) + ': ' + cx.itemLines + ' varelinje' + (cx.itemLines > 1 ? 'r' : '') + ' slettet (' + money(cx.itemSum) + ' kr). Igjen er bare pant, og ' + money(cash) + ' kr betalt tilbake kontant', ids: [it.transactionId] });
       }
-      if (win !== null && res.applicable) {
-        var un = [], t0 = tsMin(it);
+      if (resaleOn && res.applicable) {
+        // samme dag (standard): varen er ikke solgt på noen annen bong i butikken den dagen; ellers innen minuttene før eller etter
+        var un = [], t0 = tsMin(it), d0 = dayOf(it);
         cx.items.forEach(function (v) {
           if (!isEan(v.c)) return;
-          var hit = (sold[it.storeNumber + '|' + v.c] || []).some(function (s) { return s.id !== it.transactionId && Math.abs(s.t - t0) <= win; });
+          var hit = (sold[it.storeNumber + '|' + v.c] || []).some(function (s) { return s.id !== it.transactionId && (dayMode ? s.day === d0 : Math.abs(s.t - t0) <= win); });
           if (hit) res.resold++; else { un.push(v); res.unresolved++; c.unresolved++; }
         });
-        if (un.length) res.findings.push({ kind: 'Slettede linjer', code: 'voidNoResale', title: 'Makulert vare ikke solgt på ny', flag: true,
-          detail: whereText(it) + ': ' + un.map(function (v) { return v.n + ' (' + v.c + ') ' + money(v.a) + ' kr'; }).join(', ') + ' makulert og ikke solgt på ny i butikken innen ' + win + ' min', ids: [it.transactionId] });
+        if (un.length) {
+          var svinn = un.map(function (v) { return { v: v, s: shr[it.storeNumber + '|' + d0 + '|' + v.c] || [] }; });
+          var inShr = svinn.filter(function (x) { return x.s.length; }).length;
+          res.inShrink = (res.inShrink || 0) + inShr;
+          res.findings.push({ kind: 'Slettede linjer', code: 'voidNoResale', title: 'Makulert vare ikke solgt på ny', flag: true,
+            detail: whereText(it) + ': ' + svinn.map(function (x) {
+              return x.v.n + ' (' + x.v.c + ') ' + money(x.v.a) + ' kr' + (x.s.length ? ', registrert som svinn samme dag (' + x.s.slice(0, 2).map(function (s) { return typeLabel(s.receiptType).toLowerCase() + ' kl. ' + parseDT(s.endDateTime).time + ', kasserer ' + s.cashierNumber; }).join('; ') + ')' : ', ikke registrert som svinn');
+            }).join('; ') + '. Slettet og ikke solgt i butikken ' + (dayMode ? 'samme dag' : 'innen ' + win + ' min') + '.', ids: [it.transactionId] });
+        }
       }
     });
     res.rows = Object.keys(per).sort(numCmp).map(function (id) {
@@ -4032,7 +4163,7 @@
     CHANNEL_LABELS: CHANNEL_LABELS,
     TYPE_LABELS: TYPE_LABELS,
     discounts: discounts,
-    memberChecks: memberChecks,
+    memberChecks: memberChecks, memberVerdict: memberVerdict,
     shiftDT: shiftDT,
     timeCheck: timeCheck,
     priceDeviation: priceDeviation,
@@ -4091,7 +4222,7 @@
     defaultControl: defaultControl,
     sanitizeControl: sanitizeControl,
     profiles: profiles,
-    patterns: patterns,
+    patterns: patterns, bankPaid: bankPaid,
     pantCheck: pantCheck,
     sequence: sequence,
     reconcile: reconcile,
@@ -4119,7 +4250,7 @@
     FAMILIES: FAMILIES,
     rrs: rrs,
     riskLevel: riskLevel,
-    rankReceipts: rankReceipts,
+    rankReceipts: rankReceipts, reportView: reportView, reportHidden: reportHidden, REPORT_HIDDEN_GROUPS: REPORT_HIDDEN_GROUPS, REPORT_HIDDEN_FIELDS: REPORT_HIDDEN_FIELDS, REPORT_HIDDEN_TITLES: REPORT_HIDDEN_TITLES,
     rankCashiers: rankCashiers,
     explainReason: explainReason,
     ruleText: ruleText,

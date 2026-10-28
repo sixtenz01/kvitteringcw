@@ -84,7 +84,8 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   assert.match(fnd, /Medlem: Medlemsnr flere ganger samme dag Medlemsnr M2: 4 bonger 2026-10-07/);
   assert.ok(!/Medlemsnr brukt svært mye/.test(fnd), 'totalgrensen på 15 nås ikke');
   const mem = await txt('[data-sec=member]');
-  assert.match(mem, /Medlemsnr Bonger Kasserer Funn M2 4 \(1 d, 1 b\) B \(50 %\) dag M1 2 \(1 d, 2 b\) A \(50 %\) butikker K0 1 \(1 d, 1 b\)/);
+  assert.match(mem, /Medlemsnr Bonger Kasserer Funn Vurdering M2 4 \(1 d, 1 b\) B \(50 %\) dag (mulig, sjekk|sterk indikasjon) M1 2 \(1 d, 2 b\) A \(50 %\) butikker (mulig, sjekk|sterk indikasjon|trolig uskyldig) K0 1 \(1 d, 1 b\)/);
+  assert.match(fnd, /Medlemsnr M2: 4 bonger 2026-10-07[^.]*\. Vurdering: /);
   // pris per vare
   assert.match(fnd, /Pris: Avvikende pris på vare Kasse 2 15:00 kasserer C: MELK 1L kr 8\.00 mot vanlig 12\.90 \(−38 %\)/);
   assert.match(fnd, /Pris: Mange avvikende priser Kasserer C: 3 varelinjer/);

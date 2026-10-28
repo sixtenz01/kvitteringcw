@@ -174,6 +174,9 @@ async function main() {
       await go('Mer', 'Innstillinger');
       if (!(await page.$eval('[data-sec=set-disc]', (d) => d.open))) await page.click('[data-sec=set-disc] summary');
       await page.setChecked('[data-sec=set-disc] .kvr-set-row:has-text("Klassifiser automatisk som kampanjevare") input[type=checkbox]', on);
+      // kampanjeflyten gjelder rabatt uten årsak, som er av som standard fra 3.41.0: slås på mens scenen tas
+      await page.setChecked('[data-sec=set-disc] input[aria-label="Rabatt uten årsak fra: på"]', !on);
+      if (!on) { const pi = page.locator('[data-sec=set-disc] input[aria-label="Rabatt uten årsak fra"]'); await pi.fill('30'); await pi.press('Tab'); }
       await go('Analyse', 'Sjekk først');
       await page.click('[data-sec=chk-top] button:text-is("Kjør analyse")');
       await page.waitForFunction(() => !/endret siden sist/.test(document.querySelector('[data-sec=chk-top]').innerText) && /Kontroller ferdig/.test(document.getElementById('kvr-panel').innerText), null, { timeout: 60000 });
@@ -279,9 +282,8 @@ async function main() {
     const at = (t) => (heights.filter((h) => h[0].indexOf(t) === 0)[0] || [0, 0])[1];
     const clip = async (name, y0, y1) => { await rp.screenshot({ path: path.join(OUT, name + '.jpg'), type: 'jpeg', quality: 80, fullPage: true, clip: { x: 0, y: y0, width: 1000, height: Math.min(y1, H) - y0 } }); console.log('  ' + name); };
     await clip('rapport-forside', 0, at('2.') + 0);
-    await clip('rapport-dekning', at('3.'), at('4.'));
-    await clip('rapport-funn', at('6.'), Math.min(at('6.') + 780, at('7.')));
-    await clip('rapport-bevis', at('7.'), at('9.'));
+    await clip('rapport-funn', at('5.'), Math.min(at('5.') + 780, at('6.')));
+    await clip('rapport-bevis', at('6.'), at('8.'));
     await rp.close();
   }
 

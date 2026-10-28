@@ -286,18 +286,24 @@
 <div class="tw"><table>
   <thead><tr><th>Tekstnr</th><th>Årsak</th><th>Overvåkes som standard</th></tr></thead>
   <tbody>
-    <tr><td>1</td><td>Datovare</td><td>Nei</td></tr>
+    <tr><td>1</td><td>Datovare</td><td>Ja</td></tr>
     <tr><td>2</td><td>Feil pris</td><td>Ja</td></tr>
-    <tr><td>3</td><td>Prisløfte</td><td>Nei</td></tr>
+    <tr><td>3</td><td>Prisløfte</td><td>Ja</td></tr>
     <tr><td>4</td><td>Reserveløsning kupong</td><td>Ja</td></tr>
     <tr><td>5</td><td>Annen rabattårsak</td><td>Ja</td></tr>
-    <tr><td>6</td><td>Best før</td><td>Nei</td></tr>
+    <tr><td>6</td><td>Best før</td><td>Ja</td></tr>
   </tbody></table></div>
-<p>Årsak 2, 4 og 5 overvåkes fordi de er mest skjønnsmessige: kassereren velger selv. Du endrer listen under Innstillinger → Rabatt.</p>
-<h3>Rabatt uten årsak</h3>
-<p>Rabattårsak er valgfri på bongen, så en tom årsak er ikke en feil i seg selv. Pluginen behandler det slik:</p>
+<p><strong>Rabatt flagges bare når linjen har rabattårsak.</strong> En kampanjevare kan ha rabatt uten årsak, så rabatt uten årsak er bare tall i kortet Rabatter og kuponger. Med årsak gjelder tre tester:</p>
 <ul>
-  <li><strong>Bongen flagges</strong> når en rabattlinje uten årsak har en rabattprosent på minst 30 % (Innstillinger → Rabatt, «Rabatt uten årsak fra»; tom = av). Rabatter under grensen flagges ikke. Testen bruker prosenten som er trykt på rabattlinjen. En linje uten trykt prosent vurderes i stedet av «Høy rabattprosent» og «Rabatt uten treff», som regner prosenten ut fra beløpene. Funnet gir <strong>0 poeng</strong> som standard: det vises i Sjekk først og Detaljer, men teller ikke i risikoscoren. Poengene kan endres under Innstillinger → Rabatt.</li>
+  <li><strong>Overvåket (standard 41–69 %):</strong> rabatt med årsak i spennet flagges som «Rabatt med overvåket årsak». Nedre grense 41 % gjør at vanlig datovare på 40 % ikke flagges. Alle seks årsakene overvåkes som standard; listen og spennet (fra og til) endres under Innstillinger → Rabatt.</li>
+  <li><strong>Høy rabatt (standard 71–100 %):</strong> rabatt med årsak i spennet flagges som «Høy rabattprosent». 70 % ligger mellom spennene og flagges ikke; endre grensene om du vil ha den med.</li>
+  <li><strong>Varen solgt av én kasserer:</strong> rabatt med årsak på en vare (EAN) som bare én kasserer har solgt i butikken den dagen, flagges. Alle salg av varen telles, med og uten rabatt. Selger to kasserere varen samme dag, flagges den ikke. Står over dager der under 80 % av salgene i butikken er skannet.</li>
+</ul>
+<p><strong>Filtrer:</strong> Filtrer → Innhold → Rabatt «Rabatt med årsak» sammen med «Rabatt % fra» og «til» viser bonger der samme linje har årsak og prosent i spennet (for eksempel 71 til 100). Knappene «Vis overvåket» og «Vis høy rabatt» i kortet Rabatter og kuponger fyller inn dette.</p>
+<h3>Rabatt uten årsak (av som standard)</h3>
+<p>Rabattårsak er valgfri på bongen, og en kampanjevare har ofte rabatt uten årsak, så testene under er av som standard. Slår du dem på under Innstillinger → Rabatt, virker de slik:</p>
+<ul>
+  <li><strong>Bongen flagges</strong> når en rabattlinje uten årsak har en rabattprosent på minst grensen (Innstillinger → Rabatt, «Rabatt uten årsak fra», for eksempel 30 %; tom = av). Rabatter under grensen flagges ikke. Testen bruker prosenten som er trykt på rabattlinjen. En linje uten trykt prosent vurderes i stedet av «Høy rabattprosent» og «Rabatt uten treff», som regner prosenten ut fra beløpene. Funnet gir <strong>0 poeng</strong> som standard: det vises i Sjekk først og Detaljer, men teller ikke i risikoscoren. Poengene kan endres under Innstillinger → Rabatt.</li>
   <li><strong>Kassereren markeres</strong> (ikke bongen) når andelen av hans eller hennes bonger med rabatt uten årsak er minst 1,5 ganger butikkens andel, med minst 5 bonger og minst 2 bonger med rabatt uten årsak. Det står i kassererprofilen som «Mange rabatter uten årsak», og kan slås av med «Sammenlign kasserere».</li>
   <li><strong>Kampanjevare:</strong> selger minst to kasserere samme vare med rabatt (én bong hver er nok), klassifiseres varen automatisk som kampanjevare. Rabatten flagges ikke, og den teller ikke mot kassereren (under).</li>
   <li><strong>Bonger som ikke er skannet</strong> ses ikke. Dekningsgraden i kortet Rabatter og kuponger viser hvor mange salg som er vurdert.</li>
@@ -307,13 +313,13 @@
 <div class="tw"><table>
   <thead><tr><th>Test</th><th>Hva den finner</th></tr></thead>
   <tbody>
-    <tr><td>Høy rabattprosent</td><td>Rabattlinjer mellom to grenser (standard 70 til 100 %), med eller uten årsak. Overvåker rabatter som nesten gir varen bort.</td></tr>
-    <tr><td>Rabatt uten treff på andre salg</td><td>En vare med minst 30 % rabatt der ingen andre bonger i butikken samme dag har samme vare med samme rabatt. Samme rabatt på andre dager står i forklaringen. Kan være feil eller underslag. Standard er bare rabatt uten årsak.</td></tr>
+    <tr><td>Høy rabattprosent</td><td>Rabattlinjer med årsak mellom to grenser (standard 71 til 100 %). Overvåker rabatter som nesten gir varen bort.</td></tr>
+    <tr><td>Rabatt uten treff på andre salg (av som standard)</td><td>En vare med rabatt over grensen der ingen andre bonger i butikken samme dag har samme vare med samme rabatt. Samme rabatt på andre dager står i forklaringen. Gjelder bare rabatt uten årsak når «Treff-testen gjelder bare rabatt uten årsak» er på.</td></tr>
     <tr><td>Kampanjevare</td><td>Samme vare med rabatt (hvilken som helst prosent) hos minst 2 kasserere, minst 2 bonger til sammen (én bong hos hver er nok), over alle dager og butikker. Standard: varen klassifiseres automatisk som kampanjevare, og rabatten flagges ikke. Slår du av «Klassifiser automatisk som kampanjevare», tas bongene med i analysen med et notat, og du blir spurt.</td></tr>
 
   </tbody></table></div>
 <h3>Kampanjevare</h3>
-<p>Rabatt uten årsak kan skyldes en kampanje fra sentralt hold. Er samme vare solgt med rabatt på flere bonger hos flere kasserere, er det trolig en kampanje og ikke én person som gir rabatt.</p>
+<p>Rabatt uten årsak kan skyldes en kampanje fra sentralt hold. Er samme vare solgt med rabatt på flere bonger hos flere kasserere, er det trolig en kampanje og ikke én person som gir rabatt. Bare rabatt uten årsak kan bli kampanje; rabatt med årsak er gitt av kassereren og vurderes alltid.</p>
 <ul>
   <li><strong>Automatisk (standard):</strong> selger minst to kasserere samme vare med rabatt, er varen en <em>kampanjevare</em>. Én bong hos hver av to kasserere er nok. Rabatten flagges ikke, telles ikke mot kassereren, og linjen merkes «kampanjevare» i kvitteringsvisningen. Bare salg med rabatt telles. Grensene er «Mulig kampanje: … bonger» (2) og «… kasserere» (2) under Innstillinger → Rabatt.</li>
   <li><strong>Kupong på bongen:</strong> står varen i en kupong-linje på samme bong (for eksempel fra Coop-appen), regnes rabatten som kampanje. Kan slås av under Innstillinger → Rabatt.</li>
@@ -358,6 +364,12 @@
     <tr><td>Totalt</td><td>Samme medlemsnr på svært mange bonger i alt. Avhenger av hvor lang periode du har lastet.</td></tr>
     <tr><td>Én kasserer</td><td>Et medlemsnr som nesten bare brukes hos én kasserer. Andelen må også være klart høyere enn kassererens vanlige andel av butikkens bonger, slik at kassereren som tar de fleste bongene ikke flagges uten grunn.</td></tr>
   </tbody></table></div>
+<p><strong>Vurdering:</strong> har et nummer funn, gjør pluginen opp en mening ut fra hele bruksmønsteret, og skriver den i funnet og i tabellen i kortet Medlemsnummer.</p>
+<ul>
+  <li><strong>Tegn på misbruk:</strong> kassereren taster sitt eget nummer, nesten bare hos én kasserer, flere bonger på samme kasse med under 15 minutter mellom, mange bonger på én dag, eller to butikker nesten samtidig.</li>
+  <li><strong>Tegn på en fast kunde eller en husstand som deler nummer:</strong> bruk hos mange ulike kasserere uten at én har over halvparten, og jevn bruk over mange dager (gjelder ikke når nummeret nesten bare brukes hos én kasserer).</li>
+  <li><strong>Resultat:</strong> «sterk indikasjon på misbruk», «mulig misbruk, bør sjekkes» eller «trolig fast kunde eller felles husstand», med begrunnelse. Den siste vises, men gir ikke poeng. Eget nummer flagges alltid.</li>
+</ul>
 <p><strong>Ansattliste:</strong> under Innstillinger → Medlemsnummer kan du legge inn ansattes medlemsnr, adskilt med komma. <code>1234567</code> flagger alle bonger med nummeret. <code>12=1234567</code> (kasserer=medlemsnr) flagger i tillegg når kasserer 12 selv har tastet nummeret, som gir høyest poeng. Listen lagres bare i din nettleser, men tas med i innstillingseksport og rapport.</p>
 <p>Kortet <strong>Medlemsnummer</strong> viser nummerne med flest funn og bruk. Klikk et nummer for å filtrere listen på det.</p>
 {{shotw:d-member}}
@@ -393,7 +405,7 @@
 <ul>
   <li><strong>Makulert linje på bong:</strong> hver bong med en varelinje og motlinje flagges (2 poeng), også når varen er solgt på nytt, når dekningen er lav og når hele bongen er makulert. Har bongen samtidig rundt beløp, får den begge reaksjonene. Står «makulert» eller «annullert» som tekst på bongen, i en betalingslinje eller i topp/bunn, flagges den også som hendelsesord.</li>
   <li><strong>Varelinjer slettet, pant utbetalt kontant (av som standard):</strong> en kunde handler for 150 kr og betaler med pantelapp for 150 kr, og kassereren sletter deretter varelinjene slik at pantelappen utbetales som kontanter. Bongen flagges når de slettede linjene gjør at bare pant og kontant tilbake står igjen. «Kontant tilbake uten salg» regner nå også slettede linjer som ikke solgt.</li>
-  <li><strong>Makulert vare ikke solgt på ny:</strong> for hver slettet vare med EAN sjekkes det om samme vare er solgt på en annen bong i butikken innen 120 minutter før eller etter. Er den ikke det, flagges bongen. Testen krever at minst 80 % av salgene er skannet.</li>
+  <li><strong>Makulert vare ikke solgt på ny:</strong> for hver slettet vare med EAN sjekkes det om samme vare er solgt på en annen bong i butikken samme dag. Er den ikke det, flagges bongen. Funnet sier om varen er registrert som svinn eller internt forbruk samme dag (bong, klokkeslett og kasserer). Begge tilfeller flagges: slettet og så skrevet av som svinn kan være en måte å skjule at varen ble gitt bort. Med «samme dag» av brukes minuttene (standard 120) før eller etter i stedet. Testen krever at minst 80 % av salgene er skannet.</li>
   <li><strong>Mange makulerte varelinjer:</strong> kassereren markeres ved minst 5 slettede linjer.</li>
 </ul>
 <h3>Åpen retur (Mastercard)</h3>
@@ -507,11 +519,10 @@
 <h3>Slik leser du rapporten</h3>
 {{shotw:rapport-forside}}
 <ul>
-  <li><strong>Dekningsgrad og begrensninger</strong> forteller hvor mye av grunnlaget testene faktisk så, og hvilke tester som ikke ble vurdert. Les denne før du leser funnene. Her står også kampanjesvarene: hvilke varer du har svart er sentral kampanje (og som derfor ikke er flagget), hvilke du har avvist, og hvor mange som ikke er avklart.</li>
+  <li><strong>Ikke med i utskriften:</strong> dekningsgrad og begrensninger, tallanalyse (Benford, runde beløp, siste siffer) og kassaoppgjør (kassadifferanse, salg etter kassaoppgjør og bonger av typen kassaoppgjør). Bongene rangeres og kassererne får poeng uten disse testene; analysen i panelet viser dem fortsatt.</li>
   <li><strong>Metode</strong> viser alle terskler og poeng som ble brukt, med endringer fra standard merket gult.</li>
   <li><strong>Funn</strong> er gruppert per test. <strong>Flaggede kvitteringer</strong> er rangert etter risiko, med forklaring, status og notat, og lenke til bevisbildet.</li>
 </ul>
-{{shotw:rapport-dekning}}
 {{shotw:rapport-funn}}
 <div class="shots">{{fig:bevis}}<div><p>Bevisbildene er tegnet fra kvitteringsteksten i Lindbak med topptekst for butikk, kasse, kasserer, bongnummer og tid. De er laget ved eksport, og kontrollsummen står under hvert bilde. Bildene ligger inne i rapport.html, så de vises også når rapporten åpnes rett fra ZIP-filen; «Se bilde» i tabellen over flaggede kvitteringer hopper ned til bildet. De ligger i tillegg som egne filer i mappen bevis/.</p><p>Bonger som ikke lenger finnes i listen får ikke bevisbilde. Det står i dekningsdelen.</p></div></div>
 {{shotw:rapport-bevis}}

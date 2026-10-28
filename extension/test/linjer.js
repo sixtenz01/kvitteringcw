@@ -23,7 +23,7 @@ add({ cashier: 'C', time: '2026-10-02 13:00', tot: -150, body: [vare(E1, 'MELK',
 // 4: eget forbruk
 add({ cashier: 'C', tot: 30, body: [vare(E2, 'KAFFE', 30), TR('Eget forbruk:', '30.00')] });
 // 5: rabatt 80 % og 40 % uten treff
-add({ cashier: 'D', tot: 10, body: [vare(E2, 'KAFFE', 10), '<tr><td>Rabatt: Kr 40.00 (80 %)</td></tr>', TR('Bank:', '10.00')] });
+add({ cashier: 'D', tot: 10, body: [vare(E2, 'KAFFE', 10), '<tr><td>Rabatt: Kr 40.00 (80 %)</td></tr>', '<tr><td>Rabatt årsak: 2</td></tr>', TR('Bank:', '10.00')] });
 add({ cashier: 'D', tot: 12, body: [vare(E3, 'JUICE', 12), '<tr><td>Rabatt: Kr 8.00 (40 %)</td></tr>', TR('Bank:', '12.00')] });
 // 6: tre returer på samme Visa
 for (let i = 0; i < 3; i++) add({ cashier: i === 1 ? 'B' : 'A', tot: -100, time: `2026-10-0${i + 1} 15:00`, body: [vare(E1, 'RETUR', -100), TR('Visa:', '-100.00'), '<tr><td>Kort: ************1234</td></tr>'] });
@@ -101,8 +101,8 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   assert.match(fnd, /Slettede linjer: Varelinjer slettet, pant utbetalt kontant .*1 varelinje slettet \(150\.00 kr\)\. Igjen er bare pant, og 150\.00 kr betalt tilbake kontant/);
   assert.match(fnd, /Mønster: Kontant tilbake uten salg flere ganger|Slettede linjer: Varelinjer slettet/);
   assert.match(fnd, /Spesialbetaling: Spesialbetaling på bong .*«Eget forbruk» \(betaling, 30\.00 kr\)/);
-  assert.match(fnd, /Rabatt: Høy rabattprosent .*KAFFE −40 kr \(80 %\)/);
-  assert.match(fnd, /Rabatt: Rabatt uten treff på andre salg .*JUICE −40 % \(ingen andre dager heller\)/);
+  assert.match(fnd, /Rabatt: Høy rabattprosent .*KAFFE −40 kr \(80 %\), årsak Feil pris/);
+  assert.ok(!/JUICE −40 %/.test(fnd), 'rabatt uten årsak (JUICE) kan være kampanjevare og flagges ikke');
   assert.match(fnd, /Kort: Gjentatte returer på samme kort Kort VISA …1234: 3 returer innen 30 dager, totalt 300\.00 kr \(kasserer A ×2, B ×1\)/);
   assert.match(fnd, /Spør pris: Spør pris avviker fra dagens salg .*MELK spør pris 12\.00 mot 20\.00 \(−40 %, 4 salg samme dag\)/);
 

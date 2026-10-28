@@ -122,11 +122,22 @@ const mapOf = (pairs) => pairs.reduce((m, [it, s]) => (m[it.transactionId] = s, 
   assert.deepStrictEqual(f('voidCash').map((x) => x.ids[0]), [combo.transactionId]);
   assert.match(f('voidCash')[0].detail, /1 varelinje slettet \(150\.00 kr\)/);
   assert.match(f('voidCash')[0].detail, /150\.00 kr betalt tilbake kontant/);
-  // v1: kaffe makulert og solgt på ny innen 120 min -> ok. Melk makulert på v2 men solgt på ny på samme bong (net 1) og 3,5 t senere på annen bong.
+  // standard samme dag: kaffe (v1) og melk (v2) er solgt på andre bonger samme dag; varen på combo (EAN3) er ikke solgt igjen
   const nr = f('voidNoResale');
-  assert.deepStrictEqual(nr.map((x) => x.ids[0]).sort(), [combo.transactionId, v2.transactionId].sort());
-  assert.match(nr.find((x) => x.ids[0] === v2.transactionId).detail, /MELK \(7038010000010\) 20\.00 kr makulert og ikke solgt på ny/);
-  assert.strictEqual(r.resold, 1);
+  assert.deepStrictEqual(nr.map((x) => x.ids[0]), [combo.transactionId]);
+  assert.match(nr[0].detail, /\(7038010000034\) 150\.00 kr, ikke registrert som svinn\. Slettet og ikke solgt i butikken samme dag\./);
+  assert.strictEqual(r.resold, 2);
+  // innen minuttene (samme dag av): melk solgt på ny 3,5 t senere er utenfor 120 min
+  const rm = L.voidChecks(all, all, map, Object.assign(CT(), { voidResaleDay: '' })).findings.filter((x) => x.code === 'voidNoResale');
+  assert.deepStrictEqual(rm.map((x) => x.ids[0]).sort(), [combo.transactionId, v2.transactionId].sort());
+  assert.match(rm.find((x) => x.ids[0] === v2.transactionId).detail, /MELK \(7038010000010\) 20\.00 kr, ikke registrert som svinn\. Slettet og ikke solgt i butikken innen 120 min\./);
+  // registrert som svinn samme dag: står i forklaringen, og bongen flagges fortsatt
+  const shrinkIt = bong({ cashierNumber: 'M', endDateTime: '2026-10-05 21:00', totalAmount: 150, receiptType: 11 });
+  const rs = L.voidChecks(all, all.concat([shrinkIt]), Object.assign({}, map, { [shrinkIt.transactionId]: sc([{ c: EAN3, n: 'OST', a: 150 }]) }), CT());
+  const rsf = rs.findings.filter((x) => x.code === 'voidNoResale');
+  assert.match(rsf[0].detail, /registrert som svinn samme dag \(synlig svinn kl\. 21:00, kasserer M\)/);
+  assert.strictEqual(rsf[0].flag, true);
+  assert.strictEqual(rs.inShrink, 1);
   assert.strictEqual(r.voided, 3);
   assert.ok(r.applicable);
   // makulert linje flagges på hver bong med linje og motlinje, også når varen er solgt på ny og når dekningen er lav
@@ -135,13 +146,13 @@ const mapOf = (pairs) => pairs.reduce((m, [it, s]) => (m[it.transactionId] = s, 
   assert.ok(vl.some((x) => x.ids[0] === v1.transactionId), 'kaffe solgt på ny er likevel makulert');
   assert.match(vl.find((x) => x.ids[0] === v2.transactionId).detail, /varelinje makulert \(20\.00 kr\): MELK/);
   // utenfor 120 min: stor mellomtid gir treff på kaffe også
-  const tight = L.voidChecks(all, all, map, Object.assign(CT(), { voidResaleMin: '30' }));
+  const tight = L.voidChecks(all, all, map, Object.assign(CT(), { voidResaleMin: '30', voidResaleDay: '' }));
   assert.ok(tight.findings.some((x) => x.code === 'voidNoResale' && x.ids[0] === v1.transactionId));
   // kassererflagg
   const k = L.voidChecks(all, all, map, Object.assign(CT(), { voidCashN: '3' }));
   assert.deepStrictEqual(k.findings.filter((x) => x.code === 'voidCash2').map((x) => [x.cashier, x.flag]), [['K', false]]);
   // av
-  assert.strictEqual(L.voidChecks(all, all, map, Object.assign(CT(), { voidCashOn: '', voidResaleMin: '', voidCashN: '', voidLineOn: '' })).findings.length, 0);
+  assert.strictEqual(L.voidChecks(all, all, map, Object.assign(CT(), { voidCashOn: '', voidResaleMin: '', voidResaleDay: '', voidCashN: '', voidLineOn: '' })).findings.length, 0);
   // for lav dekning gir ingen gjensalgstest
   const half = L.voidChecks(all, all.concat(Array.from({ length: 20 }, () => bong())), map, CT());
   assert.ok(!half.applicable && !half.findings.some((x) => x.code === 'voidNoResale'));
@@ -183,19 +194,54 @@ const mapOf = (pairs) => pairs.reduce((m, [it, s]) => (m[it.transactionId] = s, 
   const CODES = { KAFFE: EAN2, SMØR: EAN3, OST: EAN4, JUICE: '7038010000058' };
   const dl = (name, a, d, dp, dr) => ({ c: CODES[name] || EAN, n: name, a, d, dp, dr });
   const day = (id, time, cashier, lines, d) => { const it = bong({ transactionId: id, endDateTime: (d || '2026-10-05') + ' ' + time, cashierNumber: cashier }); return [it, sc(lines, { v: 6, disc: lines.reduce((x, l) => x + (l.d || 0), 0), discN: lines.filter((l) => l.d).length, discNR: lines.filter((l) => l.d && !l.dr).length, discNRsum: 0, coupons: [] })]; };
-  const base = { discPct: '', discHiFrom: '', discMatchPct: '', campBongs: '', campDay: '', discWatch: '', discCash: '' };
+  const base = { discPct: '', discHiFrom: '', discMatchPct: '', campBongs: '', campDay: '', discWatch: '', discCash: '', discOneN: '' };
   const cfgOf = (o) => Object.assign(CT(), base, o);
   // høy rabatt
-  const h1 = day('h-1', '10:00', 'A', [dl('MELK', 3, 7, 70)]), h2 = day('h-2', '10:10', 'A', [dl('MELK', 0, 10, 100, '1')]), h3 = day('h-3', '10:20', 'A', [dl('MELK', 4, 6, 60)]), h4 = day('h-4', '10:30', 'A', [dl('MELK', 2, 10)]);
-  const hs = [h1, h2, h3, h4], hit = hs.map((x) => x[0]), hm = mapOf(hs);
+  const h1 = day('h-1', '10:00', 'A', [dl('MELK', 3, 7, 70, '2')]), h2 = day('h-2', '10:10', 'A', [dl('MELK', 0, 10, 100, '1')]), h3 = day('h-3', '10:20', 'A', [dl('MELK', 4, 6, 60, '1')]), h4 = day('h-4', '10:30', 'A', [dl('MELK', 2, 10, undefined, '5')]);
+  const h5 = day('h-5', '10:40', 'A', [dl('MELK', 2, 8, 80)]);   // uten årsak: kan være kampanjevare
+  const hs = [h1, h2, h3, h4, h5], hit = hs.map((x) => x[0]), hm = mapOf(hs);
   const hi = L.discounts(hit, hm, cfgOf({ discHiFrom: '70', discHiTo: '100' }));
   const hf = hi.findings.filter((f) => f.code === 'discHigh');
-  assert.deepStrictEqual(hf.map((f) => f.ids[0]), ['h-1', 'h-2', 'h-4'], '70, 100 og regnet 83 % (uten oppgitt prosent) treffer; 60 % ikke');
+  assert.deepStrictEqual(hf.map((f) => f.ids[0]), ['h-1', 'h-2', 'h-4'], '70, 100 og regnet 83 % (uten oppgitt prosent) treffer; 60 % og rabatt uten årsak ikke');
   assert.match(hf[1].detail, /årsak Datovare/);
-  assert.match(hf[2].detail, /uten årsak/);
+  assert.match(hf[2].detail, /årsak Annen rabattårsak/);
   assert.strictEqual(L.discounts(hit, hm, cfgOf({ discHiFrom: '70', discHiTo: '90' })).findings.filter((f) => f.code === 'discHigh').length, 2);
   assert.strictEqual(L.discRate({ a: 3, d: 7 }), 70);
   assert.strictEqual(L.discRate({ a: 0, d: 0 }), null);
+  // standard: rabatt flagges bare med årsak; overvåket 41–69 %, høy 71–100 %
+  const dc = L.defaultControl();
+  assert.deepStrictEqual([dc.discPct, dc.discCash, dc.discMatchPct, dc.discWatch, dc.discWatchPct, dc.discWatchPctTo, dc.discHiFrom, dc.discHiTo, dc.discOneN], ['', '', '', '1,2,3,4,5,6', '41', '69', '71', '100', '2']);
+  const w1 = day('w-1', '09:00', 'A', [dl('KAFFE', 6, 4, 40, '1')]), w2 = day('w-2', '09:05', 'B', [dl('KAFFE', 5, 5, 50, '1')]), w3 = day('w-3', '09:10', 'C', [dl('KAFFE', 3, 7, 70, '1')]);
+  const w4 = day('w-4', '09:15', 'D', [dl('KAFFE', 2, 8, 80, '3')]), w5 = day('w-5', '09:20', 'E', [dl('KAFFE', 4, 6, 60)]);
+  const ws = [w1, w2, w3, w4, w5], wit = ws.map((x) => x[0]), wm = mapOf(ws);
+  const wr = L.discounts(wit, wm, Object.assign(CT(), { discOneN: '', discMatchPct: '' }));
+  const byCode = (c) => wr.findings.filter((f) => f.code === c).map((f) => f.ids[0]);
+  assert.deepStrictEqual(byCode('discWatch'), ['w-2'], '50 % med årsak er overvåket; 40 % (vanlig datovare), 70 % (mellom spennene) og uten årsak ikke');
+  assert.deepStrictEqual(byCode('discHigh'), ['w-4'], '80 % med årsak er høy rabatt; 60 % uten årsak ikke');
+  assert.deepStrictEqual(byCode('discNoReason'), [], 'rabatt uten årsak flagges ikke som standard');
+  // filteret: årsak og prosent gjelder samme linje
+  const mix = day('w-6', '09:25', 'F', [dl('KAFFE', 2, 8, 80), dl('SMØR', 20, 5, 20, '1')]);
+  const fm = mapOf(ws.concat([mix])), fit = wit.concat([mix[0]]);
+  const F = (o) => fit.filter((it) => L.matches(it, Object.assign(L.defaultFilters(), o), { scan: fm })).map((it) => it.transactionId);
+  assert.deepStrictEqual(F({ disc: 'reason', discFrom: '71', discTo: '100' }), ['w-4'], 'w-6 har 80 % uten årsak og 20 % med årsak: ikke treff');
+  assert.deepStrictEqual(F({ discFrom: '71', discTo: '100' }), ['w-4', 'w-6']);
+  assert.deepStrictEqual(F({ disc: 'reason', discFrom: '41', discTo: '69' }), ['w-2']);
+  // rabatt med årsak på vare som bare én kasserer solgte samme dag
+  const o1 = day('o-1', '14:00', 'A', [dl('OST', 9, 6, 40, '1')]);                                  // OST: bare A
+  const o2 = day('o-2', '14:05', 'A', [dl('SMØR', 15, 10, 40, '1')]), o3 = day('o-3', '14:10', 'B', [{ c: EAN3, n: 'SMØR', a: 25 }]);   // SMØR: A og B
+  const o4 = day('o-4', '14:15', 'C', [{ c: EAN2, n: 'KAFFE', a: 10 }]);
+  const os = [o1, o2, o3, o4], oit = os.map((x) => x[0]), om = mapOf(os);
+  const on = L.discounts(oit, om, cfgOf({ discOneN: '2' }));
+  const of = on.findings.filter((f) => f.code === 'discOne');
+  assert.deepStrictEqual(of.map((f) => f.ids[0]), ['o-1'], 'SMØR er solgt av to kasserere samme dag');
+  assert.match(of[0].detail, /OST −6 kr \(40 %\), årsak Datovare: solgt 1 gang i butikken denne dagen, bare av kasserer A/);
+  assert.strictEqual(of[0].cashier, 'A');
+  assert.strictEqual(L.RISK_WEIGHTS['Rabatt med årsak, varen solgt av én kasserer'], 3);
+  // under 80 % skannet i butikken den dagen: testen står over
+  const os2 = os.concat([[bong({ transactionId: 'o-5', endDateTime: '2026-10-05 15:00', cashierNumber: 'D' }), null], [bong({ transactionId: 'o-6', endDateTime: '2026-10-05 15:05', cashierNumber: 'D' }), null]]);
+  const on2 = L.discounts(os2.map((x) => x[0]), mapOf(os2.filter((x) => x[1])), cfgOf({ discOneN: '2' }), os2.map((x) => x[0]));
+  assert.strictEqual(on2.findings.filter((f) => f.code === 'discOne').length, 0);
+  assert.ok(on2.oneSkip > 0);
   // treff på andre salg
   const m1 = day('m-1', '11:00', 'A', [dl('KAFFE', 6, 4, 40)]);                  // ingen andre
   const m2 = day('m-2', '11:05', 'B', [dl('SMØR', 15, 10, 40)]);                  // SMØR har samme rabatt på m-3
@@ -427,7 +473,7 @@ const mapOf = (pairs) => pairs.reduce((m, [it, s]) => (m[it.transactionId] = s, 
   assert.strictEqual(L.groupForReason('Pantelapp slettet'), 'lapp');
   assert.strictEqual(L.groupForReason('Høy rabattprosent'), 'disc');
   const dc = defaultControlOn();
-  assert.deepStrictEqual([dc.lappManualMin, dc.lappReuseMin, dc.voidResaleMin, dc.discHiFrom, dc.discHiTo, dc.campBongs, dc.campCashiers, dc.campDay, dc.campAuto, dc.askDevPct, dc.cardRetN], ['50', '60', '120', '70', '100', '2', '2', '40', '1', '5', '3']);
+  assert.deepStrictEqual([dc.lappManualMin, dc.lappReuseMin, dc.voidResaleMin, dc.discHiFrom, dc.discHiTo, dc.campBongs, dc.campCashiers, dc.campDay, dc.campAuto, dc.askDevPct, dc.cardRetN], ['50', '60', '120', '71', '100', '2', '2', '40', '1', '5', '3']);
   assert.strictEqual(dc.specialWords, 'eget forbruk, internt forbruk, utbetaling, finansiering, sjekk');
   assert.ok(L.rrs(L.riskScore(['Pantelapp slettet', 'Varelinjer slettet, pant utbetalt kontant'])) > 50);
 }

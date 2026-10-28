@@ -2286,7 +2286,15 @@
     });
     rows.push(['Butikk', T.n, T.withDisc, fmt(T.disc), T.withNR, fmt(T.nr), pct(T.share), T.withW, T.withCpn, T.cpn]);
     box.appendChild(tbl(['Kasserer', 'Bonger', 'Med rabatt', 'Rabatt kr', 'Uten årsak', 'Uten årsak kr', 'Andel', 'Overvåket', 'Med kupong', 'Kuponger'], rows));
-    box.appendChild(hintEl(D.watch.length ? 'Overvåkede årsaker: ' + D.watch.join(', ') + '. Bongen flagges ved rabatt på minst ' + ctlCfg.discWatchPct + ' % og ' + ctlCfg.discWatchKr + ' kr; kassereren markeres ved minst ' + (ctlCfg.discWatchN || '–') + ' bonger. Endres under Terskler.' : 'Overvåking av rabattårsaker er av (tom liste under Terskler).'));
+    box.appendChild(hintEl(D.watch.length ? 'Overvåkede årsaker: ' + D.watch.join(', ') + '. Bongen flagges ved rabatt med årsak på ' + (ctlCfg.discWatchPct || 0) + (ctlCfg.discWatchPctTo ? '–' + ctlCfg.discWatchPctTo : ' eller mer') + ' % og minst ' + ctlCfg.discWatchKr + ' kr; kassereren markeres ved minst ' + (ctlCfg.discWatchN || '–') + ' bonger. Rabatt flagges bare når linjen har årsak; en kampanjevare kan ha rabatt uten årsak. Endres under Innstillinger → Rabatt.' : 'Overvåking av rabattårsaker er av (tom liste under Innstillinger → Rabatt).'));
+    // hurtigfilter: rabatt med årsak i det overvåkede spennet og høy rabatt med årsak
+    var rangeBtn = function (label, from, to) {
+      return btn(label, function () { filters.disc = 'reason'; filters.discFrom = String(from); filters.discTo = String(to); writeForm(); apply(); say('Viser bonger med rabatt med årsak på ' + from + '–' + to + ' %.'); }, 'kvr-ent');
+    };
+    var qb = [];
+    if (D.watch.length) qb.push(rangeBtn('Vis overvåket (' + (ctlCfg.discWatchPct || 0) + '–' + (ctlCfg.discWatchPctTo || 100) + ' %)', ctlCfg.discWatchPct || 0, ctlCfg.discWatchPctTo || 100));
+    if (ctlCfg.discHiFrom) qb.push(rangeBtn('Vis høy rabatt (' + ctlCfg.discHiFrom + '–' + (ctlCfg.discHiTo || 100) + ' %)', ctlCfg.discHiFrom, ctlCfg.discHiTo || 100));
+    if (qb.length) box.appendChild(el('div', { class: 'kvr-row' }, qb));
     if (D.reasons.length) {
       var pick = function (name) { return name === 'Uten årsak' ? 'noreason' : L.DISC_REASONS.indexOf(name) !== -1 ? 'r:' + name : null; };
       box.appendChild(el('b', { class: 'kvr-subh', text: 'Rabatt per årsak' }));
@@ -2330,7 +2338,7 @@
       }
       box.appendChild(hintEl('Samme vare med rabatt på minst ' + (ctlCfg.campBongs || '–') + ' bonger hos minst ' + ctlCfg.campCashiers + ' kasserere (over alle dager og butikker) kan være en kampanje fra sentralt hold. Uten automatisk kampanjevare tas bongene med i analysen med et notat, og du blir spurt. Svaret gjelder varen, uansett rabattprosent. Svar Ja: rabatten flagges ikke lenger og telles ikke mot kassereren (' + D.camp.confirmed + ' bekreftet). Svar Nei: flagges som vanlig (' + D.camp.denied + ' avvist). En dag der minst ' + (ctlCfg.campDay || '–') + ' % av minst 30 salg har rabatt får bare notat.'));
     }
-    box.appendChild(hintEl('Rabatt = linjen «Rabatt: Kr x (y %)» på en vare med årsak 1 Datovare, 2 Feil pris, 3 Prisløfte, 4 Reserveløsning kupong, 5 Annen rabattårsak eller 6 Best før (tom = ingen årsak valgt). Klikk en årsak for å filtrere listen. Kupong = linjen «Kupong (id - navn)», antatt lagt inn sentralt (CN/VPI); beløpet er ofte 0,00, så den viser at kampanjen er knyttet til bongen, ikke at den er innløst. Rødt = andel bonger med rabatt uten årsak er minst ' + ctlCfg.profFactor + '× butikkens (minst ' + ctlCfg.profMin + ' bonger). Funn «Rabatt uten årsak» krever minst ' + (ctlCfg.discPct || '–') + ' % rabatt. «Høy rabattprosent» flagger ' + (ctlCfg.discHiFrom ? ctlCfg.discHiFrom + '–' + ctlCfg.discHiTo + ' %' : 'ingenting (av)') + '. «Rabatt uten treff» krever minst ' + (ctlCfg.discMatchPct || '–') + ' % og at ingen andre bonger samme dag har varen med samme rabatt. Søk på rabatt-prosent under Skann.'));
+    box.appendChild(hintEl('Rabatt = linjen «Rabatt: Kr x (y %)» på en vare med årsak 1 Datovare, 2 Feil pris, 3 Prisløfte, 4 Reserveløsning kupong, 5 Annen rabattårsak eller 6 Best før (tom = ingen årsak valgt). Klikk en årsak for å filtrere listen. Kupong = linjen «Kupong (id - navn)», antatt lagt inn sentralt (CN/VPI); beløpet er ofte 0,00, så den viser at kampanjen er knyttet til bongen, ikke at den er innløst. Rødt = andel bonger med rabatt uten årsak er minst ' + ctlCfg.profFactor + '× butikkens (minst ' + ctlCfg.profMin + ' bonger). Funn «Rabatt uten årsak» ' + (ctlCfg.discPct ? 'krever minst ' + ctlCfg.discPct + ' % rabatt' : 'er av') + '. «Høy rabattprosent» flagger rabatt med årsak på ' + (ctlCfg.discHiFrom ? ctlCfg.discHiFrom + '–' + ctlCfg.discHiTo + ' %' : 'ingenting (av)') + '. «Varen solgt av én kasserer» ' + (ctlCfg.discOneN ? 'flagger rabatt med årsak når færre enn ' + ctlCfg.discOneN + ' kasserere solgte varen i butikken den dagen' + (D.oneSkip ? ' (' + D.oneSkip + ' linjer sto over fordi under 80 % av dagens salg var skannet)' : '') : 'er av') + '. «Rabatt uten treff» krever minst ' + (ctlCfg.discMatchPct || '–') + ' % og at ingen andre bonger samme dag har varen med samme rabatt. Søk på rabatt-prosent under Skann.'));
   }
 
   function renderMemberCard(M) {
@@ -2338,11 +2346,14 @@
     if (!M || !M.members) { box.appendChild(hintEl('Ingen bonger med medlemsnr blant de innlastede bongene i valgte butikker.')); return; }
     box.appendChild(hintEl(M.members + ' ulike medlemsnr på ' + M.sales + ' salg i valgte butikker. Viser de ' + Math.min(15, M.rows.length) + ' med flest funn og bruk (d = dager, b = butikker, kasserer med andel av bongene). Trenger ikke skanning.'));
     var short = { 'flere butikker': 'butikker', 'samme dag': 'dag', 'mye brukt': 'mye', 'én kasserer': 'kasserer', 'eget nummer': 'eget', 'ansatt': 'ansatt' };
-    box.appendChild(tbl(['Medlemsnr', 'Bonger', 'Kasserer', 'Funn'], M.rows.slice(0, 15).map(function (r) {
-      var bad = r.flags.length > 0;
+    var vText = { 'høy': 'sterk indikasjon', middels: 'mulig, sjekk', lav: 'trolig uskyldig' };
+    box.appendChild(tbl(['Medlemsnr', 'Bonger', 'Kasserer', 'Funn', 'Vurdering'], M.rows.slice(0, 15).map(function (r) {
+      var bad = r.flags.length > 0 && r.verdict !== 'lav';
       return [{ node: btn(r.id, function () { filters.member = r.id; writeForm(); apply(); say('Viser kvitteringer med medlemsnr ' + r.id + '.'); }, 'kvr-ent') }, { t: r.n + ' (' + r.days + ' d, ' + r.stores + ' b)', bad: bad },
-        { node: el('span', {}, [entLink('kasserer', r.cashier, r.cashier), document.createTextNode(' (' + pct(r.share) + ')')]), bad: r.flags.indexOf('én kasserer') !== -1 }, { t: r.flags.map(function (f) { return short[f] || f; }).join(', ') || '–', bad: bad }];
+        { node: el('span', {}, [entLink('kasserer', r.cashier, r.cashier), document.createTextNode(' (' + pct(r.share) + ')')]), bad: r.flags.indexOf('én kasserer') !== -1 }, { t: r.flags.map(function (f) { return short[f] || f; }).join(', ') || '–', bad: bad },
+        { t: r.verdict ? vText[r.verdict] : '–', bad: r.verdict === 'høy' }];
     })));
+    box.appendChild(hintEl('Vurdering: pluginen veier tegn på misbruk (eget nummer, nesten bare hos én kasserer, flere bonger på samme kasse med under 15 min mellom, mange bonger på én dag) mot tegn på en fast kunde eller en husstand som deler nummer (mange ulike kasserere, jevnt fordelt over mange dager). «Trolig uskyldig» vises, men gir ikke poeng.'));
     box.appendChild(hintEl('Funn: to butikker innen ' + (ctlCfg.memberStoreMin || '–') + ' min, minst ' + (ctlCfg.memberDayN || '–') + ' bonger samme dag, totalt ' + (ctlCfg.memberN || '–') + ', og nesten bare hos én kasserer (minst ' + (ctlCfg.memberCashN || '–') + ' bonger, over ' + ctlCfg.memberCashShare + ' % og minst ' + ctlCfg.profFactor + '× kassererens vanlige andel). ' +
       (ctlCfg.empMembers ? 'Ansattliste er på.' : 'Legg inn ansattes medlemsnr under Innstillinger for å fange eget nummer direkte.') + ' Mange bruk av ett nummer kan være en trofast kunde: vurder sammen med hvem som taster det.'));
   }
@@ -2427,7 +2438,7 @@
     var box = ui.ctlLines, V = R.voids, S = R.special, A = R.ask, C = R.card, M = R.manual;
     box.appendChild(el('b', { class: 'kvr-subh', text: 'Slettede og makulerte linjer' }));
     box.appendChild(hintEl(V.scanned + ' av ' + V.sales + ' salg skannet. ' + plur(V.voided, 'varelinje', 'varelinjer') + ' slettet på ' + plur(V.bongs, 'bong', 'bonger') + ', ' + V.combos + ' av dem med pant og kontant tilbake. ' +
-      (V.applicable ? 'Makulerte EAN-varer: ' + V.resold + ' solgt på nytt innen ' + (ctlCfg.voidResaleMin || '–') + ' min, ' + V.unresolved + ' ikke.' : 'Gjensalg vurderes ikke: under 80 % av salgene er skannet.')));
+      (V.applicable ? 'Makulerte EAN-varer: ' + V.resold + ' solgt på nytt ' + (ctlCfg.voidResaleDay ? 'i butikken samme dag' : 'innen ' + (ctlCfg.voidResaleMin || '–') + ' min') + ', ' + V.unresolved + ' ikke' + (V.inShrink ? ' (' + V.inShrink + ' av dem registrert som svinn samme dag)' : '') + '.' : 'Gjensalg vurderes ikke: under 80 % av salgene er skannet.')));
     var vrows = V.rows.filter(function (r) { return r.lines; }).map(function (r) { return [{ node: entLink('kasserer', r.id) }, r.sales, { t: r.lines, bad: r.flag }, r.unresolved, r.combos]; });
     if (vrows.length) box.appendChild(tbl(['Kasserer', 'Salg', 'Slettet', 'Uten gjensalg', 'Pant+kontant'], vrows));
     box.appendChild(el('b', { class: 'kvr-subh', text: 'Spesialbetalinger' }));
@@ -4397,7 +4408,7 @@
     var who = el('input', { type: 'text', placeholder: 'navn' }); who.value = o.author || '';
     var ev = el('input', { type: 'number', min: '0', max: '100', step: '1' }); ev.value = o.evidence === undefined ? 30 : o.evidence;
     var nt = check('Ta med notater og status', function () {}); nt.box.checked = o.notes !== false;
-    var ranked = L.rankReceipts(R.items, R.anom, weights);
+    var ranked = L.reportView(R.items, R.anom, ctlRes.findings, weights).ranked;
     var kids = [
       hintEl('Omfang: ' + R.scopeText + ' · ' + R.items.length + ' bonger · ' + ranked.length + ' flaggede · analyse kjørt ' + new Date(R.at).toLocaleString('nb-NO') + '.'),
       field('Referanse / saksnr', ref), field('Utarbeidet av', who),
@@ -4433,7 +4444,7 @@
     ui.scanBtn.disabled = true; ui.anomBtn.disabled = true; ui.stopBtn.disabled = false; ui.stopTop.style.display = ''; ui.retryBtn.disabled = true; if (ui.retryBtn2) ui.retryBtn2.disabled = true;
     var prev = grid.select(), prevTr = prev && prev[0];
     try {
-      var ranked = L.rankReceipts(R.items, R.anom, weights);
+      var RV = L.reportView(R.items, R.anom, C.findings, weights), ranked = RV.ranked;
       var pick = ranked.slice(0, opts.evidence), files = [], missing = [], t0 = Date.now();
       for (var i = 0; i < pick.length && !cancelScan; i++) {
         progress(i, pick.length, t0, 'Bevis-PNG', missing.length);
@@ -4450,7 +4461,7 @@
       var byId = {}, explain = {}, noteSub = {};
       files.forEach(function (f) { byId[f.id] = { path: f.path }; });
       ranked.forEach(function (rk) {
-        explain[rk.id] = rk.reasons.map(function (r) { return L.explainReason(r, { id: rk.id, cfg: R.anomCfg, ctl: R.ctl, findings: C.findings, rules: customRules }); });
+        explain[rk.id] = rk.reasons.map(function (r) { return L.explainReason(r, { id: rk.id, cfg: R.anomCfg, ctl: R.ctl, findings: RV.findings, rules: customRules }); });
         var n = notes[rk.id];
         if (opts.notes && n && (n.status || n.note)) noteSub[rk.id] = { status: n.status || '', note: n.note || '' };
       });
@@ -4461,8 +4472,8 @@
         items: R.items, pop: R.pop, scan: R.scan, storeLabels: R.storeLabels,
         settings: { ctl: R.ctl, anom: R.anomCfg, weights: weights, currentDiffers: KvReport.stable([R.ctl, R.anomCfg]) !== KvReport.stable([ctlCfg, anomCfg]) },
         checks: { falseRet: { coverage: C.falseRet.coverage, lineCheck: C.falseRet.lineCheck }, voids: C.voids ? { applicable: C.voids.applicable, coverage: C.voids.coverage } : null, campaign: C.disc && C.disc.camp ? { pending: C.disc.camp.pending, items: C.disc.camp.items.filter(function (e) { return e.status; }).map(function (e) { return { c: e.c, name: e.name, rateText: e.rateText, n: e.n, status: e.status }; }) } : null, numbers: C.numbers, ledger: C.ledger ? { lines: C.ledger.lines, pay: C.ledger.pay, vat: C.ledger.vat, refs: C.ledger.refs } : null },
-        findings: C.findings, ranked: ranked, explain: explain, notes: noteSub,
-        cashiers: L.rankCashiers(R.items, R.anom, weights, C.profile, C.cashierExtra).slice(0, 10),
+        findings: RV.findings, ranked: ranked, explain: explain, notes: noteSub,
+        cashiers: L.rankCashiers(RV.items, RV.anom, weights, C.profile, RV.extra).slice(0, 10),
         compare: compareForReport(R), failedScans: failedRecs.length, cwxRun: R.cwxRun || null, archInfo: R.archInfo || null,
         evidence: { files: files.map(function (f) { return { id: f.id, path: f.path, hash: f.hash, src: f.src }; }), byId: byId, missing: missing, requested: pick.length, cappedFrom: ranked.length },
         settingsJson: JSON.stringify({ app: 'kvitteringshenter', v: 1, ctl: R.ctl, anom: R.anomCfg, weights: weights, customRules: customRules, groups: rules, stores: manualStores, camp: campDec, keynav: keyNav }, null, 2) + '\n'

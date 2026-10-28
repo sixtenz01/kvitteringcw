@@ -249,8 +249,18 @@ assert.strictEqual(byCode('cashNoSale').length, 1);
 assert.strictEqual(byCode('cashNoSale')[0].ids.length, 3);
 assert.match(byCode('cashNoSale')[0].detail, /Kasse 7: 3 ganger, totalt 150 kr/);
 // rene pantereturer (c-1 til c-3) teller ikke som gjentatt beløp, så Z har bare én bong på −50
-assert.deepStrictEqual(byCode('repeatAmount').map(x => x.detail).sort(), ['Kasserer Y 2026-10-02: 199 kr × 3']);
-assert.strictEqual(L.patterns(mi, {}, Object.assign({}, C, { repeatN: '2' })).filter(x => x.code === 'repeatAmount').length, 1);
+// standard: bare bankbetaling. Uten skanning er bankbeløpet ukjent, så ingen treff
+assert.deepStrictEqual(byCode('repeatAmount'), []);
+const Csum = Object.assign({}, C, { repeatBank: '' });   // bongsum fra listen, som før
+assert.deepStrictEqual(L.patterns(mi.concat(ci), mscan, Csum).filter(x => x.code === 'repeatAmount').map(x => x.detail).sort(), ['Kasserer Y 2026-10-02: 199.00 kr × 3']);
+assert.strictEqual(L.patterns(mi, {}, Object.assign({}, Csum, { repeatN: '2' })).filter(x => x.code === 'repeatAmount').length, 1);
+// bankbeløpet: tre bonger med 199 kr i bank flagges; en med kontant teller ikke, og bongsummen kan være en annen enn bankbeløpet
+const bk = (pay) => rcpt([['7000 VARE', '', '249.00']].concat(Object.keys(pay).map((k) => [k + ':', '', pay[k].toFixed(2)])));
+const bki = [['b-1', 249, { Bank: 199, Kontant: 50 }], ['b-2', 199, { Bank: 199 }], ['b-3', 199, { Visa: 199 }], ['b-4', 199, { Kontant: 199 }]].map(([id, t]) => mkI(id, '2026-10-04', '10:00', 2, 'Q', t));
+const bscan = { 'b-1': bk({ Bank: 199, Kontant: 50 }), 'b-2': bk({ Bank: 199 }), 'b-3': bk({ Visa: 199 }), 'b-4': bk({ Kontant: 199 }) };
+const rb = L.patterns(bki, bscan, C).filter(x => x.code === 'repeatAmount');
+assert.deepStrictEqual(rb.map(x => [x.detail, x.ids.sort()]), [['Kasserer Q 2026-10-04: 199.00 kr betalt med bank × 3', ['b-1', 'b-2', 'b-3']]]);
+assert.deepStrictEqual([L.bankPaid(bscan['b-1']), L.bankPaid(bscan['b-4']), L.bankPaid(null)], [199, null, null]);
 assert.strictEqual(L.patterns(mi, {}, Object.assign({}, C, { smallReturnN: '' })).filter(x => x.code === 'smallReturns').length, 0, 'tom verdi = av');
 assert.strictEqual(L.patterns(mi, {}, Object.assign({}, C, { closeTime: '00:00', closeWindow: '60' })).filter(x => x.code === 'smallReturns').length, 0);
 
@@ -588,19 +598,20 @@ assert.deepStrictEqual(qrd2.matrix.rows.find(r => r.id === 'B').counts, { 'Datov
 // overvåkede rabattårsaker: bong-flagg, terskler og kasserer-flagg
 assert.deepStrictEqual(L.watchReasons({ discWatch: '2, 4;5,5,xyz, Best før' }), ['Feil pris', 'Reserveløsning kupong', 'Annen rabattårsak', 'Best før']);
 assert.deepStrictEqual(L.watchReasons({ discWatch: '' }), []);
-assert.deepStrictEqual(L.watchReasons(defaultControlOn()), ['Feil pris', 'Reserveløsning kupong', 'Annen rabattårsak']);
+assert.deepStrictEqual(L.watchReasons(defaultControlOn()), L.DISC_REASONS, 'standard: alle årsaker, i spennet 41–69 %');
 const wl = (reason, d, dp) => [['7000 VARE', '', '50.00'], ['Rabatt: Kr ' + d + ' (' + dp + '%)'], ['Rabatt årsak: ' + reason]];
 const wsc = { 'w-1': rcpt(wl('2', '10.00', '16.7')), 'w-2': rcpt(wl('Annen Rabattårsak', '3.00', '5.7')), 'w-3': rcpt(wl('4', '8.00', '13.8')),
   'w-4': rcpt(wl('1', '9.00', '15.3')), 'w-5': rcpt(wl('Feil pris', '1.00', '2.0')), 'w-6': rcpt(wl('2', '5.00', '9.1')) };
 const wit = [['w-1', 'A'], ['w-2', 'A'], ['w-3', 'A'], ['w-4', 'A'], ['w-5', 'B'], ['w-6', 'B']].map(x => dmeta(x[0], { cashierNumber: x[1] }));
-const wd = L.discounts(wit, wsc, C2);
+const C2w = Object.assign({}, C2, { discWatch: '2,4,5', discWatchPct: '0', discWatchPctTo: '', discOneN: '' });   // eldre oppsett: utvalgte årsaker, alle prosenter
+const wd = L.discounts(wit, wsc, C2w);
 assert.deepStrictEqual(wd.findings.filter(f => f.code === 'discWatch').map(f => f.ids[0]), ['w-1', 'w-2', 'w-3', 'w-5', 'w-6']);
 assert.match(wd.findings.find(f => f.code === 'discWatch').detail, /Kasse 1 12:00 kasserer A: VARE −10 kr \(16.7 %\) – årsak Feil pris/);
 assert.strictEqual(wd.findings.find(f => f.code === 'discWatch').flag, true);
 assert.deepStrictEqual(wd.findings.filter(f => f.code === 'discWatchCash').map(f => [f.cashier, f.flag]), [['A', false]]);
 assert.match(wd.findings.find(f => f.code === 'discWatchCash').detail, /3 av 4 bonger.*Feil pris 1, Reserveløsning kupong 1, Annen rabattårsak 1; grense 3/);
 assert.deepStrictEqual([wd.total.withW, wd.rows.find(r => r.id === 'A').withW, wd.rows.find(r => r.id === 'A').flagW, wd.rows.find(r => r.id === 'B').flagW], [5, 3, true, false]);
-const wf = (o) => L.discounts(wit, wsc, Object.assign({}, C2, o)).findings.filter(f => /^discWatch/.test(f.code)).map(f => f.code === 'discWatch' ? f.ids[0] : f.cashier);
+const wf = (o) => L.discounts(wit, wsc, Object.assign({}, C2w, o)).findings.filter(f => /^discWatch/.test(f.code)).map(f => f.code === 'discWatch' ? f.ids[0] : f.cashier);
 assert.deepStrictEqual(wf({ discWatchPct: '5' }), ['w-1', 'w-2', 'w-3', 'w-6', 'A']);
 assert.deepStrictEqual(wf({ discWatchKr: '5' }), ['w-1', 'w-3', 'w-6']);
 assert.deepStrictEqual(wf({ discWatchN: '' }), ['w-1', 'w-2', 'w-3', 'w-5', 'w-6']);
@@ -670,9 +681,26 @@ assert.match(mf('memberCash')[0].detail, /Medlemsnr M3: 6 av 7 bonger \(86 %\) h
 assert.strictEqual(mf('memberMany').length, 0, 'tom grense slår testen av');
 assert.strictEqual(mf('empOwn').length + mf('empUse').length, 0, 'ansattliste er tom');
 assert.ok(mc.findings.every(f => f.flag === true && f.ids.length));
+// vurdering på hvert funn
+assert.ok(mc.findings.every(f => /\. Vurdering: (sterk indikasjon på misbruk|mulig misbruk, bør sjekkes|trolig fast kunde eller felles husstand) – /.test(f.detail)));
+assert.strictEqual(mf('memberCash')[0].verdict, 'middels');
+assert.match(mf('memberCash')[0].detail, /86 % av bongene hos kasserer 12/);
+assert.strictEqual(mc.rows.find(r => r.id === 'M3').verdict, 'middels');
+// fast kunde: mye brukt, men hos mange kasserere og jevnt fordelt over mange dager → trolig uskyldig, uten poeng
+const loyal = [];
+for (let i = 0; i < 20; i++) loyal.push(R4(1005, 1 + (i % 3), ['10', '11', '12', '13'][i % 4], '2026-10-' + String(1 + i).padStart(2, '0'), '16:00', 300, 'F1'));
+const lv = L.memberChecks(loyal, loyal, Object.assign({}, mcfg, { memberN: '15' })).findings.filter(f => f.code === 'memberMany');
+assert.deepStrictEqual([lv.length, lv[0].verdict, lv[0].flag], [1, 'lav', false]);
+assert.match(lv[0].detail, /trolig fast kunde eller felles husstand – brukt hos 4 kasserere, ingen med over halvparten; jevnt fordelt på 20 dager \(1 bonger per dag\)/);
+// kassereren taster et nummer på flere kunder rett etter hverandre → sterk indikasjon
+const burst = [0, 3, 6, 9, 12].map(m => R4(1005, 2, '14', '2026-10-09', '11:' + String(m).padStart(2, '0'), 120, 'Z9'));
+const bv = L.memberChecks(mpop.concat(burst), mpop.concat(burst), Object.assign({}, mcfg, { memberDayN: '4' })).findings.filter(f => f.code === 'memberDay');
+assert.deepStrictEqual([bv.length, bv[0].verdict, bv[0].flag], [1, 'høy', true]);
+assert.match(bv[0].detail, /4 ganger under 15 min mellom bongene på samme kasse; 5 bonger på én dag/);
 assert.ok(mc.rows.find(r => r.id === 'M3').flags.includes('én kasserer'));
 const mc2 = L.memberChecks(all, all, Object.assign({}, mcfg, { memberN: '7', memberStoreMin: '', memberDayN: '', memberCashN: '', empMembers: '12=E2, E1' }));
 assert.deepStrictEqual(mc2.findings.map(f => f.code).sort(), ['empOwn', 'empUse', 'empUse', 'memberMany']);
+assert.strictEqual(mc2.findings.find(f => f.code === 'empOwn').flag, true, 'eget nummer flagges alltid');
 assert.deepStrictEqual(mc2.findings.find(f => f.code === 'empOwn').ids, [e2.transactionId]);
 assert.deepStrictEqual(mc2.findings.filter(f => f.code === 'empUse').map(f => f.ids.length).sort(), [1, 1]);
 assert.strictEqual(L.memberKey({ memberNumber: { number: 55 } }), '55');

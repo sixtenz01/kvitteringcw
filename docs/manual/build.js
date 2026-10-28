@@ -50,7 +50,7 @@ const IMG = {
   'innstillinger-rad': ['Åpnet gruppe med markører', 'Én gruppe åpnet. Verdien for «Stor panteretur fra» er endret til 250.'],
   'innstillinger-generelt': ['Generelt-kortet', 'Generelt: butikknavn, tastaturflyt, eksport og import.'],
   'revisjon-dialog': ['Dialogen for revisjonsrapport', 'Dialogen: referanse, utarbeidet av og antall bevisbilder.'], 'revisjon-ferdig': ['Rapport laget', 'Når rapporten er laget, viser panelet kontrollsummen for ZIP-filen.'],
-  'rapport-forside': ['Rapportens forside og sammendrag', 'Rapportens forside og sammendrag.'], 'rapport-dekning': ['Dekningsgrad og begrensninger', 'Dekningsgrad og begrensninger.'],
+  'rapport-forside': ['Rapportens forside og sammendrag', 'Rapportens forside og sammendrag.'],
   'rapport-funn': ['Funn og flaggede kvitteringer', 'Funn og flaggede kvitteringer med forklaring.'], 'rapport-bevis': ['Bevis og kontrollsummer', 'Bevisbilder og kontrollsummer.'],
   bevis: ['Bevisbilde av en bong', 'Et bevisbilde.']
 };

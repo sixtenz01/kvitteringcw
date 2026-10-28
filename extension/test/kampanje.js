@@ -54,7 +54,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   await page.addInitScript(() => {
     const rq = indexedDB.open('kvr-store', 1);
     rq.onupgradeneeded = () => { rq.result.createObjectStore('kv'); rq.result.createObjectStore('scan'); };
-    rq.onsuccess = () => { const tx = rq.result.transaction('kv', 'readwrite'); const g = tx.objectStore('kv').get('kvr.campmig.v1'); g.onsuccess = () => { if (g.result === undefined) tx.objectStore('kv').put({ campBongs: '3', campCashiers: '2' }, 'kvr.ctl.v1'); }; };
+    rq.onsuccess = () => { const tx = rq.result.transaction('kv', 'readwrite'); const g = tx.objectStore('kv').get('kvr.campmig.v1'); g.onsuccess = () => { if (g.result === undefined) tx.objectStore('kv').put({ campBongs: '3', campCashiers: '2', discPct: '30', discCash: '1', discMatchPct: '30' }, 'kvr.ctl.v1'); }; };
   });
   await page.route('https://chainweb.coop.no/**', r => {
     if (r.request().url().indexOf('/Api/') !== -1) { apiCalls.push(r.request().url()); return r.fulfill({ status: 404, body: '' }); }

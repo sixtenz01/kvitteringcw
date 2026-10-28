@@ -118,16 +118,18 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   assert.match(diff, /Kasserer A 2 2 0 −70,00/);
   assert.match(await page.innerText('[data-sec=numbers]'), /Benford \(første siffer i totalbeløp\): \d+ bonger/);
   assert.ok(await page.$('[data-sec=ch-benford]') === null, 'Benford-diagrammet ligger under Diagram');
-  // rabatt og kupong: rabatt uten årsak er et funn, rabatt med årsak og kupong er bare tall
-  assert.match(fnd, /Rabatt: Rabatt uten årsak Kasse 5 10:00 kasserer E: VARE V −40 kr \(50 %\) uten rabattårsak/);
-  assert.ok(!/Datovare|Best før|VARE X −/.test(fnd), 'rabatt med årsak flagges ikke');
+  // rabatt flagges bare med årsak (3.41.0): rabatt uten årsak kan være kampanjevare og er bare tall; rabatt med årsak på en vare
+  // som bare én kasserer solgte den dagen, er et funn
+  assert.ok(!/Rabatt uten årsak Kasse 5/.test(fnd), 'rabatt uten årsak flagges ikke');
+  assert.match(fnd, /Rabatt: Rabatt med årsak, varen solgt av én kasserer Kasse 1 10:00 kasserer A: VARE X −10 kr \(9,1 %\), årsak Best før: solgt 1 gang i butikken denne dagen, bare av kasserer A/);
   const dsc = (await page.innerText('[data-sec=disc]')).replace(/\s+/g, ' ');
   assert.match(dsc, /4 bonger har rabattlinje \(67,00 kr\), 1 av dem uten årsak \(40,00 kr\)\. 1 bonger har kupong\/kampanje \(1 kuponger\)/);
   assert.match(dsc, /Kasserer E 1 1 40,00 1 40,00 100 % 0 1 1/);
-  assert.match(dsc, /Rabatt per årsak Årsak Linjer Bonger Rabatt kr Snitt % Overvåket Datovare 1 1 5,00 6 Feil pris 1 1 12,00 9,1 ja Best før 1 1 10,00 9,1 Uten årsak 1 1 40,00 50/);
-  assert.match(fnd, /Rabatt: Rabatt med overvåket årsak Kasse 1 22:15 kasserer C: VARE Y −12 kr \(9.1 %\) – årsak Feil pris/);
-  assert.match(dsc, /Kasserer C 2 1 12,00 0 0,00 0 % 1 0 0/);
-  assert.match(dsc, /Overvåkede årsaker: Feil pris, Reserveløsning kupong, Annen rabattårsak\. Bongen flagges ved rabatt på minst 0 % og 0 kr; kassereren markeres ved minst 3 bonger/);
+  assert.match(dsc, /Rabatt per årsak Årsak Linjer Bonger Rabatt kr Snitt % Overvåket Datovare 1 1 5,00 6 ja Feil pris 1 1 12,00 9,1 ja Best før 1 1 10,00 9,1 ja Uten årsak 1 1 40,00 50/);
+  assert.ok(!/Rabatt med overvåket årsak/.test(fnd), '9,1 % er under det overvåkede spennet 41–69 %');
+  assert.match(dsc, /Kasserer C 2 1 12,00 0 0,00 0 % 0 0 0/);
+  assert.match(dsc, /Overvåkede årsaker: Datovare, Feil pris, Prisløfte, Reserveløsning kupong, Annen rabattårsak, Best før\. Bongen flagges ved rabatt med årsak på 41–69 % og minst 0 kr; kassereren markeres ved minst 3 bonger/);
+  assert.match(dsc, /Vis overvåket \(41–69 %\) Vis høy rabatt \(71–100 %\)/);
   assert.match(dsc, /Kasserer × årsak \(antall rabattlinjer\) Kasserer Datovare Feil pris Best før Uten årsak Kasserer A 1 · 1 · Kasserer C · 1 · · Kasserer E · · · 1/);
   assert.match(dsc, /1ESD2P6DRVPCCJY1 Gruppe - Coop koppnudler, 65 g 1 0,00/);
   if (process.env.SHOT) { await page.evaluate(() => { document.querySelector('[data-sec=findings]').scrollIntoView({ block: 'start' }); }); await page.waitForTimeout(200); await (await page.$('#kvr-panel')).screenshot({ path: process.env.SHOT.replace('.png', '-funn.png') }); await page.evaluate(() => { document.querySelector('[data-sec=diff]').scrollIntoView({ block: 'start' }); }); await page.waitForTimeout(200); await (await page.$('#kvr-panel')).screenshot({ path: process.env.SHOT.replace('.png', '-diff.png') }); }

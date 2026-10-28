@@ -87,29 +87,35 @@ const shuffled = R.build(Object.assign(model(), { items: items.slice().reverse()
 assert.strictEqual(shuffled.hashes.receipts, out.hashes.receipts, 'rekkefølge påvirker ikke kontrollsummen');
 assert.notStrictEqual(R.build(Object.assign(model(), { items: items.slice(0, 3) })).hashes.receipts, out.hashes.receipts, 'endret omfang endrer kontrollsummen');
 assert.ok(byPath['data/funn.csv'].includes('Falsk retur;Salg og retur av samme beløp;Kasse 1: salg 10:00 og retur 10:20, begge 100 kr;"1005-1-101; 1005-1-100";;ja'));
-assert.match(byPath['data/funn.csv'], /Tallanalyse;Mange runde beløp;.*;;A;nei/);
+assert.ok(!byPath['data/funn.csv'].includes('Tallanalyse'), 'tallanalyse er ikke med i rapporten');
 assert.match(byPath['data/flaggede_bonger.csv'], /1;Høy;9;54;1005-1-101;2026-10-01 10:20;1005;1;A;-100;"Salg og retur av samme beløp; Kortkjøp refundert kontant";oppfolging;Sjekk med <script>alert\(1\)<\/script> butikksjef;bevis\/01_1005-1-101.png/);
 assert.strictEqual(JSON.parse(byPath['innstillinger.json']).app, 'kvitteringshenter');
 
 // rapporten: alle deler, riktige tall, escaping
 const html = byPath['rapport.html'];
-for (const t of ['Revisjonsrapport – Kvitteringsjournal', '1. Sammendrag', '2. Omfang og datagrunnlag', '3. Dekningsgrad og begrensninger', '4. Metode: tester, terskler og poeng', '5. Funn', '6. Flaggede kvitteringer (rangert)', '7. Bevis (bong-PNG)', '8. Kontrollsummer og verifisering', '9. Forbehold'])
+for (const t of ['Revisjonsrapport – Kvitteringsjournal', '1. Sammendrag', '2. Omfang og datagrunnlag', '3. Metode: tester, terskler og poeng', '4. Funn', '5. Flaggede kvitteringer (rangert)', '6. Bevis (bong-PNG)', '7. Kontrollsummer og verifisering', '8. Forbehold'])
   assert.ok(html.includes(t), t);
+// tas ikke med i utskriften: dekningsgrad og begrensninger, tallanalyse (Benford) og kassaoppgjør
+assert.ok(!/Dekningsgrad|Benford|Tallanalyse|Mange runde beløp|Kassadifferanse over tid|Salg etter kassaoppgjør/.test(html), 'skjulte deler');
 assert.ok(html.includes('SAK-2026-14 &lt;b&gt;'), 'referanse er escapet');
 assert.ok(!html.includes('<script>alert') && !html.includes('<img src=x'), 'ingen uescapet innhold');
 assert.ok(html.includes('Test Testesen') && html.includes('02.10.2026 14:00 (lokal tid) · 2026-10-02T12:00:00.000Z') && html.includes('1005 – Coop Mega Kolbotn · 2026-10-01 → 2026-10-01') && html.includes('Kvitteringshenter ' + R.VERSION));
 assert.ok(html.includes('2026-10-01 → 2026-10-01 · 1005 – Coop Mega Kolbotn'));
-assert.ok(html.includes('4 kvitteringer i omfanget') && html.includes('2 funn, 2 flaggede kvitteringer (1 høy risiko, 0 middels, 1 lav)'));
-assert.ok(html.includes('Skannet innhold: 2 av 3 salg (67 %)'));
-assert.ok(html.includes('«Retur uten salg» ble ikke vurdert: bare 50 % av salgene'));
-assert.ok(!html.includes('hull i bongnummer') && html.includes('Benford: bare 3 bonger') && html.includes('1 kvitteringer kunne ikke skannes'));
-assert.ok(html.includes('begrenset til de 1 høyest rangerte av 2') && html.includes('Bevis-PNG mangler for 1 bonger'));
-assert.ok(html.includes('<div class="chg">Eller minus totalt over: <b>60 kr</b></div>'), 'endret terskel er markert');
+assert.ok(html.includes('4 kvitteringer i omfanget') && html.includes('1 funn, 2 flaggede kvitteringer (1 høy risiko, 0 middels, 1 lav)'));
+// begrensningene regnes fortsatt (i pakken), men står ikke i utskriften
+const limText = out.limitations.join(' ');
+assert.ok(limText.includes('Skannet innhold: 2 av 3 salg (67 %)') && limText.includes('«Retur uten salg» ble ikke vurdert: bare 50 % av salgene'));
+assert.ok(!limText.includes('hull i bongnummer') && limText.includes('Benford: bare 3 bonger') && limText.includes('1 kvitteringer kunne ikke skannes'));
+assert.ok(limText.includes('begrenset til de 1 høyest rangerte av 2') && limText.includes('Bevis-PNG mangler for 1 bonger'));
+assert.ok(!html.includes('Skannet innhold: 2 av 3 salg'));
+assert.ok(!html.includes('Eller minus totalt over'), 'kassadifferanse står ikke i metoden');
 assert.ok(html.includes('<div class="chg">Stor panteretur: <b>7</b></div>'), 'endret poeng er markert');
 assert.ok(html.includes('<div>Stengetid: <b>22:00</b></div>'), 'klokkeslett uten enhet');
-assert.ok(html.includes('<div>Kassadifferanse fra: <b>1 kr</b></div>') && html.split('<b><span class="off">av</span></b>').length === 11, 'av i standardoppsettet: ansattlisten, overvåkede varer, retur uten kort/medlem samme dag, flagg hver bong med overvåket returårsak og de seks pant-testene som ikke er 99 eller 399 slettet');
+
+
+assert.ok(!html.includes('Kassadifferanse fra') && html.split('<b><span class="off">av</span></b>').length === 14, 'av i standardoppsettet: ansattlisten, overvåkede varer, retur uten kort/medlem samme dag, flagg hver bong med overvåket returårsak, de seks pant-testene som ikke er 99 eller 399 slettet, og de tre testene for rabatt uten årsak');
 assert.ok(html.includes('Kasse 1: salg 10:00 og retur 10:20, begge 100 kr'));
-assert.ok(html.includes('(kassererfunn, gir poeng på kassereren)'));
+assert.ok(!html.includes('(kassererfunn, gir poeng på kassereren)'), 'eneste kassererfunn var tallanalyse');
 assert.ok(html.includes('href="bevis/01_1005-1-101.png"') && html.includes('a'.repeat(64)));
 assert.ok(html.includes('<a href="#bevis-1">Se bilde 1</a>') && html.includes('<div class="ev" id="bevis-1"><img src="bevis/01_1005-1-101.png"'), 'uten innebygd bilde: lenke til filen');
 // bildet ligger inne i rapporten (data-URI); bare gyldig base64-PNG godtas
