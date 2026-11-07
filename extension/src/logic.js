@@ -1058,6 +1058,7 @@
     ['askDevPct', 'Spør pris avviker fra dagens salg ≥ % (tom = av)', '5'], ['askMinN', 'Spør pris: minst antall salg av varen samme dag', '3'], ['askN', 'Spør pris: kasserer ved ≥ antall bonger (tom = av)', '5'],
     ['cardRetN', 'Returer på samme kort ≥ antall (tom = av)', '3'], ['cardRetDays', 'Returer på samme kort innen dager', '30'],
     ['openRetSchemes', 'Åpen retur: kortleverandører der hver retur til kort flagges (komma, tom = av)', 'Mastercard'],
+    ['netMembers', 'Nettverk: kort brukt med minst så mange medlemsnr (tom = av)', '4'], ['netSelfN', 'Nettverk: retur til kort der kassereren har minst så mange av kjøpene (tom = av)', '3'], ['netEmpOn', 'Nettverk: retur til kort knyttet til ansattnummer (tom = av)', '1'],
     ['mlTopPct', 'Maskinlæring: flagg de mest uvanlige bongene, % (tom = av)', '1'], ['mlMinScore', 'Maskinlæring: uvanlighet minst (0–100)', '60'], ['mlMinN', 'Maskinlæring: minst antall skannede salg', '200'],
     ['mlLearnMin', 'Maskinlæring: lær av vurderingene, minst bonger av hver (tom = av)', '8'],
     ['manualWords', 'Manuell kvittering: ord (komma, tom = av)', 'manuell kvittering, manuell bong, til gode, tilgode'], ['manualDays', 'Manuell kvittering: match innen dager', '3'],
@@ -1201,6 +1202,11 @@
       sf('cardRetDays', 'ctl', 'num', 'Innen', 'dager'),
       sf('openRetSchemes', 'ctl', 'text', 'Åpen retur: flagg hver retur til', '', 'Kortleverandører (komma), for eksempel Mastercard. Tom = av.', true)
     ], weights: ['Gjentatte returer på samme kort', 'Retur til kort med åpen retur'] },
+    { id: 'net', title: 'Nettverk: kort, medlemsnr og kasserere', text: 'Kort og medlemsnummer som står på samme bong, knyttes sammen til grupper (som regel én kunde eller husstand). Gruppen viser hvilke kasserere kjøpene går gjennom, og om det er gitt retur til kortene. Kort kjennes bare igjen på det som står på bongen; et kort uten utstedernr knyttes først når kortet og medlemsnummeret står sammen på minst to bonger. Krever skanning versjon 6 (kortdata).', fields: [
+      sf('netMembers', 'ctl', 'num', 'Kort brukt med mange medlemsnr: flagg ved', 'medlemsnr', 'Mange medlemsnummer knyttet sammen av samme kort kan være nummer som tastes på andres kjøp.', true),
+      sf('netSelfN', 'ctl', 'num', 'Retur til kort i kassererens nettverk: minst', 'kjøp', 'Kassereren som gir returen, står for minst så mange og minst 60 % av gruppens kjøp.', true),
+      sf('netEmpOn', 'ctl', 'flag', 'Retur til kort knyttet til ansattnummer', '', 'Bruker listen «Ansattes medlemsnr» under Medlemsnummer. Kortet er brukt med et ansattnummer, og det er gitt retur til det.')
+    ], weights: ['Kort brukt med mange medlemsnr', 'Retur til kort i kassererens nettverk', 'Retur til kort knyttet til ansatt'] },
     { id: 'ml', title: 'Maskinlæring', text: 'Lokalt i nettleseren, uten kall mot CW. Uvanlige bonger: en isolasjonsskog lærer hvordan salgene i datagrunnlaget ser ut (beløp, klokkeslett, varelinjer, retur, rabatt, slettede linjer, pant, kontant tilbake, kontantandel og tid siden forrige bong på kassen) og flagger de mest avvikende. Lær av vurderingene: bonger du merker «Til oppfølging» og «Sjekket» brukes til å sortere «Sjekk først». Medlemsnummer og kasserer er ikke med i modellen. Krever skanning.', fields: [
       sf('mlTopPct', 'ctl', 'num', 'Uvanlige bonger: flagg de mest uvanlige', '%', 'Andel av de skannede salgene som regnes som uvanlige.', true),
       sf('mlMinScore', 'ctl', 'num', 'Uvanlighet minst', 'av 100', '50 er vanlig; over 60 skiller seg klart ut.'),
@@ -1574,7 +1580,7 @@
     'Manuell pantelapp': 3, 'Mange manuelle pantelapper': 3, 'Pantelapp slettet': 4, 'Pantelapp innløst flere ganger': 4,
     'Varelinjer slettet, pant utbetalt kontant': 5, 'Makulert vare ikke solgt på ny': 3, 'Mange makulerte varelinjer': 3,
     'Spesialbetaling på bong': 3, 'Mange spesialbetalinger': 3, 'Høy rabattprosent': 3, 'Rabatt med årsak, varen solgt av én kasserer': 3, 'Rabatt uten treff på andre salg': 4,
-    'Spør pris avviker fra dagens salg': 3, 'Mange spør pris': 2, 'Gjentatte returer på samme kort': 4, 'Retur til kort med åpen retur': 3, 'Uvanlig bong (maskinlæring)': 2, 'Manuell kvittering matcher annen bong': 4,
+    'Spør pris avviker fra dagens salg': 3, 'Mange spør pris': 2, 'Gjentatte returer på samme kort': 4, 'Retur til kort med åpen retur': 3, 'Uvanlig bong (maskinlæring)': 2, 'Kort brukt med mange medlemsnr': 2, 'Retur til kort i kassererens nettverk': 3, 'Retur til kort knyttet til ansatt': 4, 'Manuell kvittering matcher annen bong': 4,
     'Bonger i rask rekkefølge': 2, 'Mange 0-kr-bonger': 2, 'Overvåket vare i retur': 3, 'Overvåket vare slettet': 3, 'Mange overvåkede varer hos kasserer': 2,
     'Retur av vare uten kjøp på kortet': 4, 'Retur av vare uten kjøp av medlemmet': 3, 'Retur av vare uten salg samme dag': 1,
     'Topptekst stemmer ikke med listen': 3, 'Samme autorisasjonskode på flere bonger': 3, 'Makulert linje på bong': 2,
@@ -3668,6 +3674,97 @@
   // ---- retur av vare uten kjøp av samme EAN: på samme kort, samme medlem eller samme dag ------------
   function cardKeyOf(c) { return (c.s || '?') + '|' + (c.f || '') + '|' + c.n; }
 
+  // ---- nettverk: kort, medlemsnummer og kasserere ----------------------------------------------------------
+  // Kort og medlemsnummer som brukes på samme bong, knyttes sammen. Det som henger sammen, er én «gruppe» (som regel én kunde
+  // eller husstand). Kort kjennes bare igjen på det som står på bongen (leverandør, eventuelt utstedernr, siste fire siffer), så
+  // et kort uten utstedernr knyttes bare når samme kort og medlemsnr står sammen på minst to bonger; da blir færre ulike kort med
+  // like siste fire siffer slått sammen ved en tilfeldighet.
+  function netChecks(items, pop, scanMap, cfg) {
+    var mN = cnum(cfg.netMembers, null), selfN = cnum(cfg.netSelfN, null), empOn = hasNum(cfg.netEmpOn), emp = empList(cfg);
+    var res = { findings: [], groups: [], scanned: 0, sales: 0, links: 0, weak: 0, coverage: 1 };
+    var parent = {}, find = function (x) { while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; };
+    var add = function (x) { if (parent[x] === undefined) parent[x] = x; };
+    var join = function (a, b) { add(a); add(b); var ra = find(a), rb = find(b); if (ra !== rb) { if (ra < rb) parent[rb] = ra; else parent[ra] = rb; } };
+    var pairs = {}, recs = [], labelOf = {};
+    pop.forEach(function (it) {
+      if (!isSale(it)) return;
+      res.sales++;
+      var sc = scanMap && scanMap[it.transactionId];
+      if (!hasV6(sc)) return;
+      res.scanned++;
+      var mk = memberKey(it), cards = (sc.cd || []).map(function (c) { var k = cardKeyOf(c); labelOf[k] = (c.s ? c.s.toUpperCase() + ' ' : '') + (c.f ? c.f + '…' : '…') + c.n; return { k: k, strong: !!c.f }; });
+      recs.push({ it: it, sc: sc, mk: mk, cards: cards, refund: cardRefund(it, sc) });
+      if (mk) add('M:' + mk);
+      cards.forEach(function (c) { add('C:' + c.k); if (mk) { var pk = 'M:' + mk + '#C:' + c.k; (pairs[pk] = pairs[pk] || { n: 0, strong: c.strong, m: 'M:' + mk, c: 'C:' + c.k }).n++; } });
+    });
+    res.coverage = res.sales ? res.scanned / res.sales : 1;
+    Object.keys(pairs).sort().forEach(function (pk) {
+      var p = pairs[pk];
+      if (p.strong || p.n >= 2) { join(p.m, p.c); res.links++; } else res.weak++;
+    });
+    // grupper med minst to medlemsnummer eller to kort
+    var g = {};
+    recs.forEach(function (r) {
+      var nodes = (r.mk ? ['M:' + r.mk] : []).concat(r.cards.map(function (c) { return 'C:' + c.k; }));
+      var roots = {};
+      nodes.forEach(function (n) { roots[find(n)] = true; });
+      Object.keys(roots).forEach(function (root) {
+        var e = g[root] || (g[root] = { id: root, members: {}, cards: {}, recs: [], cashiers: {}, refunds: [] });
+        if (r.mk && find('M:' + r.mk) === root) e.members[r.mk] = (e.members[r.mk] || 0) + 1;
+        r.cards.forEach(function (c) { if (find('C:' + c.k) === root) e.cards[c.k] = (e.cards[c.k] || 0) + 1; });
+        e.recs.push(r);
+        if (r.refund) e.refunds.push(r); else e.cashiers[r.it.cashierNumber] = (e.cashiers[r.it.cashierNumber] || 0) + 1;
+      });
+    });
+    var scope = {};
+    items.forEach(function (it) { scope[it.transactionId] = true; });
+    var ownerOf = function (mk) { return Object.keys(emp.pairs).filter(function (k) { return k.split('|')[1] === mk; }).map(function (k) { return k.split('|')[0]; }); };
+    Object.keys(g).sort().forEach(function (root) {
+      var e = g[root], ms = Object.keys(e.members).sort(), cs = Object.keys(e.cards).sort();
+      if (ms.length + cs.length < 3) return;
+      var buys = Object.keys(e.cashiers).reduce(function (a, k) { return a + e.cashiers[k]; }, 0);
+      var top = Object.keys(e.cashiers).sort(function (a, b) { return e.cashiers[b] - e.cashiers[a] || numCmp(a, b); })[0];
+      var empM = ms.filter(function (m) { return emp.members[m]; });
+      var grp = { id: root, members: ms, cards: cs.map(function (k) { return labelOf[k] || k; }), cardKeys: cs, n: e.recs.length, cashiers: e.cashiers, top: top || null, topShare: buys && top ? e.cashiers[top] / buys : 0,
+        refunds: e.refunds.length, refundSum: round2(e.refunds.reduce(function (a, r) { return a + r.refund.amount; }, 0)), emp: empM, ids: e.recs.map(function (r) { return r.it.transactionId; }), flags: [],
+        edges: e.recs.map(function (r) { return { id: r.it.transactionId, k: r.it.cashierNumber, m: r.mk && e.members[r.mk] ? r.mk : '', c: r.cards.filter(function (c) { return e.cards[c.k]; }).map(function (c) { return labelOf[c.k] || c.k; }), refund: !!r.refund }; }) };
+      res.groups.push(grp);
+      var cashText = Object.keys(e.cashiers).sort(function (a, b) { return e.cashiers[b] - e.cashiers[a]; }).slice(0, 4).map(function (k) { return k + ' (' + e.cashiers[k] + ')'; }).join(', ');
+      var cardText = grp.cards.slice(0, 3).join(', ') + (grp.cards.length > 3 ? ' og ' + (grp.cards.length - 3) + ' til' : '');
+      // mange medlemsnummer knyttet sammen av kort: én betaler bruker mange nummer, eller nummer tastes på andres kjøp
+      if (mN !== null && ms.length >= mN) {
+        var inS = grp.ids.filter(function (id) { return scope[id]; });
+        if (inS.length) {
+          grp.flags.push('mange medlemsnr');
+          res.findings.push({ kind: 'Nettverk', code: 'netGroup', title: 'Kort brukt med mange medlemsnr', flag: true,
+            detail: ms.length + ' medlemsnr (' + ms.slice(0, 4).join(', ') + (ms.length > 4 ? ' …' : '') + ') og ' + cs.length + ' kort (' + cardText + ') henger sammen på ' + grp.n + ' bonger; kasserer ' + cashText + '.',
+            ids: inS.slice(0, 40) });
+        }
+      }
+      e.refunds.forEach(function (r) {
+        if (!scope[r.it.transactionId]) return;
+        var k = String(r.it.cashierNumber), cardsHere = r.cards.filter(function (c) { return e.cards[c.k]; }).map(function (c) { return labelOf[c.k] || c.k; }).join(', ') || 'kortet';
+        // retur til et kort som er brukt med et ansattnummer
+        if (empOn && empM.length) {
+          var own = empM.map(function (m) { var o = ownerOf(m); return m + (o.length ? ' (kasserer ' + o.join(', ') + ')' : ''); });
+          grp.flags.push('ansatt');
+          res.findings.push({ kind: 'Nettverk', code: 'netEmp', title: 'Retur til kort knyttet til ansatt', flag: true, cashier: r.it.cashierNumber,
+            detail: whereText(r.it) + ': ' + money(r.refund.amount) + ' kr tilbake til ' + cardsHere + ', som er brukt med ansattnummer ' + own.join(', ') + '.', ids: [r.it.transactionId] });
+        }
+        // retur gitt av kassereren som nesten alle kjøpene i gruppen går gjennom
+        var mine = e.cashiers[k] || 0;
+        if (selfN !== null && buys >= selfN && mine >= selfN && mine / buys >= 0.6 && ms.length) {
+          grp.flags.push('egen kasserer');
+          res.findings.push({ kind: 'Nettverk', code: 'netSelf', title: 'Retur til kort i kassererens nettverk', flag: true, cashier: r.it.cashierNumber,
+            detail: whereText(r.it) + ': ' + money(r.refund.amount) + ' kr tilbake til ' + cardsHere + '. Kortet og medlemsnr ' + ms.slice(0, 3).join(', ') + ' står på ' + buys + ' kjøp, ' + mine + ' (' + Math.round(mine / buys * 100) + ' %) hos kasserer ' + k + ', som også ga returen.',
+            ids: [r.it.transactionId] });
+        }
+      });
+    });
+    res.groups.sort(function (a, b) { return b.flags.length - a.flags.length || b.members.length - a.members.length || b.n - a.n || (a.id < b.id ? -1 : 1); });
+    return res;
+  }
+
   function itemReturns(items, pop, scanMap, cfg) {
     var res = { findings: [], rows: [], returns: 0, lines: 0, flagged: 0, byCard: 0, byMember: 0, byDay: 0, unlinked: 0, short: 0, scanned: 0, sales: 0, coverage: 1, applicable: false, on: false };
     var days = cnum(cfg.retEanDays, null), dayOn = hasNum(cfg.retEanDay);
@@ -4376,7 +4473,7 @@
     specialChecks: specialChecks,
     specialHits: specialHits,
     askPrice: askPrice,
-    cardChecks: cardChecks, cardRefund: cardRefund, mlAnomaly: mlAnomaly, mlLearn: mlLearn, isolationForest: isolationForest, ML_FEATURES: ML_FEATURES, schemeLabel: schemeLabel, schemeList: schemeList, SCHEME_LABELS: SCHEME_LABELS,
+    cardChecks: cardChecks, cardRefund: cardRefund, mlAnomaly: mlAnomaly, mlLearn: mlLearn, netChecks: netChecks, isolationForest: isolationForest, ML_FEATURES: ML_FEATURES, schemeLabel: schemeLabel, schemeList: schemeList, SCHEME_LABELS: SCHEME_LABELS,
     manualReceipts: manualReceipts,
     cancelled: cancelled,
     netNp: netNp,

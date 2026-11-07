@@ -408,6 +408,14 @@
   <li><strong>Makulert vare ikke solgt på ny:</strong> for hver slettet vare med EAN sjekkes det om samme vare er solgt på en annen bong i butikken samme dag. Er den ikke det, flagges bongen. Funnet sier om varen er registrert som svinn eller internt forbruk samme dag (bong, klokkeslett og kasserer). Begge tilfeller flagges: slettet og så skrevet av som svinn kan være en måte å skjule at varen ble gitt bort. Med «samme dag» av brukes minuttene (standard 120) før eller etter i stedet. Testen krever at minst 80 % av salgene er skannet.</li>
   <li><strong>Mange makulerte varelinjer:</strong> kassereren markeres ved minst 5 slettede linjer.</li>
 </ul>
+<h3>Nettverk: kort, medlemsnr og kasserere</h3>
+<p>Kort og medlemsnummer som står på samme bong, knyttes sammen. Det som henger sammen, er en gruppe, som regel én kunde eller husstand. Kortet <em>Nettverk</em> i Detaljer viser gruppene med flest medlemsnummer og funn først: hvor mange bonger, hvilken kasserer kjøpene mest går gjennom, og om det er gitt retur til kortene. Klikk et medlemsnummer for et diagram med kasserere, medlemsnummer og kort, der strekene er bonger og rødt er retur til kortet. «Velg bongene» velger alle bongene i gruppen i listen.</p>
+<ul>
+  <li><strong>Kort brukt med mange medlemsnr</strong> (standard 4, 2 poeng): ett kort brukt med mange ulike medlemsnummer kan være nummer som tastes på andres kjøp.</li>
+  <li><strong>Retur til kort i kassererens nettverk</strong> (3 poeng): kassereren som gir returen, står for minst 3 og minst 60 % av kjøpene med kortet og medlemsnummeret.</li>
+  <li><strong>Retur til kort knyttet til ansatt</strong> (4 poeng): kortet er brukt med et ansattnummer fra listen under Medlemsnummer, og det gis retur til det.</li>
+  <li><strong>Begrensning:</strong> kort kjennes bare igjen på det som står på bongen (leverandør, eventuelt utstedernr, siste fire siffer). Et kort uten utstedernr knyttes først når kortet og medlemsnummeret står sammen på minst to bonger, så ulike kort med like siste fire siffer sjelden slås sammen. Krever skanning versjon 6.</li>
+</ul>
 <h3>Maskinlæring</h3>
 <p>To modeller kjører lokalt i nettleseren når du kjører analysen. Ingenting sendes noe sted, og pluginen gjør ingen kall mot CW.</p>
 <ul>

@@ -350,3 +350,12 @@ tr.kvr-follow>td.kvr-cb-cell::after{color:#e37400}
 /* maskinlæring: lært sannsynlighet i «Sjekk først» */
 #kvr-panel .kvr-ml{padding:1px 6px;border-radius:999px;background:#eef1f0;color:#4a5550;font-size:10px;font-weight:600}
 #kvr-panel .kvr-ml-hi{background:#fde8d0;color:#8a4b00}
+
+/* nettverk: diagram over en gruppe kort og medlemsnr */
+#kvr-panel .kvr-net-wrap{margin:6px 0;max-width:640px}
+#kvr-panel .kvr-net-h{font-size:11px;font-weight:700;fill:var(--kv-muted)}
+#kvr-panel .kvr-net-n{fill:var(--kv-soft);stroke:var(--kv-edge);stroke-width:1}
+#kvr-panel .kvr-net-emp{stroke:var(--kv-fg);stroke-width:2}
+#kvr-panel .kvr-net-t{font-size:10px;fill:var(--kv-fg)}
+#kvr-panel .kvr-net-l{stroke:var(--kv-edge)}
+#kvr-panel .kvr-net-ret{stroke:var(--kv-warn)}

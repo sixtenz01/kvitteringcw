@@ -2214,6 +2214,7 @@
       ask: ask,
       card: L.cardChecks(items, pop, scanMap, ctlCfg),
       ml: L.mlAnomaly(items, pop, scanMap, ctlCfg),
+      net: L.netChecks(items, pop, scanMap, ctlCfg),
       manual: manual,
       tempo: L.tempoChecks(items, ctlCfg),
       watch: L.watchItems(items, pop, scanMap, ctlCfg),
@@ -2226,7 +2227,7 @@
       res.member.findings, res.price.findings, res.ku.findings, res.ev.findings, res.ledger.findings, res.corr.findings.filter(keep),
       res.lapp.findings.filter(keep), res.voids.findings.filter(keep), res.special.findings, res.ask.findings.filter(keep), res.card.findings.filter(keep), res.manual.findings.filter(keep),
       res.tempo.findings.filter(keep), res.watch.findings.filter(keep), res.retEan.findings.filter(keep), res.retR.findings.filter(keep), res.hdr.findings.filter(keep),
-      res.cw.findings.filter(keep), res.shift.findings.filter(keep), res.copy.findings.filter(keep), res.shrink.findings.filter(keep), res.ml.findings);
+      res.cw.findings.filter(keep), res.shift.findings.filter(keep), res.copy.findings.filter(keep), res.shrink.findings.filter(keep), res.ml.findings, res.net.findings);
     res.cashierExtra = {};
     res.findings.forEach(function (f) {
       if (f.flag) f.ids.forEach(function (id) { if (scopeIds[id]) addFlag(id, f.title); });
@@ -2393,6 +2394,63 @@
       box.appendChild(hintEl(!LN.on ? 'Lær av vurderingene er av.' : LN.trained ? 'Lært av ' + LN.pos + ' bonger «Til oppfølging» og ' + LN.neg + ' «Sjekket». Treffsikkerhet på bonger modellen ikke har trent på: ' + (LN.auc === null ? 'for få til å måle' : 'AUC ' + String(Math.round(LN.auc * 100) / 100).replace('.', ',') + ' (0,5 = tilfeldig, 1 = perfekt)' + (LN.auc < 0.65 ? '. Ikke bedre enn tilfeldig ennå: fortsett å merke bonger' : '')) + '. «Sjekk først» kan sorteres etter den.' :
         'Lær av vurderingene: ' + LN.pos + ' «Til oppfølging» og ' + LN.neg + ' «Sjekket» så langt; minst ' + LN.minL + ' av hver trengs.'));
     }
+  }
+
+  // Nettverk: grupper av kort og medlemsnummer som henger sammen, med kassererne kjøpene går gjennom. Klikk en gruppe for diagram.
+  var netPick = null;
+  function renderNetCard(N) {
+    var box = ui.ctlNet;
+    if (!N) return;
+    box.innerHTML = '';
+    if (!N.scanned) { box.appendChild(hintEl('Ingen skannede salg med kortdata. Kort leses fra skanning versjon 6.')); return; }
+    box.appendChild(hintEl(N.scanned + ' av ' + N.sales + ' salg er skannet med kortdata. ' + plur(N.groups.length, 'gruppe', 'grupper') + ' med minst tre ledd (medlemsnr og kort). ' + N.links + ' koblinger kort–medlemsnr er brukt; ' + N.weak + ' kort uten utstedernr som bare står én gang med et medlemsnr, er ikke koblet (kan være et annet kort med like siste fire siffer).'));
+    if (!N.groups.length) return;
+    var uniq = function (a) { return a.filter(function (x, i) { return a.indexOf(x) === i; }); };
+    box.appendChild(tbl(['Medlemsnr', 'Kort', 'Bonger', 'Mest hos kasserer', 'Retur til kortene', 'Funn'], N.groups.slice(0, 15).map(function (g) {
+      var bad = g.flags.length > 0;
+      return [{ node: btn(g.members.length + ': ' + g.members.slice(0, 3).join(', ') + (g.members.length > 3 ? ' …' : ''), function () { netPick = g.id; renderNetCard(N); }, 'kvr-ent'), bad: g.members.length >= (Number(ctlCfg.netMembers) || Infinity) },
+        g.cards.length + ': ' + g.cards.slice(0, 2).join(', ') + (g.cards.length > 2 ? ' …' : ''), g.n,
+        g.top ? { node: el('span', {}, [entLink('kasserer', g.top, g.top), document.createTextNode(' (' + Math.round(g.topShare * 100) + ' %)')]) } : '–',
+        { t: g.refunds ? g.refunds + ' (' + fmt(g.refundSum) + ' kr)' : '–', bad: g.refunds > 0 && bad }, { t: uniq(g.flags).join(', ') || '–', bad: bad }];
+    })));
+    var g = N.groups.filter(function (x) { return x.id === netPick; })[0];
+    if (!g) { box.appendChild(hintEl('Klikk et medlemsnr i tabellen for å se gruppen som diagram.')); return; }
+    box.appendChild(el('b', { class: 'kvr-subh', text: 'Gruppe: ' + g.members.length + ' medlemsnr, ' + g.cards.length + ' kort, ' + g.n + ' bonger' }));
+    box.appendChild(netDiagram(g));
+    box.appendChild(el('div', { class: 'kvr-row' }, [
+      btn('Velg bongene (' + g.ids.length + ')', function () { var byId = {}; allRecs().forEach(function (r) { byId[r.item.transactionId] = r.item; }); g.ids.forEach(function (id) { if (byId[id]) selected[id] = byId[id]; }); apply(); say('Valgt ' + g.ids.length + ' bonger i gruppen.'); }),
+      btn('Lukk diagram', function () { netPick = null; renderNetCard(N); })
+    ]));
+  }
+  // Diagram i tre kolonner: kasserere, medlemsnr og kort. Strekene er bonger (tykkere = flere); rødt = retur til kortet.
+  function netDiagram(g) {
+    var count = function (list) { var o = {}; list.forEach(function (x) { if (x) o[x] = (o[x] || 0) + 1; }); return o; };
+    var ks = count(g.edges.map(function (e) { return String(e.k); })), ms = count(g.edges.map(function (e) { return e.m; })), cs = count([].concat.apply([], g.edges.map(function (e) { return e.c; })));
+    var top = function (o) { return Object.keys(o).sort(function (a, b) { return o[b] - o[a] || a.localeCompare(b, 'nb', { numeric: true }); }).slice(0, 14); };
+    var K = top(ks), M = top(ms), C = top(cs), rows = Math.max(K.length, M.length, C.length, 1), W = 560, H = 30 + rows * 26, X = [70, 280, 490];
+    var y = function (list, v) { var i = list.indexOf(v); return i === -1 ? null : 30 + i * 26 + (rows - list.length) * 13; };
+    var svg = sv('svg', { viewBox: '0 0 ' + W + ' ' + H, width: '100%', role: 'img', 'aria-label': 'Nettverk for gruppen', class: 'kvr-net' });
+    [['Kasserer', X[0]], ['Medlemsnr', X[1]], ['Kort', X[2]]].forEach(function (h) { svg.appendChild(sv('text', { x: h[1], y: 14, 'text-anchor': 'middle', class: 'kvr-net-h', text: h[0] })); });
+    var lines = {};
+    var link = function (x1, y1, x2, y2, refund) { if (y1 === null || y2 === null) return; var k = [x1, y1, x2, y2, refund ? 1 : 0].join(','); lines[k] = (lines[k] || 0) + 1; };
+    g.edges.forEach(function (e) {
+      var yk = y(K, String(e.k)), ym = e.m ? y(M, e.m) : null;
+      if (ym !== null) link(X[0], yk, X[1], ym, e.refund);
+      e.c.forEach(function (c) { var yc = y(C, c); if (ym !== null) link(X[1], ym, X[2], yc, e.refund); else link(X[0], yk, X[2], yc, e.refund); });
+    });
+    Object.keys(lines).forEach(function (k) {
+      var p = k.split(',').map(Number), n = lines[k];
+      svg.appendChild(sv('line', { x1: p[0] + 40, y1: p[1], x2: p[2] - 40, y2: p[3], class: p[4] ? 'kvr-net-ret' : 'kvr-net-l', 'stroke-width': String(Math.min(6, 1 + Math.log2(n))) }, [sv('title', { text: n + (n === 1 ? ' bong' : ' bonger') + (p[4] ? ' (retur til kort)' : '') })]));
+    });
+    var node = function (list, o, x) {
+      list.forEach(function (v) {
+        var yy = y(list, v), emp = x === X[1] && g.emp.indexOf(v) !== -1;
+        svg.appendChild(sv('rect', { x: x - 40, y: yy - 10, width: 80, height: 20, rx: 6, class: 'kvr-net-n' + (emp ? ' kvr-net-emp' : '') }));
+        svg.appendChild(sv('text', { x: x, y: yy + 4, 'text-anchor': 'middle', class: 'kvr-net-t', text: (v.length > 12 ? v.slice(0, 11) + '…' : v) }, [sv('title', { text: v + ': ' + o[v] + (o[v] === 1 ? ' bong' : ' bonger') + (emp ? ' (ansattnummer)' : '') })]));
+      });
+    };
+    node(K, ks, X[0]); node(M, ms, X[1]); node(C, cs, X[2]);
+    return el('div', { class: 'kvr-net-wrap' }, [svg, hintEl('Strekene er bonger (tykkere = flere). Rødt = retur til kortet' + (g.emp.length ? '; mørk ramme = ansattnummer' : '') + '. Høyst 14 per kolonne.')]);
   }
 
   // Modellen som lærer av vurderingene (status på bongene). Regnes på nytt når statusene endres; det tar millisekunder.
@@ -2656,6 +2714,7 @@
     }
     renderDiscCard(R.disc);
     renderMemberCard(R.member);
+    renderNetCard(R.net);
     renderMiscCard(R);
     renderLappCard(R);
     renderLinesCard(R);
@@ -2668,7 +2727,7 @@
     if (!ui.ctlProfile) return;
     var R = ctlRes;
     ui.ctlInfo.textContent = R ? 'Sist kjørt ' + R.at.toLocaleTimeString('nb-NO') + ' på ' + R.n + (R.mode === 'visible' ? ' synlige' : ' kvitteringer i omfanget') + '.' : 'Ikke kjørt ennå. Filtrer listen først, og trykk «Kjør alle kontroller».';
-    [ui.ctlProfile, ui.ctlFindings, ui.ctlPant, ui.ctlRecon, ui.ctlDiff, ui.ctlNum, ui.ctlDisc, ui.ctlMember, ui.ctlMisc, ui.ctlLapp, ui.ctlLines, ui.ctlAcct, ui.ctlCwx].forEach(function (n) { n.innerHTML = ''; });
+    [ui.ctlProfile, ui.ctlFindings, ui.ctlPant, ui.ctlRecon, ui.ctlDiff, ui.ctlNum, ui.ctlDisc, ui.ctlMember, ui.ctlMisc, ui.ctlLapp, ui.ctlLines, ui.ctlAcct, ui.ctlCwx, ui.ctlNet].forEach(function (n) { n.innerHTML = ''; });
     ui.ctlResults.style.display = R ? '' : 'none';
     ui.ctlSumCard.style.display = R ? '' : 'none';
     if (!R) return;
@@ -5032,6 +5091,9 @@
     var secDisc = fold(section('disc', 'Rabatter og kuponger', [ui.ctlDisc]), 'disc', true);
     secDisc.classList.add('kvr-span');
     var secMember = fold(section('member', 'Medlemsnummer', [ui.ctlMember]), 'member', true);
+    ui.ctlNet = el('div', {});
+    var secNet = fold(section('net', 'Nettverk: kort, medlemsnr og kasserere', [ui.ctlNet]), 'net', true);
+    secNet.classList.add('kvr-span');
     var secMisc = fold(section('misc', 'Pris, kjøpeutbytte og hendelser', [ui.ctlMisc]), 'misc', false);
     var secLapp = fold(section('lapp', 'Pantelapper: manuell og maskin', [ui.ctlLapp]), 'lapp', true);
     secLapp.classList.add('kvr-span');
@@ -5042,7 +5104,7 @@
     secCwx.classList.add('kvr-span');
     ui.ctlSum = el('div', { class: 'kvr-ctlsum' });
     ui.ctlJump = el('div', { class: 'kvr-chips' });
-    [['profile', 'Profil'], ['findings', 'Funn'], ['pantbal', 'Pant'], ['recon', 'Avstemming'], ['diff', 'Differanse'], ['numbers', 'Tall'], ['disc', 'Rabatt'], ['member', 'Medlem'], ['misc', 'Pris m.m.'], ['lapp', 'Pantelapper'], ['lines', 'Linjer m.m.'], ['acct', 'Regnskap'], ['cwx', 'Fra CW']].forEach(function (j) {
+    [['profile', 'Profil'], ['findings', 'Funn'], ['pantbal', 'Pant'], ['recon', 'Avstemming'], ['diff', 'Differanse'], ['numbers', 'Tall'], ['disc', 'Rabatt'], ['member', 'Medlem'], ['net', 'Nettverk'], ['misc', 'Pris m.m.'], ['lapp', 'Pantelapper'], ['lines', 'Linjer m.m.'], ['acct', 'Regnskap'], ['cwx', 'Fra CW']].forEach(function (j) {
       ui.ctlJump.appendChild(btn(j[1], function () {
         var n = openSec(j[0]);
         if (n) n.scrollIntoView({ block: 'start', behavior: 'smooth' });
@@ -5051,7 +5113,7 @@
     ui.ctlSumCard = section('ctlsum', 'Resultat', [ui.ctlSum, ui.ctlJump,
       el('div', { class: 'kvr-row' }, [btn('Fold sammen alle', function () { foldAll(false); }, 'kvr-sm'), btn('Åpne alle', function () { foldAll(true); }, 'kvr-sm'), btn('⤢ Større', function () { ui.wideBtn.click(); }, 'kvr-sm')]),
       hintEl('Tabellene har mange kolonner. «Større» (⤢ i tittelfeltet) gir plass til alle: Stor dokker panelet til høyre og beholder lista i Lindbak, Full bruker hele skjermen.')]);
-    ui.ctlResults = el('div', { class: 'kvr-pane' }, [secProfile, secFindings, secCwx, secPantBal, secRecon, secDiff, secNum, secDisc, secMember, secMisc, secLapp, secLines, secAcct]);
+    ui.ctlResults = el('div', { class: 'kvr-pane' }, [secProfile, secFindings, secCwx, secPantBal, secRecon, secDiff, secNum, secDisc, secMember, secNet, secMisc, secLapp, secLines, secAcct]);
     ui.noteList = el('div', { class: 'kvr-list' });
     ui.noteCount = hintEl('');
     var kn = check('Tastaturflyt: ↑ ↓ bytter bong, N notat, M velg/fjern', function () { keyNav = kn.box.checked; store(K.keynav, keyNav); });
