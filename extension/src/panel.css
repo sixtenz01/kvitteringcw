@@ -346,3 +346,7 @@ tr.kvr-follow>td.kvr-cb-cell::after{color:#e37400}
 #kvr-panel .kvr-words input{width:140px}
 #kvr-panel .kvr-words-sug{display:flex;flex-wrap:wrap;gap:4px;align-items:center;flex-basis:100%}
 #kvr-panel .kvr-cwx-err{color:var(--kv-bad-fg);background:var(--kv-bad-bg);padding:3px 8px;border-radius:var(--kv-r);margin-top:4px}
+
+/* maskinlæring: lært sannsynlighet i «Sjekk først» */
+#kvr-panel .kvr-ml{padding:1px 6px;border-radius:999px;background:#eef1f0;color:#4a5550;font-size:10px;font-weight:600}
+#kvr-panel .kvr-ml-hi{background:#fde8d0;color:#8a4b00}

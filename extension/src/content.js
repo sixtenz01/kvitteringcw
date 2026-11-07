@@ -2213,6 +2213,7 @@
       special: L.specialChecks(items, scanMap, ctlCfg),
       ask: ask,
       card: L.cardChecks(items, pop, scanMap, ctlCfg),
+      ml: L.mlAnomaly(items, pop, scanMap, ctlCfg),
       manual: manual,
       tempo: L.tempoChecks(items, ctlCfg),
       watch: L.watchItems(items, pop, scanMap, ctlCfg),
@@ -2225,7 +2226,7 @@
       res.member.findings, res.price.findings, res.ku.findings, res.ev.findings, res.ledger.findings, res.corr.findings.filter(keep),
       res.lapp.findings.filter(keep), res.voids.findings.filter(keep), res.special.findings, res.ask.findings.filter(keep), res.card.findings.filter(keep), res.manual.findings.filter(keep),
       res.tempo.findings.filter(keep), res.watch.findings.filter(keep), res.retEan.findings.filter(keep), res.retR.findings.filter(keep), res.hdr.findings.filter(keep),
-      res.cw.findings.filter(keep), res.shift.findings.filter(keep), res.copy.findings.filter(keep), res.shrink.findings.filter(keep));
+      res.cw.findings.filter(keep), res.shift.findings.filter(keep), res.copy.findings.filter(keep), res.shrink.findings.filter(keep), res.ml.findings);
     res.cashierExtra = {};
     res.findings.forEach(function (f) {
       if (f.flag) f.ids.forEach(function (id) { if (scopeIds[id]) addFlag(id, f.title); });
@@ -2381,6 +2382,28 @@
     box.appendChild(hintEl(E.hits + ' av ' + E.scanned + ' skannede bonger har ord som annullert, parkert, manuell eller spør pris. Slike hendelser er ikke observert i ekte data ennå.' + (E.covered ? ' ' + E.covered + ' av dem har bare ord som allerede har egne tester (spør pris, manuell kvittering) og flagges der.' : '') +
       (R.copies ? ' ' + R.copies + ' bongkopier («Bong kopi») flagges bare her og er holdt utenfor de andre testene.' : '')));
     box.appendChild(el('div', { class: 'kvr-row' }, [btn('Diagnostikk: ukjente linjer…', openDiag)]));
+    var ML = R.ml;
+    if (ML) {
+      box.appendChild(el('b', { class: 'kvr-subh', text: 'Maskinlæring: uvanlige bonger' }));
+      box.appendChild(hintEl(!ML.applicable ? 'Ikke kjørt: ' + ML.n + ' skannede salg, minst ' + ML.minN + ' trengs (Innstillinger → Maskinlæring).' :
+        ML.topPct === null ? 'Uvanlighet er regnet for ' + ML.n + ' skannede salg, men flagging er av (Innstillinger → Maskinlæring).' :
+        'Modellen har lært av ' + ML.n + ' skannede salg i datagrunnlaget og flagger ' + ML.flagged + ' bonger i omfanget blant de ' + String(ML.topPct).replace('.', ',') + ' % mest uvanlige (uvanlighet minst ' + Math.round(Math.max(ML.cut, (Number(ctlCfg.mlMinScore) || 60) / 100) * 100) + ' av 100, og minst én egenskap som under 1 % av bongene har). ' +
+        'Den kjører lokalt, uten kall mot CW, og bruker ikke medlemsnummer eller kasserer. Samme data gir samme resultat.'));
+      var LN = mlLearnNow();
+      box.appendChild(hintEl(!LN.on ? 'Lær av vurderingene er av.' : LN.trained ? 'Lært av ' + LN.pos + ' bonger «Til oppfølging» og ' + LN.neg + ' «Sjekket». Treffsikkerhet på bonger modellen ikke har trent på: ' + (LN.auc === null ? 'for få til å måle' : 'AUC ' + String(Math.round(LN.auc * 100) / 100).replace('.', ',') + ' (0,5 = tilfeldig, 1 = perfekt)' + (LN.auc < 0.65 ? '. Ikke bedre enn tilfeldig ennå: fortsett å merke bonger' : '')) + '. «Sjekk først» kan sorteres etter den.' :
+        'Lær av vurderingene: ' + LN.pos + ' «Til oppfølging» og ' + LN.neg + ' «Sjekket» så langt; minst ' + LN.minL + ' av hver trengs.'));
+    }
+  }
+
+  // Modellen som lærer av vurderingene (status på bongene). Regnes på nytt når statusene endres; det tar millisekunder.
+  var mlLearnCache = null;
+  function mlLearnNow() {
+    if (!ctlRes || !ctlRes.ml) return { on: false, trained: false, pos: 0, neg: 0, p: {}, why: {} };
+    var key = Object.keys(notes).filter(function (id) { return notes[id] && notes[id].status; }).sort().map(function (id) { return id + notes[id].status; }).join('|') + '#' + ctlRes.at + '#' + ctlCfg.mlLearnMin;
+    if (mlLearnCache && mlLearnCache.key === key) return mlLearnCache.res;
+    var cand = Object.keys(anomMap);
+    mlLearnCache = { key: key, res: L.mlLearn(cand, anomMap, notes, ctlRes.ml, ctlCfg) };
+    return mlLearnCache.res;
   }
 
   // Aldri «100 %» hvis noe ikke stemmer: rundes ned til én desimal.
@@ -3421,7 +3444,8 @@
       riskBadge(rk.score),
       el('span', { class: 'kvr-ck-t', text: it.endDateTime.slice(5) + ' · kasse ' + it.workstationNumber + ' · ' + (it.totalAmount === null ? L.typeLabel(it.receiptType) : fmt(it.totalAmount) + ' kr') }),
       checkState.newIds[id] ? el('span', { class: 'kvr-new', text: 'Ny' }) : null,
-      n && n.status ? el('span', { class: 'kvr-st', text: n.status === 'sjekket' ? 'Sjekket' : 'Til oppfølging' }) : null
+      n && n.status ? el('span', { class: 'kvr-st', text: n.status === 'sjekket' ? 'Sjekket' : 'Til oppfølging' }) : null,
+      (function () { var LN = mlLearnNow(), p = LN.trained ? LN.p[id] : undefined; return typeof p === 'number' ? el('span', { class: 'kvr-ml' + (p >= 0.5 ? ' kvr-ml-hi' : ''), text: 'Lært ' + Math.round(p * 100) + ' %', title: 'Sannsynlighet for «Til oppfølging», lært av vurderingene dine' + (LN.why[id] && LN.why[id].length ? ': ligner på grunn av ' + LN.why[id].join(' og ') : '') }) : null; })()
     ].filter(Boolean));
     head.addEventListener('click', function () { expanded[id] = !open; renderCheck(); });
     var card = el('div', { class: 'kvr-ck' + (open ? ' kvr-open' : '') }, [head,
@@ -3558,7 +3582,9 @@
     ui.checkTop.innerHTML = '';
     renderScopeInfo();
     var src = checkSource(), items = src.items;
-    var all = L.rankReceipts(items, anomMap, weights);
+    var all = L.rankReceipts(items, anomMap, weights), LN = mlLearnNow();
+    // sortert etter vurderingene dine (lært): sannsynlighet først, så poeng
+    if (LN.trained && checkState.learnSort) all = all.slice().sort(function (a, b) { return (LN.p[b.id] || 0) - (LN.p[a.id] || 0) || b.score - a.score; });
     var checked = all.filter(function (r) { return notes[r.id] && notes[r.id].status === 'sjekket'; }).length;
     var vis = all.filter(function (r) { return checkState.showChecked || !(notes[r.id] && notes[r.id].status === 'sjekket'); });
     var high = vis.filter(function (r) { return L.riskLevel(r.score) === 'høy'; }).length;
@@ -3585,6 +3611,11 @@
     if (vis.length) top.push(el('div', { class: 'kvr-ctlsum', text: vis.length + ' å sjekke · ' + high + ' høy risiko' + (nNew ? ' · ' + nNew + ' nye siden sist' : '') }));
     else if (checkState.at) top.push(el('div', { class: 'kvr-ctlsum', text: all.length ? 'Alt er sjekket.' : 'Ingen avvik funnet i dette utvalget.' }));
     else top.push(hintEl('Analysen skanner det som mangler, kjører avvik og kontroller, og lager en prioritert liste. Under kan du velge omfang: periode, butikk, kasserer, kasse eller periode mot periode.'));
+    if (all.length && LN.trained) {
+      var ls = check('Sorter etter vurderingene dine (maskinlæring' + (LN.auc !== null ? ', AUC ' + String(Math.round(LN.auc * 100) / 100).replace('.', ',') : '') + ')', function () { checkState.learnSort = ls.box.checked; renderCheck(); });
+      ls.box.checked = !!checkState.learnSort;
+      top.push(ls.node);
+    } else if (all.length && LN.on && (LN.pos || LN.neg)) top.push(hintEl('Maskinlæring: merk minst ' + LN.minL + ' bonger «Til oppfølging» og ' + LN.minL + ' «Sjekket» (nå ' + LN.pos + ' og ' + LN.neg + '), så kan listen sorteres etter vurderingene dine.'));
     ui.checkTop.appendChild(section('chk-top', 'Analyse', top));
     if (!all.length) return;
 
@@ -3609,6 +3640,7 @@
       sc.box.checked = checkState.showChecked;
       listKids.push(sc.node);
     }
+
     body.appendChild(section('chk-list', 'Sjekk først (' + vis.length + ')', listKids));
   }
 

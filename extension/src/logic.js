@@ -1058,6 +1058,8 @@
     ['askDevPct', 'Spør pris avviker fra dagens salg ≥ % (tom = av)', '5'], ['askMinN', 'Spør pris: minst antall salg av varen samme dag', '3'], ['askN', 'Spør pris: kasserer ved ≥ antall bonger (tom = av)', '5'],
     ['cardRetN', 'Returer på samme kort ≥ antall (tom = av)', '3'], ['cardRetDays', 'Returer på samme kort innen dager', '30'],
     ['openRetSchemes', 'Åpen retur: kortleverandører der hver retur til kort flagges (komma, tom = av)', 'Mastercard'],
+    ['mlTopPct', 'Maskinlæring: flagg de mest uvanlige bongene, % (tom = av)', '1'], ['mlMinScore', 'Maskinlæring: uvanlighet minst (0–100)', '60'], ['mlMinN', 'Maskinlæring: minst antall skannede salg', '200'],
+    ['mlLearnMin', 'Maskinlæring: lær av vurderingene, minst bonger av hver (tom = av)', '8'],
     ['manualWords', 'Manuell kvittering: ord (komma, tom = av)', 'manuell kvittering, manuell bong, til gode, tilgode'], ['manualDays', 'Manuell kvittering: match innen dager', '3'],
     ['paceSec', 'Tempo: maks sekunder mellom bonger i en serie (tom = av)', '25'], ['paceN', 'Tempo: serie på minst antall bonger', '4'],
     ['paceMinuteN', 'Tempo uten sekunder: bonger i samme minutt på én kasse (tom = av)', '6'], ['zeroN', '0-kr-bonger: kasserer ved ≥ antall (tom = av)', '5'],
@@ -1199,6 +1201,12 @@
       sf('cardRetDays', 'ctl', 'num', 'Innen', 'dager'),
       sf('openRetSchemes', 'ctl', 'text', 'Åpen retur: flagg hver retur til', '', 'Kortleverandører (komma), for eksempel Mastercard. Tom = av.', true)
     ], weights: ['Gjentatte returer på samme kort', 'Retur til kort med åpen retur'] },
+    { id: 'ml', title: 'Maskinlæring', text: 'Lokalt i nettleseren, uten kall mot CW. Uvanlige bonger: en isolasjonsskog lærer hvordan salgene i datagrunnlaget ser ut (beløp, klokkeslett, varelinjer, retur, rabatt, slettede linjer, pant, kontant tilbake, kontantandel og tid siden forrige bong på kassen) og flagger de mest avvikende. Lær av vurderingene: bonger du merker «Til oppfølging» og «Sjekket» brukes til å sortere «Sjekk først». Medlemsnummer og kasserer er ikke med i modellen. Krever skanning.', fields: [
+      sf('mlTopPct', 'ctl', 'num', 'Uvanlige bonger: flagg de mest uvanlige', '%', 'Andel av de skannede salgene som regnes som uvanlige.', true),
+      sf('mlMinScore', 'ctl', 'num', 'Uvanlighet minst', 'av 100', '50 er vanlig; over 60 skiller seg klart ut.'),
+      sf('mlMinN', 'ctl', 'num', 'Minst antall skannede salg', 'stk', 'Færre gir for usikker modell.'),
+      sf('mlLearnMin', 'ctl', 'num', 'Lær av vurderingene: minst', 'av hver', 'Antall bonger merket «Til oppfølging» og «Sjekket» som trengs før «Sjekk først» kan sorteres etter dem.', true)
+    ], weights: ['Uvanlig bong (maskinlæring)'] },
     { id: 'manual', title: 'Manuell kvittering og til gode-lapp', text: 'Bonger som er manuelle eller betalt med til gode-lapp, og som har samme beløp som en annen bong i butikken. Ordene er ikke bekreftet i ekte data. Krever skanning.', fields: [
       sf('manualWords', 'ctl', 'text', 'Ord (komma)', '', 'Treff på starten av et ord i linjer, betalingsmåter og tekstlinjer.', true),
       sf('manualDays', 'ctl', 'num', 'Samme beløp innen', 'dager')
@@ -1566,7 +1574,7 @@
     'Manuell pantelapp': 3, 'Mange manuelle pantelapper': 3, 'Pantelapp slettet': 4, 'Pantelapp innløst flere ganger': 4,
     'Varelinjer slettet, pant utbetalt kontant': 5, 'Makulert vare ikke solgt på ny': 3, 'Mange makulerte varelinjer': 3,
     'Spesialbetaling på bong': 3, 'Mange spesialbetalinger': 3, 'Høy rabattprosent': 3, 'Rabatt med årsak, varen solgt av én kasserer': 3, 'Rabatt uten treff på andre salg': 4,
-    'Spør pris avviker fra dagens salg': 3, 'Mange spør pris': 2, 'Gjentatte returer på samme kort': 4, 'Retur til kort med åpen retur': 3, 'Manuell kvittering matcher annen bong': 4,
+    'Spør pris avviker fra dagens salg': 3, 'Mange spør pris': 2, 'Gjentatte returer på samme kort': 4, 'Retur til kort med åpen retur': 3, 'Uvanlig bong (maskinlæring)': 2, 'Manuell kvittering matcher annen bong': 4,
     'Bonger i rask rekkefølge': 2, 'Mange 0-kr-bonger': 2, 'Overvåket vare i retur': 3, 'Overvåket vare slettet': 3, 'Mange overvåkede varer hos kasserer': 2,
     'Retur av vare uten kjøp på kortet': 4, 'Retur av vare uten kjøp av medlemmet': 3, 'Retur av vare uten salg samme dag': 1,
     'Topptekst stemmer ikke med listen': 3, 'Samme autorisasjonskode på flere bonger': 3, 'Makulert linje på bong': 2,
@@ -3145,6 +3153,200 @@
     return res;
   }
 
+  // ---- maskinlæring, lokalt og deterministisk ------------------------------------------------------------
+  // Egenskaper per skannet salg. Ingen medlemsnummer og ingen kasserer: modellen ser på bongen, ikke på personen.
+  // t = verdien modellen bruker (logaritme for skjeve beløp og antall), lo/hi = ord når verdien er uvanlig lav eller høy.
+  var LOG1 = function (v) { return Math.log(1 + Math.max(0, v)); };
+  var ML_FEATURES = [
+    { k: 'tot', n: 'beløp', t: function (v) { return (v < 0 ? -1 : 1) * Math.log(1 + Math.abs(v)); }, f: function (v) { return money(v) + ' kr'; }, lo: 'så lavt', hi: 'så høyt' },
+    { k: 'min', n: 'klokkeslett', t: function (v) { return v; }, f: function (v) { return 'kl. ' + hhmm(v); }, lo: 'så tidlig', hi: 'så sent' },
+    { k: 'lines', n: 'varelinjer', t: LOG1, f: function (v) { return v + (v === 1 ? ' varelinje' : ' varelinjer'); }, lo: 'så få', hi: 'så mange' },
+    { k: 'ret', n: 'returlinjer', t: LOG1, f: function (v) { return v + (v === 1 ? ' returlinje' : ' returlinjer'); }, lo: 'så få', hi: 'så mange' },
+    { k: 'disc', n: 'rabatt', t: function (v) { return v; }, f: function (v) { return 'rabatt ' + String(Math.round(v * 10) / 10).replace('.', ',') + ' % av varene'; }, lo: 'så lav', hi: 'så høy' },
+    { k: 'del', n: 'slettede linjer', t: LOG1, f: function (v) { return v + (v === 1 ? ' slettet linje' : ' slettede linjer'); }, lo: 'så få', hi: 'så mange' },
+    { k: 'pant', n: 'panteretur', t: LOG1, f: function (v) { return money(v) + ' kr i panteretur'; }, lo: 'så lite', hi: 'så mye' },
+    { k: 'back', n: 'kontant tilbake', t: LOG1, f: function (v) { return money(v) + ' kr kontant tilbake'; }, lo: 'så lite', hi: 'så mye' },
+    { k: 'cash', n: 'kontantandel', t: function (v) { return v; }, f: function (v) { return Math.round(v * 100) + ' % betalt kontant'; }, lo: 'så lav', hi: 'så høy' },
+    { k: 'gap', n: 'tid siden forrige bong på kassen', t: LOG1, f: function (v) { return v + ' min siden forrige bong på kassen'; }, lo: 'så kort', hi: 'så lang' }
+  ];
+  function mlRaw(it, sc, gap) {
+    var goods = (sc.items || []).filter(function (l) { return !isPantText(l); });
+    var gross = goods.reduce(function (a, l) { return a + (l.a > 0 ? l.a + (l.d || 0) : 0); }, 0);
+    var disc = goods.reduce(function (a, l) { return a + (l.d || 0); }, 0);
+    var paid = 0, cash = 0;
+    Object.keys(sc.pay || {}).forEach(function (k) { var v = sc.pay[k]; if (/tilbake/i.test(k)) return; paid += Math.abs(v); if (/^kontant/i.test(k)) cash += Math.abs(v); });
+    var cx = cancelled(sc), tot = typeof sc.tot === 'number' ? sc.tot : it.totalAmount;
+    return [round2(tot || 0), mins(parseDT(it.endDateTime).time) || 0, goods.filter(function (l) { return l.a > 0; }).length, goods.filter(function (l) { return l.a < 0; }).length,
+      gross > 0 ? round2(disc / gross * 100) : 0, cx.itemLines + delLines(sc).filter(function (l) { return !isPantText(l); }).length,
+      round2(-(sc.ret || 0)), round2((sc.pay && sc.pay['Kontant tilbake']) || 0), paid > 0 ? round2(cash / paid) : 0, gap];
+  }
+  function mulberry32(a) {
+    return function () { a |= 0; a = a + 0x6D2B79F5 | 0; var t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+  }
+  function cFactor(n) { return n <= 1 ? 0 : n === 2 ? 1 : 2 * (Math.log(n - 1) + 0.5772156649) - 2 * (n - 1) / n; }
+  function iTree(X, idx, depth, limit, rnd) {
+    if (depth >= limit || idx.length <= 1) return { s: idx.length };
+    var d = X[0].length, f = 0, lo = 0, hi = 0;
+    for (var tries = 0; tries < d * 2; tries++) {
+      f = Math.floor(rnd() * d); lo = Infinity; hi = -Infinity;
+      for (var i = 0; i < idx.length; i++) { var v = X[idx[i]][f]; if (v < lo) lo = v; if (v > hi) hi = v; }
+      if (hi > lo) break;
+    }
+    if (!(hi > lo)) return { s: idx.length };
+    var sp = lo + rnd() * (hi - lo), L = [], R = [];
+    idx.forEach(function (j) { (X[j][f] < sp ? L : R).push(j); });
+    return { f: f, sp: sp, l: iTree(X, L, depth + 1, limit, rnd), r: iTree(X, R, depth + 1, limit, rnd) };
+  }
+  // Isolasjonsskog: et punkt som skilles fra de andre med få tilfeldige kutt, er uvanlig. Poeng 0–1 (0,5 er vanlig).
+  function isolationForest(X, opts) {
+    var o = opts || {}, n = X.length, psi = Math.min(o.sample || 256, n), trees = [], rnd = mulberry32(o.seed || 20261107), limit = Math.ceil(Math.log2(Math.max(psi, 2)));
+    var all = X.map(function (_, i) { return i; });
+    for (var t = 0; t < (o.trees || 100); t++) {
+      var pick = all.slice();
+      for (var i = 0; i < psi; i++) { var j = i + Math.floor(rnd() * (n - i)), x = pick[i]; pick[i] = pick[j]; pick[j] = x; }
+      trees.push(iTree(X, pick.slice(0, psi), 0, limit, rnd));
+    }
+    var cn = cFactor(psi);
+    return {
+      score: function (x) {
+        var sum = 0;
+        trees.forEach(function (t0) { var t = t0, d = 0; while (t.s === undefined) { t = x[t.f] < t.sp ? t.l : t.r; d++; } sum += d + cFactor(t.s); });
+        return cn ? Math.pow(2, -(sum / trees.length) / cn) : 0.5;
+      }
+    };
+  }
+  // Uvanlige bonger: modellen lærer hvordan salgene i datagrunnlaget ser ut og flagger de mest avvikende i omfanget.
+  // Forklaringen er egenskapene der bongen ligger ytterst (få andre bonger har så høy eller lav verdi).
+  function mlAnomaly(items, pop, scanMap, cfg) {
+    var topPct = cnum(cfg.mlTopPct, null), minN = cnum(cfg.mlMinN, 200), minScore = cnum(cfg.mlMinScore, 60) / 100;
+    var res = { findings: [], applicable: false, n: 0, sales: 0, scores: {}, raw: {}, cut: null, topPct: topPct, flagged: 0, minN: minN };
+    // tid siden forrige bong på samme kasse (alle bonger i listen, også uskannede)
+    // (samme dag; dagens første bong får median-verdien, så den ikke ser uvanlig ut)
+    var gaps = {}, byWs = {}, first = {};
+    pop.forEach(function (it) { var k = it.storeNumber + '|' + it.workstationNumber + '|' + dayOf(it); (byWs[k] = byWs[k] || []).push(it); });
+    Object.keys(byWs).forEach(function (k) {
+      byWs[k].sort(function (a, b) { return tsMin(a) - tsMin(b) || (String(a.transactionId) < String(b.transactionId) ? -1 : 1); });
+      byWs[k].forEach(function (it, i) { if (i) gaps[it.transactionId] = Math.min(240, Math.max(0, Math.round(tsMin(it) - tsMin(byWs[k][i - 1])))); else first[it.transactionId] = true; });
+    });
+    var gv = Object.keys(gaps).map(function (k) { return gaps[k]; }).sort(function (a, b) { return a - b; }), gMed = gv.length ? gv[Math.floor(gv.length / 2)] : 0;
+    Object.keys(first).forEach(function (id) { gaps[id] = gMed; });
+    var rows = [];
+    pop.forEach(function (it) {
+      if (!isSale(it)) return;
+      res.sales++;
+      var sc = scanMap && scanMap[it.transactionId];
+      if (!sc || !sc.items || sc.settle) return;
+      rows.push({ it: it, raw: mlRaw(it, sc, gaps[it.transactionId]) });
+    });
+    rows.sort(function (a, b) { return String(a.it.transactionId) < String(b.it.transactionId) ? -1 : 1; });   // samme data gir samme modell
+    res.n = rows.length;
+    rows.forEach(function (r) { res.raw[r.it.transactionId] = r.raw; });
+    if (rows.length < minN) return res;
+    res.applicable = true;
+    var X = rows.map(function (r) { return r.raw.map(function (v, i) { return ML_FEATURES[i].t(v); }); });
+    var forest = isolationForest(X, { trees: 100, sample: 256 });
+    var scored = rows.map(function (r, i) { var sc = forest.score(X[i]); res.scores[r.it.transactionId] = Math.round(sc * 100) / 100; return sc; });
+    if (topPct === null) return res;
+    var sorted = scored.slice().sort(function (a, b) { return b - a; });
+    res.cut = sorted[Math.min(sorted.length - 1, Math.max(0, Math.floor(sorted.length * topPct / 100) - 1))];
+    var thr = Math.max(res.cut, minScore), cols = ML_FEATURES.map(function (_, i) { return rows.map(function (r) { return r.raw[i]; }).sort(function (a, b) { return a - b; }); });
+    var bound = function (a, v, upper) { var lo = 0, hi = a.length; while (lo < hi) { var m = (lo + hi) >> 1; if (upper ? a[m] <= v : a[m] < v) lo = m + 1; else hi = m; } return lo; };
+    // andelen bonger med like høy (eller like lav) verdi
+    var tail = function (i, v) {
+      var n = cols[i].length, up = n - bound(cols[i], v, false), dn = bound(cols[i], v, true);
+      return up <= dn ? { share: up / n, dir: 'hi' } : { share: dn / n, dir: 'lo' };
+    };
+    var scope = {};
+    items.forEach(function (it) { scope[it.transactionId] = true; });
+    rows.forEach(function (r, i) {
+      var s = scored[i];
+      if (!scope[r.it.transactionId] || s < thr) return;
+      var odd = ML_FEATURES.map(function (fe, j) { var tl = tail(j, r.raw[j]); return { fe: fe, v: r.raw[j], share: tl.share, dir: tl.dir, j: j }; })
+        .filter(function (x) { return x.share <= 0.05 && !(x.j === 9 && first[r.it.transactionId]); }).sort(function (a, b) { return a.share - b.share; }).slice(0, 3);
+      // minst én egenskap må være tydelig uvanlig (under 1 % av bongene), ellers er det bare støy
+      if (!odd.length || odd[0].share > 0.01) return;
+      res.flagged++;
+      var pct = function (x) { return x < 0.001 ? 'under 0,1' : String(Math.round(x * 1000) / 10).replace('.', ','); };
+      res.findings.push({ kind: 'Maskinlæring', code: 'mlOdd', title: 'Uvanlig bong (maskinlæring)', flag: true, cashier: r.it.cashierNumber,
+        detail: whereText(r.it) + ': uvanlighet ' + Math.round(s * 100) + ' av 100 (blant de ' + String(topPct).replace('.', ',') + ' % mest uvanlige av ' + rows.length + ' skannede salg). ' +
+          'Uvanlig: ' + odd.map(function (x) { return x.fe.f(x.v) + ' (' + pct(x.share) + ' % av bongene har ' + x.fe[x.dir] + ')'; }).join('; ') + '.',
+        ids: [r.it.transactionId] });
+    });
+    return res;
+  }
+
+  // Lær av vurderingene dine: «Til oppfølging» = relevant, «Sjekket» = ikke. Logistisk regresjon på hvilke tester som slo ut,
+  // uvanligheten og bongens egenskaper. Gir sannsynlighet for at en flagget bong er relevant, og treffsikkerhet på bonger
+  // modellen ikke har trent på (femdelt kryssvalidering, AUC: 0,5 = tilfeldig, 1 = perfekt).
+  function sigmoid(z) { return 1 / (1 + Math.exp(-Math.max(-30, Math.min(30, z)))); }
+  function fitLogistic(X, y, l2, iters) {
+    var d = X[0].length, w = new Array(d).fill(0), b = 0, n = X.length, lr = 0.5;
+    for (var it = 0; it < iters; it++) {
+      var gw = new Array(d).fill(0), gb = 0;
+      for (var i = 0; i < n; i++) {
+        var z = b; for (var j = 0; j < d; j++) z += w[j] * X[i][j];
+        var e = sigmoid(z) - y[i]; gb += e;
+        for (var k = 0; k < d; k++) gw[k] += e * X[i][k];
+      }
+      b -= lr * gb / n;
+      for (var m = 0; m < d; m++) w[m] -= lr * (gw[m] / n + l2 * w[m]);
+    }
+    return { w: w, b: b, p: function (x) { var z = b; for (var j = 0; j < d; j++) z += w[j] * x[j]; return sigmoid(z); } };
+  }
+  function aucOf(pairs) {
+    var pos = pairs.filter(function (x) { return x.y === 1; }), neg = pairs.filter(function (x) { return x.y === 0; });
+    if (!pos.length || !neg.length) return null;
+    var win = 0;
+    pos.forEach(function (a) { neg.forEach(function (b) { win += a.p > b.p ? 1 : a.p === b.p ? 0.5 : 0; }); });
+    return win / (pos.length * neg.length);
+  }
+  function mlLearn(candidates, anomMap, notes, ml, cfg) {
+    var minL = cnum(cfg.mlLearnMin, null), res = { on: minL !== null, trained: false, pos: 0, neg: 0, minL: minL, p: {}, why: {}, auc: null };
+    if (minL === null) return res;
+    var lab = Object.keys(notes || {}).filter(function (id) { var st = notes[id] && notes[id].status; return (st === 'oppfolging' || st === 'sjekket') && ((anomMap && anomMap[id]) || (ml && ml.raw[id])); }).sort();
+    lab.forEach(function (id) { if (notes[id].status === 'oppfolging') res.pos++; else res.neg++; });
+    if (res.pos < minL || res.neg < minL) return res;
+    var vocab = {};
+    lab.forEach(function (id) { ((anomMap && anomMap[id]) || []).forEach(function (r) { vocab[reasonBase(r)] = 1; }); });
+    var names = Object.keys(vocab).sort().concat(['uvanlighet']).concat(ML_FEATURES.map(function (f) { return f.n; }));
+    var nR = Object.keys(vocab).length, mean = [], sd = [];
+    var numOf = function (id) { var r = ml && ml.raw[id]; return r ? r.map(function (v, i) { return ML_FEATURES[i].t(v); }) : null; };
+    ML_FEATURES.forEach(function (_, i) {
+      var vals = lab.map(numOf).filter(Boolean).map(function (r) { return r[i]; });
+      var m = vals.length ? vals.reduce(function (a, v) { return a + v; }, 0) / vals.length : 0;
+      var v2 = vals.length ? vals.reduce(function (a, v) { return a + (v - m) * (v - m); }, 0) / vals.length : 0;
+      mean.push(m); sd.push(Math.sqrt(v2) || 1);
+    });
+    var vec = function (id) {
+      var rs = {}; ((anomMap && anomMap[id]) || []).forEach(function (r) { rs[reasonBase(r)] = 1; });
+      var x = Object.keys(vocab).sort().map(function (k) { return rs[k] ? 1 : 0; });
+      var sc = ml && ml.scores[id];
+      x.push(typeof sc === 'number' ? (sc - 0.5) * 4 : 0);
+      var nr = numOf(id);
+      ML_FEATURES.forEach(function (_, i) { x.push(nr ? (nr[i] - mean[i]) / sd[i] : 0); });
+      return x;
+    };
+    var X = lab.map(vec), y = lab.map(function (id) { return notes[id].status === 'oppfolging' ? 1 : 0; });
+    var cv = [];
+    for (var f = 0; f < 5; f++) {
+      var tr = [], ty = [], te = [];
+      lab.forEach(function (_, i) { if (i % 5 === f) te.push(i); else { tr.push(X[i]); ty.push(y[i]); } });
+      if (!te.length || ty.indexOf(1) === -1 || ty.indexOf(0) === -1) continue;
+      var mf = fitLogistic(tr, ty, 0.05, 300);
+      te.forEach(function (i) { cv.push({ p: mf.p(X[i]), y: y[i] }); });
+    }
+    res.auc = aucOf(cv);
+    var model = fitLogistic(X, y, 0.05, 300);
+    res.trained = true;
+    candidates.forEach(function (id) {
+      var x = vec(id);
+      res.p[id] = Math.round(model.p(x) * 100) / 100;
+      res.why[id] = x.map(function (v, j) { return { n: names[j], c: model.w[j] * v, r: j < nR }; }).filter(function (t) { return t.c > 0.15; })
+        .sort(function (a, b) { return b.c - a.c; }).slice(0, 2).map(function (t) { return t.r ? '«' + t.n + '»' : t.n; });
+    });
+    return res;
+  }
+
   // Manuell kvittering / til gode-lapp som ligner en annen bong (samme butikk, samme beløp, innen få dager).
   function manualReceipts(items, pop, scanMap, cfg) {
     var res = { findings: [], manual: 0, scanned: 0, words: wordList(cfg.manualWords) };
@@ -4174,7 +4376,7 @@
     specialChecks: specialChecks,
     specialHits: specialHits,
     askPrice: askPrice,
-    cardChecks: cardChecks, cardRefund: cardRefund, schemeLabel: schemeLabel, schemeList: schemeList, SCHEME_LABELS: SCHEME_LABELS,
+    cardChecks: cardChecks, cardRefund: cardRefund, mlAnomaly: mlAnomaly, mlLearn: mlLearn, isolationForest: isolationForest, ML_FEATURES: ML_FEATURES, schemeLabel: schemeLabel, schemeList: schemeList, SCHEME_LABELS: SCHEME_LABELS,
     manualReceipts: manualReceipts,
     cancelled: cancelled,
     netNp: netNp,

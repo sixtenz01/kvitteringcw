@@ -408,6 +408,13 @@
   <li><strong>Makulert vare ikke solgt på ny:</strong> for hver slettet vare med EAN sjekkes det om samme vare er solgt på en annen bong i butikken samme dag. Er den ikke det, flagges bongen. Funnet sier om varen er registrert som svinn eller internt forbruk samme dag (bong, klokkeslett og kasserer). Begge tilfeller flagges: slettet og så skrevet av som svinn kan være en måte å skjule at varen ble gitt bort. Med «samme dag» av brukes minuttene (standard 120) før eller etter i stedet. Testen krever at minst 80 % av salgene er skannet.</li>
   <li><strong>Mange makulerte varelinjer:</strong> kassereren markeres ved minst 5 slettede linjer.</li>
 </ul>
+<h3>Maskinlæring</h3>
+<p>To modeller kjører lokalt i nettleseren når du kjører analysen. Ingenting sendes noe sted, og pluginen gjør ingen kall mot CW.</p>
+<ul>
+  <li><strong>Uvanlige bonger:</strong> en isolasjonsskog lærer hvordan salgene i datagrunnlaget ser ut, og gir hver skannet bong en uvanlighet fra 0 til 100. Den ser på beløp, klokkeslett, varelinjer, retur, rabatt, slettede linjer, pant, kontant tilbake, kontantandel og tid siden forrige bong på kassen. De mest uvanlige (standard 1 %) flagges som «Uvanlig bong (maskinlæring)» (2 poeng). Bongen må ha minst én egenskap som under 1 % av bongene har, og forklaringen sier hvilke, for eksempel «kl. 05:10 (0,4 % av bongene har så tidlig)». Krever minst 200 skannede salg.</li>
+  <li><strong>Lær av vurderingene dine:</strong> bongene du merker «Til oppfølging» og «Sjekket» blir eksempler. Når du har minst 8 av hver, lærer pluginen hvilke funn du pleier å følge opp. Hver flagget bong i «Sjekk først» får «Lært NN %», og analyseboksen får valget «Sorter etter vurderingene dine». Treffsikkerheten måles på bonger modellen ikke har trent på (AUC: 0,5 er tilfeldig, 1 er perfekt) og står i Detaljer. Under 0,65 er den ikke bedre enn tilfeldig ennå.</li>
+  <li><strong>Personvern og etterprøvbarhet:</strong> medlemsnummer og kasserer er ikke med i modellene, så de lærer av bongen og ikke av personen. Samme data og samme vurderinger gir samme resultat. Modellen rangerer; du avgjør. Uvanlig er ikke det samme som galt.</li>
+</ul>
 <h3>Åpen retur (Mastercard)</h3>
 <p>Mastercard har åpen retur: pengene ved en retur kan settes inn på et hvilket som helst Mastercard, også et annet enn det som ble brukt ved kjøpet. Hver retur til et Mastercard flagges derfor som «Retur til kort med åpen retur». Listen over leverandører står under Innstillinger → Kort: returer, og analysen viser returer til kort per leverandør; trykk en leverandør for å vise bongene (Filtrer → Innhold → Retur til kort).</p>
 <h3>Spesialbetalinger</h3>
