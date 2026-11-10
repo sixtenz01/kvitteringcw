@@ -117,7 +117,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   const diff = (await page.innerText('[data-sec=diff]')).replace(/\s+/g, ' ');
   assert.match(diff, /Kasserer A 2 2 0 −70,00/);
   assert.match(await page.innerText('[data-sec=numbers]'), /Benford \(første siffer i totalbeløp\): \d+ bonger/);
-  assert.ok(await page.$('[data-sec=ch-benford]') === null, 'Benford-diagrammet ligger under Diagram');
+  assert.ok(await page.$('[data-sec=ch-benford]') === null, 'ingen Benford-diagram');
   // rabatt flagges bare med årsak (3.41.0): rabatt uten årsak kan være kampanjevare og er bare tall; rabatt med årsak på en vare
   // som bare én kasserer solgte den dagen, er et funn
   assert.ok(!/Rabatt uten årsak Kasse 5/.test(fnd), 'rabatt uten årsak flagges ikke');
@@ -169,10 +169,10 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   assert.strictEqual(await page.inputValue('#fromDatePicker'), '01.08.2026');
   assert.ok((await page.evaluate(() => window.__applied)) >= 1);
 
-  // Benford-diagram finnes under Diagram
+  // Diagram har salg per time, men ikke Benford (fjernet i 3.45.0)
   await go('Analyse', 'Diagram');
-  assert.ok(await page.$('[data-sec=ch-benford] svg'), 'Benford-diagram');
-  assert.strictEqual(await page.$$eval('[data-sec=ch-benford] .kvr-hit', n => n.length), 9);
+  assert.ok(await page.$('[data-sec=ch-hours] svg'), 'salg per time');
+  assert.ok(await page.$('[data-sec=ch-benford]') === null, 'ingen Benford-diagram');
 
   assert.deepStrictEqual(errors, []);
   assert.deepStrictEqual(apiCalls, [], 'pluginen skal aldri kalle CWs API');

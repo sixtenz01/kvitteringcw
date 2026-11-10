@@ -526,7 +526,7 @@
     if (!ui.cwxInfo) return;
     ui.cwxInfo.innerHTML = '';
     var r = cwx && cwx.runs[0];
-    if (!r) { ui.cwxInfo.appendChild(hintEl('Ikke hentet ennå.')); return; }
+    if (!r) { ui.cwxInfo.appendChild(metaEl('Ikke hentet ennå.')); return; }
     var when = new Date(r.at).toLocaleString('nb-NO', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
     ui.cwxInfo.appendChild(hintEl('Sist hentet ' + when + ' for ' + r.n + ' bonger (' + (r.from === r.to ? r.from : r.from + ' – ' + r.to) + '), ' + r.searches + ' søk.' +
       (r.cut ? ' Søket ditt hadde 1000 bonger, så CW har trolig kuttet det; velg kortere periode for at tallene skal være hele.' : '')));
@@ -982,7 +982,7 @@
     if (!ui.partInfo) return;
     ui.partInfo.innerHTML = '';
     var days = Object.keys(arch.days).sort(), n = archCount();
-    if (!days.length) ui.partInfo.appendChild(hintEl('Samlet grunnlag er tomt.'));
+    if (!days.length) ui.partInfo.appendChild(metaEl('Samlet grunnlag er tomt.'));
     else {
       var scanned = 0, cut = days.filter(function (d) { return arch.days[d].cut; });
       days.forEach(function (d) { arch.days[d].rows.forEach(function (r) { if (scanMap[r.transactionId]) scanned++; }); });
@@ -3876,7 +3876,6 @@
     body.innerHTML = '';
     var W = Math.max(260, (body.clientWidth || 380) - 24);
     if (!recs.length) { body.appendChild(el('div', { class: 'kvr-card' }, [hintEl('Ingen kvitteringer i listen.')])); return; }
-    var scopeNote = 'Diagrammene ser bort fra filteret de selv styrer, så de ikke krymper når du klikker.';
     var setTime = function (h) { filters.timeFrom = two(h) + ':00'; filters.timeTo = two(h) + ':59'; writeForm(); apply(); };
     var setDay = function (d) { filters.dateFrom = d; filters.dateTo = d; writeForm(); apply(); };
 
@@ -3886,7 +3885,7 @@
       return { label: String(h), value: n, on: filters.timeFrom === two(h) + ':00' && filters.timeTo === two(h) + ':59',
         tip: two(h) + ':00–' + two(h) + ':59 · ' + n + ' salg · ' + fmt(hd.sum[h]) + ' kr', click: function () { setTime(h); } };
     });
-    body.appendChild(chartCard('ch-hours', 'Salg per time', 'Antall salg. Klikk en søyle for å filtrere på timen. ' + scopeNote,
+    body.appendChild(chartCard('ch-hours', 'Salg per time', 'Antall salg. Klikk en søyle for å filtrere på timen.',
       colChart({ W: W, data: hours, labelEvery: 3, aria: 'Søylediagram: antall salg per time', peakText: function (d) { return String(d.value); } }),
       { heads: ['Time', 'Salg', 'Sum kr'], rows: hd.count.map(function (n, h) { return [two(h) + ':00', n, fmt(hd.sum[h])]; }) }));
 
@@ -3947,19 +3946,6 @@
         { heads: ['Kasse', 'Salg'], rows: heatT }));
     }
 
-    // benford
-    var bn = L.numbers(scopedItems({}), scanMap, ctlCfg).overall;
-    if (bn.n > 0) {
-      var f1 = function (v) { return Math.round(v * 1000) / 10; };
-      var bdata = bn.expected.map(function (e, i) {
-        return { label: String(i + 1), a: f1(e), b: f1(bn.actual[i]),
-          tip: 'Første siffer ' + (i + 1) + ' · forventet ' + String(f1(e)).replace('.', ',') + ' % · faktisk ' + String(f1(bn.actual[i])).replace('.', ',') + ' % (' + bn.counts[i] + ' bonger)' };
-      });
-      body.appendChild(chartCard('ch-benford', 'Benford: første siffer i totalbeløp', 'Synlige salg (' + bn.n + ' bonger). MAD ' + bn.mad.toFixed(3) + ': ' + bn.verdict + (bn.n < (Number(ctlCfg.benfordMin) || 100) ? ' (for få bonger til en sikker konklusjon)' : '') + '. Avvik er en indikasjon som må forklares, ikke et bevis.',
-        el('div', {}, [legend([[CH.blue, 'Forventet (Benford)'], [CH.orange, 'Faktisk']]), pairChart({ W: W, data: bdata, aria: 'Søylediagram: forventet og faktisk fordeling av første siffer i prosent' })]),
-        { heads: ['Siffer', 'Forventet %', 'Faktisk %', 'Bonger'], rows: bdata.map(function (d, i) { return [d.label, String(d.a).replace('.', ','), String(d.b).replace('.', ','), bn.counts[i]]; }) }));
-    }
-
     // pant per dag
     var pd = L.chartData(scopedItems({ dateFrom: '', dateTo: '' }), scanMap).pant;
     var pbase = recs.filter(function (r) { return r.base && r.item.receiptType === 1; });
@@ -3969,10 +3955,6 @@
       body.appendChild(chartCard('ch-pant', 'Pant per dag: salg mot utbetalt', 'Kun skannede kvitteringer (' + pdone + ' av ' + pbase.length + '). Klikk en dag for å filtrere.',
         el('div', {}, [legend([[CH.blue, 'Pantesalg'], [CH.orange, 'Utbetalt panteretur']]), pairChart({ W: W, data: pdata, aria: 'Søylediagram: pantesalg og utbetalt panteretur per dag' })]),
         { heads: ['Dag', 'Pantesalg', 'Utbetalt'], rows: pd.map(function (d) { return [d.day, fmt(d.sale), fmt(d.ret)]; }) }));
-    } else {
-      body.appendChild(el('div', { class: 'kvr-card', 'data-sec': 'ch-pant' }, pd.length
-        ? [el('h4', { text: 'Pant per dag' }), hintEl('Ingen pant i de skannede kvitteringene (' + pdone + ' av ' + pbase.length + ').')]
-        : [el('h4', { text: 'Pant per dag' }), hintEl('Skann kvitteringene for å se pantesalg mot utbetalt panteretur.'), btn('Skann nå', scanVisible, 'kvr-sm')]));
     }
   }
 
@@ -4894,27 +4876,29 @@
     cwBong.addEventListener('input', function () { cw.bong = cwBong.value.trim(); summary(); });
     ui.cwStatus = el('div', { class: 'kvr-note', text: '' });
     ui.cwxBtn = btn('Hent tilleggsdata fra CW', fetchCwExtra);
-    ui.cwxStop = btn('Stopp', stopCwExtra);
+    ui.cwxStop = btn('Stopp', stopCwExtra, 'kvr-ifon');
     ui.cwxStop.disabled = true;
     ui.cwxStatus = el('div', { class: 'kvr-note', role: 'status', text: '' });
     ui.cwxInfo = el('div', {});
     var secCw = section('cw', 'Søk i hele journalen (CW)', [
       el('div', { class: 'kvr-row' }, [field('Dato fra', cwFrom), field('Dato til', cwTo)]),
       field('Butikker (navn som i CW)', cwQ), ui.cwStores, ui.cwCount,
-      field('Medlemsnr', cwMem), field('Lojalitets-ID', cwLoy),
-      el('div', { class: 'kvr-row' }, [field('Vare (EAN/navn)', cwFree), field('Bongnr', cwBong)]),
-      el('div', { class: 'kvr-row' }, [btn('Søk i CW', cwSearch, 'kvr-primary'), btn('Nullstill CW', cwReset)]),
-      ui.cwStatus,
-      el('b', { class: 'kvr-subh', text: 'Tilleggsdata fra CW' }),
-      hintEl('Bruker CWs egne filtre på søket du har i listen: hvert innholdsvalg (slettet vare, manuell rabatt, makulert, manuell pant, retur, parkert, spør pris, Vensafe …), betalingsmåtene kontant, kontant tilbake, kreditt, kupong, tilgodelapp, gavekort og finansiering, og systembongene (innlogging, utlogging, bongkopi, bankavstemming, dagsavslutning). Ett søk om gangen med pause mellom, omtrent 20 søk. Filtrene og søket ditt settes tilbake etterpå. Fritekst brukes ikke.'),
+      (ui.cwMore = el('details', { class: 'kvr-sub' }, [el('summary', { text: 'Flere søkefelt: medlemsnr, lojalitets-ID, vare, bongnr' }),
+        field('Medlemsnr', cwMem), field('Lojalitets-ID', cwLoy),
+        el('div', { class: 'kvr-row' }, [field('Vare (EAN/navn)', cwFree), field('Bongnr', cwBong)])])),
+      el('div', { class: 'kvr-row' }, [btn('Søk i CW', cwSearch, 'kvr-primary'), btn('Nullstill CW', cwReset, 'kvr-sm')]),
+      ui.cwStatus
+    ], true);
+    var secCwxGet = fold(section('cwxget', 'Tilleggsdata fra CW', [
+      hintEl('Merker bongene i listen med innhold og betaling fra CWs egne filtre (ca. 20 søk). Trengs for «Rask skanning» og kortet «Fra CW».'),
       el('div', { class: 'kvr-row' }, [ui.cwxBtn, ui.cwxStop]),
       ui.cwxStatus, ui.cwxInfo
-    ], true);
+    ]), 'cwxget', false);
     renderCwx();
 
     // --- Hent og skann i deler
     ui.partBtn = btn('Hent og skann i deler', fetchParts, 'kvr-primary');
-    ui.partStop = btn('Stopp', stopParts);
+    ui.partStop = btn('Stopp', stopParts, 'kvr-ifon');
     ui.partStop.disabled = true;
     ui.partScan = check('Skann bongene', function () {});
     ui.partScan.box.checked = true;
@@ -4922,11 +4906,9 @@
     ui.partStatus = el('div', { class: 'kvr-note', role: 'status', text: '' });
     ui.partInfo = el('div', {});
     var secParts = section('parts', 'Hent og skann i deler', [
-      hintEl('For perioder med mer enn 1000 bonger. Bruker dato, butikker og medlemsnr fra «Søk i hele journalen» over. Pluginen søker én dag om gangen; en dag med 1000 bonger deles på klokkeslett (CWs fra- og til-tid), og en del som fortsatt har 1000 bonger, deles igjen. Hver del skannes mens den står i listen, og radene samles i pluginens egen database. Analysen bruker det samlede grunnlaget sammen med listen. Dager som er hentet før (unntatt i dag), hoppes over, så du kan stoppe og fortsette. Skanning tar 0,6–1 sekund per bong (fartsregulatoren holder igjen når CW er treg); «Rask skanning» under Skann tar bare bonger med funn fra CW.'),
+      hintEl('For mer enn 1000 bonger: henter og skanner én dag om gangen, med datoene og butikkene over. Du kan stoppe og fortsette senere.'),
       el('div', { class: 'kvr-row' }, [ui.partScan.node, ui.partExtra.node]),
-      el('div', { class: 'kvr-row' }, [ui.partBtn, ui.partStop, btn('Tøm samlet grunnlag', function () {
-        confirmBox('Tøm samlet grunnlag', 'Fjerne ' + archCount() + ' bonger fra samlet grunnlag? Skannet innhold beholdes.', 'Tøm', function () { clearArchive(); apply(); renderParts(); partSay('Samlet grunnlag er tømt.'); });
-      }, 'kvr-sm')]),
+      el('div', { class: 'kvr-row' }, [ui.partBtn, ui.partStop]),
       ui.partStatus, ui.partInfo
     ]);
     renderParts();
@@ -5005,19 +4987,16 @@
     sortSelect(ui.cardRet);
     ui.cardRet.addEventListener('change', onChange);
     ui.scanBtn = btn('Skann innhold (synlige)', scanVisible, 'kvr-primary');
-    ui.stopBtn = btn('Stopp', function () { cancelScan = true; });
+    ui.stopBtn = btn('Stopp', function () { cancelScan = true; }, 'kvr-ifon');
     ui.stopBtn.disabled = true;
-    ui.retryBtn = btn('Prøv feilede på nytt', function () { if (lastRetry) lastRetry(); });
+    ui.retryBtn = btn('Prøv feilede på nytt', function () { if (lastRetry) lastRetry(); }, 'kvr-ifon');
     ui.retryBtn.disabled = true;
     ui.quickBox = check('Rask skanning: bare bonger med funn fra CW', function () { quickScan = ui.quickBox.box.checked; store(K.quick, quickScan); renderScanState(); if (quickScan && !(cwx && Object.keys(cwx.tags).length)) say('Rask skanning trenger tilleggsdata fra CW (Hent → Tilleggsdata fra CW). Til de er hentet, skannes alle.'); });
     ui.quickBox.box.checked = quickScan;
     var secScan = section('scan', 'Skanning', [
-      el('div', { class: 'kvr-row' }, [ui.scanBtn, ui.stopBtn]),
-      el('div', { class: 'kvr-row' }, [ui.retryBtn, btn('Tøm cache', function () {
-        clearScan(); clearArchive(); anomMap = {}; ctlRes = null; checkState.at = null; failedRecs = []; lastRetry = null; syncRetry(); say('Cache tømt: skannet innhold, tilleggsdata fra CW og samlet grunnlag.'); apply(); renderControl(); renderCwx(); renderParts();
-      })]),
+      el('div', { class: 'kvr-row' }, [ui.scanBtn, ui.stopBtn, ui.retryBtn]),
       ui.quickBox.node,
-      el('div', { class: 'kvr-hint', text: 'Hver kvittering åpnes i CWs visningsfelt og leses derfra. Pluginen sender aldri egne kall mot CWs API. Fartsregulatoren tar høyst én bong per 0,6 s, og senker farten når CW svarer tregere enn normalt (pause ved tre trege svar på rad, stopp når CW ikke svarer på seks bonger på rad). Rask skanning tar bare bonger CWs filtre har merket (Hent → Tilleggsdata fra CW), returer og bonger som ikke er vanlige salg; tester som trenger alle salg, får da lav dekning og står over. Ikke bruk CWs søk eller liste mens skanningen går. Chrome bremser faner som er skjult, så la Lindbak stå i et eget vindu ved siden av det du jobber i.' })
+      hintEl('Omtrent én bong i sekundet. La fanen stå synlig (Chrome bremser skjulte faner), og ikke bruk CW mens den går. Rask skanning tar bare bonger CW har merket (krever tilleggsdata under Hent).')
     ], true);
 
     // --- Varegrupper
@@ -5054,11 +5033,11 @@
       field('Vare (EAN eller navn)', ui.item, true),
       pfield('Varegruppe', ui.groups, true)
     ], true);
-    var secGroups = section('groups', 'Varegrupper', [
+    var secGroups = fold(section('groups', 'Varegrupper', [
       el('div', { class: 'kvr-hint', text: 'Sum per varegruppe for valgte kvitteringer:' }), ui.groupSums,
       el('div', { class: 'kvr-hint kvr-mt', text: 'Varer uten gruppe (mest solgt):' }), ui.unmatched,
       rulesDetails
-    ], false);
+    ], false), 'groups', false);
 
     // --- Avvik
     var oa = check('Kun avvik'); ui.onlyAnom = oa.box;
@@ -5080,7 +5059,7 @@
     var secReport = section('report', 'Dagsrapport (synlige kvitteringer)', [
       el('div', { class: 'kvr-row' }, [ui.repBy, repDay.node]),
       ui.repTable, ui.repNote,
-      el('div', { class: 'kvr-row' }, [btn('Eksporter rapport (CSV)', exportReportCsv), btn('Skann innhold nå', scanVisible, 'kvr-primary')])
+      el('div', { class: 'kvr-row' }, [btn('Eksporter rapport (CSV)', exportReportCsv)])
     ]);
     ui.settleNote = el('div', { class: 'kvr-hint' });
     ui.settleList = el('div', { class: 'kvr-list' });
@@ -5219,10 +5198,8 @@
     ui.pngLayout.value = store(K.layout) || 'bong';
     ui.pngLayout.addEventListener('change', function () { store(K.layout, ui.pngLayout.value); });
     var secExport = section('export', 'Eksport', [
-      el('div', { class: 'kvr-row' }, [btn('CSV: synlige', function () { exportCsv(false); }), btn('CSV: valgte', function () { exportCsv(true); })]),
-      el('div', { class: 'kvr-row' }, [btn('PNG: valgte (ZIP)', function () { exportPng(selectedRecs()); }), ui.retryBtn2 = btn('Prøv feilede på nytt', function () { if (lastRetry) lastRetry(); })]),
-      field('PNG-format', ui.pngLayout), pH.node, pM.node,
-      el('div', { class: 'kvr-hint', text: 'Semikolon-separert, åpnes direkte i Excel. Varegrupper og pant tas med for skannede kvitteringer.' })
+      hintEl('CSV og PNG lages med knappene nederst: valgte bonger, eller alle synlige når ingen er valgt (CSV). CSV åpnes direkte i Excel.'),
+      field('PNG-format', ui.pngLayout), pH.node, pM.node
     ], false);
 
     ui.storeNames = storeNames;
@@ -5261,6 +5238,14 @@
         })
       ]),
       hintEl('Eksport tar med terskler, poeng, egne regler, varegrupper og butikknavn. Skannede kvitteringer og notater tas ikke med.'),
+      el('b', { class: 'kvr-subh', text: 'Lagret data' }),
+      el('div', { class: 'kvr-row' }, [btn('Tøm cache', function () {
+        confirmBox('Tøm cache', 'Slette skannet innhold, tilleggsdata fra CW og samlet grunnlag? Notater og innstillinger beholdes.', 'Tøm', function () {
+          clearScan(); clearArchive(); anomMap = {}; ctlRes = null; checkState.at = null; failedRecs = []; lastRetry = null; syncRetry(); say('Cache tømt: skannet innhold, tilleggsdata fra CW og samlet grunnlag.'); apply(); renderControl(); renderCwx(); renderParts();
+        });
+      }), btn('Tøm samlet grunnlag', function () {
+        confirmBox('Tøm samlet grunnlag', 'Fjerne ' + archCount() + ' bonger fra samlet grunnlag? Skannet innhold beholdes.', 'Tøm', function () { clearArchive(); apply(); renderParts(); partSay('Samlet grunnlag er tømt.'); });
+      })]),
       el('b', { class: 'kvr-subh', text: 'Lagre i mappe' }),
       (ui.folderInfo = hintEl('')),
       (ui.folderBtns = el('div', { class: 'kvr-row' })),
@@ -5375,9 +5360,9 @@
 
     secChecks.classList.add('kvr-adv'); secAnom.classList.add('kvr-adv');
     var tabDefs = [
-      ['cw', 'Hent', [hintEl('Henter nye kvitteringer fra Lindbak (hele journalen). Resultatet kan så filtreres under «Filtrer».'), secCw, secParts]],
+      ['cw', 'Hent', [hintEl('Henter kvitteringer fra Lindbak, høyst 1000 per søk.'), secCw, secParts, secCwxGet]],
       ['filter', 'Filtrer', [hintEl('Filtrerer kvitteringene som allerede er listet. Ingenting hentes på nytt.'), secStore, secTime, secContent, secWho, secSum, secSaved]],
-      ['content', 'Skann', [el('p', { class: 'kvr-intro', text: 'Skann leser innholdet i kvitteringene: varer, pant, rabatt og betaling. Filtrer listen først, så skanner du bare det som er synlig. Filtrene som bruker innholdet ligger under «Filtrer» → Innhold.' }), secScan, secGroups]],
+      ['content', 'Skann', [el('p', { class: 'kvr-intro', text: 'Skanning leser innholdet i bongene som er synlige i listen: varer, pant, rabatt og betaling.' }), secScan, secGroups]],
       ['analyse', 'Analyse', [subNav, subHost]],
       ['more', 'Mer', [moreNav, moreHost]]
     ];

@@ -83,11 +83,11 @@
   <tbody>
     <tr><td>Dato fra / Dato til</td><td>Tidsrommet som hentes. Trykker du Dato fra, settes Dato til til samme dag hvis den er tom.</td></tr>
     <tr><td>Butikker</td><td>Søkbar liste med butikkens navn, slik de heter i Lindbak. Velg butikkene du vil søke i.</td></tr>
-    <tr><td>Medlemsnr, Lojalitets-ID</td><td>Ett eller flere nummer, adskilt med komma.</td></tr>
+    <tr><td>Flere søkefelt</td><td>Medlemsnr og lojalitets-ID (ett eller flere nummer, adskilt med komma), vare og bongnr. Klikk «Flere søkefelt» for å åpne dem.</td></tr>
     <tr><td>Vare (EAN/navn)</td><td>Fritekstsøk i Lindbak, for eksempel et strekkodenummer.</td></tr>
     <tr><td>Bongnr</td><td>Hele eller deler av bongnummeret.</td></tr>
     <tr><td>Søk i CW / Nullstill CW</td><td>Starter søket, eller tømmer Lindbaks filter og alt du har skrevet her.</td></tr>
-    <tr><td>Hent tilleggsdata fra CW / Stopp</td><td>Bruker CWs egne filtre på søket du har i listen, ett om gangen. Se under.</td></tr>
+    <tr><td>Tilleggsdata fra CW</td><td>Eget kort nederst (foldet sammen). Bruker CWs egne filtre på søket du har i listen, ett om gangen. Se under.</td></tr>
     <tr><td>Hent og skann i deler</td><td>Henter og skanner en lengre periode dag for dag, delt på klokkeslett når en dag har 1000 bonger. Se under.</td></tr>
   </tbody></table></div>
 <p><strong>Hent og skann i deler.</strong> CW viser høyst 1000 bonger per søk og kutter de eldste. For lengre perioder bruker du «Hent og skann i deler» under «Søk i hele journalen».</p>
@@ -131,11 +131,10 @@
   <thead><tr><th>Valg</th><th>Hva det gjør</th></tr></thead>
   <tbody>
     <tr><td>Skann innhold (synlige)</td><td>Skanner alle bonger som passerer filtrene dine. Pluginen skanner også de som pant- og rabattfilteret ellers ville skjult, så ingen faller utenfor.</td></tr>
-    <tr><td>Stopp</td><td>Avbryter skanningen. Det som er ferdig beholdes.</td></tr>
+    <tr><td>Stopp</td><td>Vises mens skanningen går, og avbryter den. Det som er ferdig beholdes.</td></tr>
     <tr><td>Rask skanning: bare bonger med funn fra CW</td><td>Skanner bare salg som CWs filtre har merket (slettet vare, manuell rabatt, retur, kontant tilbake …), returer og bonger som ikke er vanlige salg. Krever «Hent tilleggsdata fra CW» først; til da skannes alle. Gir mange ganger færre bonger, men tester som trenger alle salg (retur uten salg, prisavvik, kampanjevare, bongregnskap) får lav dekning og står over.</td></tr>
-    <tr><td>Prøv feilede på nytt</td><td>Kjører bare de bongene som feilet sist.</td></tr>
-    <tr><td>Tøm cache</td><td>Sletter alt skannet innhold og alle avviksmarkeringer. Innstillinger, notater, butikknavn og kampanjesvar beholdes.</td></tr>
-    <tr><td>Varegrupper</td><td>Gruppér varer med nøkkelord (se under). Filteret på varegruppe ligger under Filtrer → Innhold.</td></tr>
+    <tr><td>Prøv feilede på nytt</td><td>Vises når bonger har feilet, og kjører bare dem.</td></tr>
+    <tr><td>Varegrupper</td><td>Foldet sammen. Gruppér varer med nøkkelord (se under). Filteret på varegruppe ligger under Filtrer → Innhold.</td></tr>
   </tbody></table></div>
 <p><strong>Fartsregulator.</strong> Pluginen tar høyst én bong per 0,6 sekund. Den måler hvor lang tid CW bruker på hver bong: er svaret over dobbelt så tregt som normalt, senkes farten; tre svar på rad over tre ganger normalt (og over ett sekund) gir ett minutts pause; svarer CW ikke på seks bonger på rad, stopper skanningen. Statuslinjen viser «CW svarer på 0,5 s», og «farten er senket» når den holder igjen. Søkene i CW venter minst like lenge som forrige søk tok. Slik blir skanningen raskere når CW har kapasitet, uten å presse CW når den er travel.</p>
 <div class="callout"><b>Den gule stripen</b>
@@ -174,13 +173,12 @@
 <p>Diagrammene viser omfanget ditt og er klikkbare: klikk en søyle eller rute for å filtrere listen på den timen, dagen eller kassen. Knappen <strong>Tabell</strong> viser tallene bak diagrammet.</p>
 <div class="shots">{{fig:ch-hours}}{{fig:ch-days}}</div>
 <div class="shots">{{fig:ch-cash}}{{fig:ch-heat}}</div>
-<div class="shots">{{fig:ch-benford}}{{fig:ch-pant}}</div>
+<div class="shots">{{fig:ch-pant}}</div>
 <ul>
   <li><strong>Salg per time</strong> og <strong>Salg per dag</strong>: antall og sum. Topp merkes.</li>
   <li><strong>Returandel per kasserer</strong>: andel salg med negativ sum, med butikksnittet som tynn strek. Oransje trekant markerer minst 1,5 ganger snittet.</li>
   <li><strong>Når skjer det? Kasse × time</strong>: antall salg per kasse og klokketime. Mørkere = flere.</li>
-  <li><strong>Benford</strong>: første siffer i totalbeløp mot forventet fordeling (se «Tallanalyse»).</li>
-  <li><strong>Pant per dag</strong>: pantesalg mot utbetalt panteretur.</li>
+  <li><strong>Pant per dag</strong>: pantesalg mot utbetalt panteretur. Vises når skannede bonger har pant.</li>
 </ul>
 <h4>Rapport</h4>
 {{shot:rapport}}
@@ -224,8 +222,7 @@
 <div class="tw"><table>
   <thead><tr><th>Valg</th><th>Hva det gjør</th></tr></thead>
   <tbody>
-    <tr><td>CSV: synlige / valgte</td><td>Semikolonseparert fil som åpnes direkte i Excel. Har varegrupper, pant og avvik for skannede bonger.</td></tr>
-    <tr><td>PNG: valgte (ZIP)</td><td>Bilde av hele kvitteringen. Flere bonger pakkes i én ZIP. Bildet er tegnet fra kvitteringsteksten, ikke et skjermbilde.</td></tr>
+    <tr><td>CSV og PNG (knappene nederst)</td><td>CSV: valgte bonger, eller alle synlige når ingen er valgt. Semikolonseparert, åpnes direkte i Excel, med varegrupper, pant og avvik for skannede bonger. PNG: bilde av hver valgt kvittering, flere pakkes i én ZIP. Bildet er tegnet fra kvitteringsteksten, ikke et skjermbilde.</td></tr>
     <tr><td>PNG-format</td><td>«Bong» (smal, som papirkvittering) eller «A4-ark med bongen i midten».</td></tr>
     <tr><td>Topptekst, medlemsnr</td><td>Topptekst med butikk, kasse, kasserer, bongnr og tid kan slås av. Medlemsnummer er bare med hvis du krysser av.</td></tr>
     <tr><td>Revisjonsrapport</td><td>Se kapittel 7.</td></tr>
@@ -580,6 +577,7 @@
     <tr><td>Panelstørrelse</td><td>Vanlig, Stor (dokket til høyre, lista i Lindbak synlig) eller Full (hele skjermen). Samme valg som ⤢ i tittelfeltet.</td></tr>
     <tr><td>Tastaturflyt</td><td>Slår på <kbd>↑</kbd> <kbd>↓</kbd> for å bytte bong, <kbd>N</kbd> for notat og <kbd>M</kbd> for å velge eller fjerne valg. Virker ikke mens du skriver i et felt.</td></tr>
     <tr><td>Eksporter / Importer innstillinger</td><td>Lagrer og leser inn terskler, poeng, egne regler, varegrupper, butikknavn og svar om sentral kampanje som en fil. Praktisk for å dele samme oppsett mellom butikker. Skannet innhold og notater tas ikke med.</td></tr>
+    <tr><td>Tøm cache / Tøm samlet grunnlag</td><td>Under «Lagret data», etter en bekreftelse. Tøm cache sletter skannet innhold, tilleggsdata fra CW, samlet grunnlag og avviksmarkeringer; innstillinger, notater, butikknavn og kampanjesvar beholdes. Tøm samlet grunnlag fjerner bare radene fra «Hent og skann i deler».</td></tr>
     <tr><td>Lagre i mappe</td><td>Velg en mappe (for eksempel på en fellesdisk), så skrives innstillingene automatisk til kvitteringshenter-innstillinger.json der ved hver endring. «Les inn fra mappen» henter dem, for eksempel på en annen PC. Etter at Chrome er startet på nytt, må du trykke «Gi tilgang» én gang. Er filen endret fra en annen PC etter din siste lagring, skrives den ikke over før du har valgt «Les inn fra mappen» eller «Skriv mine til mappen». Skannede kvitteringer og notater blir i nettleseren.</td></tr>
     <tr><td>Tilbakestill plassering</td><td>Setter panelets plass og størrelse tilbake.</td></tr>
     <tr><td>Alt til standard</td><td>Tilbake til standardverdier for alle terskler og poeng. Egne regler, varegrupper, butikknavn og kampanjesvar beholdes.</td></tr>

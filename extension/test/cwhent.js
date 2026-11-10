@@ -145,6 +145,7 @@ search();
 
   // ---- henting
   await go('Hent');
+  await page.evaluate(() => document.querySelector('[data-sec=cwxget]').__set(true));
   await page.click('button:text-is("Hent tilleggsdata fra CW")');
   await page.waitForFunction(() => /Tilleggsdata fra CW: \d+ søk/.test(document.getElementById('kvr-panel').innerText), null, { timeout: 60000 });
   const searches = await page.evaluate(() => window.__searches.slice(1));
@@ -159,11 +160,11 @@ search();
   assert.deepStrictEqual(after.types, before.types, 'bongtypefilteret satt tilbake');
   assert.deepStrictEqual(after.pay, before.pay, 'betalingsfilteret satt tilbake');
   assert.strictEqual(after.rows, baseN); assert.strictEqual(after.cells, baseN, 'pluginen er koblet til listen igjen');
-  const cw = await txt('[data-sec=cw]');
+  const cw = await txt('[data-sec=cwxget]');
   assert.match(cw, /Slettet vare: 11 · Slettet annet: 0/);
   assert.match(cw, /Betaling: Kontant tilbake: 2/);
   assert.match(cw, /Systemtransaksjoner: 5/);
-  assert.ok(!/kvr-cwx-err/.test(await page.innerHTML('[data-sec=cw]')), 'ingen merknader');
+  assert.ok(!/kvr-cwx-err/.test(await page.innerHTML('[data-sec=cwxget]')), 'ingen merknader');
   const saved = await page.evaluate(() => new Promise((res) => { const rq = indexedDB.open('kvr-store'); rq.onsuccess = () => { const g = rq.result.transaction('kv').objectStore('kv').get('kvr.cwx.v1'); g.onsuccess = () => res(g.result); }; }));
   assert.deepStrictEqual(saved.copies, { [rows.find((r) => r.receiptType === 19).transactionId]: '4711' }, 'bongkopien er lest fra visningsfeltet');
   assert.strictEqual(saved.sys.length, 5);
@@ -190,21 +191,23 @@ search();
   assert.match(await txt('[data-sec=profile]'), /Snitt selvbetjent \(shop&go\)/);
 
   // ---- CW bruker ikke innholdsfilteret: resten av innholdssøkene hoppes over, og det sies tydelig
-  const clearStatus = () => page.evaluate(() => { document.querySelector('[data-sec=cw] [role=status]').textContent = ''; });
+  const clearStatus = () => page.evaluate(() => { document.querySelector('[data-sec=cwxget] [role=status]').textContent = ''; });
   await page.evaluate(() => { window.__ignoreContent = true; window.__searches = []; });
   await go('Hent');
   await clearStatus();
+  await page.evaluate(() => document.querySelector('[data-sec=cwxget]').__set(true));
   await page.click('button:text-is("Hent tilleggsdata fra CW")');
-  await page.waitForFunction(() => /Tilleggsdata fra CW: \d+ søk/.test(document.querySelector('[data-sec=cw] [role=status]').innerText), null, { timeout: 60000 });
-  assert.match(await txt('[data-sec=cw]'), /CW brukte ikke filteret «Spør pris» \(samme bonger som uten filter\)\. Resten av innholdsfilteret ble hoppet over\./);
+  await page.waitForFunction(() => /Tilleggsdata fra CW: \d+ søk/.test(document.querySelector('[data-sec=cwxget] [role=status]').innerText), null, { timeout: 60000 });
+  assert.match(await txt('[data-sec=cwxget]'), /CW brukte ikke filteret «Spør pris» \(samme bonger som uten filter\)\. Resten av innholdsfilteret ble hoppet over\./);
   assert.strictEqual(await page.evaluate(() => window.__searches.length), 1 + 3 + 1 + 1);
 
   // ---- CW svarer ikke: kjøringen stopper, og filtrene settes tilbake
   await page.evaluate(() => { window.__ignoreContent = false; window.__noAnswer = 2; window.__searches = []; });
   await clearStatus();
+  await page.evaluate(() => document.querySelector('[data-sec=cwxget]').__set(true));
   await page.click('button:text-is("Hent tilleggsdata fra CW")');
-  await page.waitForFunction(() => /Tilleggsdata fra CW: \d+ søk/.test(document.querySelector('[data-sec=cw] [role=status]').innerText), null, { timeout: 60000 });
-  assert.match(await txt('[data-sec=cw]'), /CW svarte ikke på søket «Betaling: Kontant tilbake» innen 2 s\. Kjøringen ble stoppet\./);
+  await page.waitForFunction(() => /Tilleggsdata fra CW: \d+ søk/.test(document.querySelector('[data-sec=cwxget] [role=status]').innerText), null, { timeout: 60000 });
+  assert.match(await txt('[data-sec=cwxget]'), /CW svarte ikke på søket «Betaling: Kontant tilbake» innen 2 s\. Kjøringen ble stoppet\./);
   const s3 = await page.evaluate(() => window.__searches.map((s) => s.p));
   assert.deepStrictEqual(s3.slice(-3), ['1', '2', ''], 'ingen søk etter stoppen, bortsett fra søket tilbake');
   const back = await state();

@@ -130,6 +130,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   await page.selectOption('.kvr-f:has-text("Sortering") select', 'sumDesc');
   await page.click('button:text-is("Velg alle")');
   await tab('Søk');
+  await page.evaluate(() => { document.querySelector('[data-sec=cw] details').open = true; });
   await page.fill('input[placeholder="EAN eller varenavn"]', 'xyz');
   await page.fill('.kvr-f:has-text("Dato fra") input >> nth=0', '2026-10-01');
   const chipTxt = await page.innerText('.kvr-chipsrow');
@@ -232,6 +233,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   await grp(''); await wipe();
   // lær opp: REGAL HVETEMEL uten gruppe -> Bakeri (varer uten gruppe ligger under Skann)
   await tab('Innhold');
+  if (await page.$eval('[data-sec=groups]', n => n.classList.contains('kvr-folded'))) await page.click('[data-sec=groups] > h4');
   assert.match(await page.innerText('#kvr-panel'), /REGAL HVETEMEL 1KG/);
   await page.click('.kvr-um button:text-is("Legg til")');
   assert.match(await page.innerText('#kvr-panel'), /REGAL HVETEMEL 1KG/, 'uten valgt gruppe skjer ingenting');
@@ -263,6 +265,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
 
   // CW-søk
   await tab('Søk');
+  await page.evaluate(() => { document.querySelector('[data-sec=cw] details').open = true; });
   await page.fill('input[placeholder="EAN eller varenavn"]', 'ban');
   await page.fill('input[placeholder="bongnr"]', '1005-4-3');
   await page.click('.kvr-chk:has-text("1005 –") input');
@@ -275,8 +278,9 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   assert.deepStrictEqual(await page.evaluate(() => window.__storesSet), [1005]);
 
   // skanning via visningsfeltet
-  await tab('Innhold');
-  await page.click('text=Tøm cache');
+  await tab('Innstillinger');
+  await page.click('[data-sec=set-general] button:text-is("Tøm cache")');
+  await page.click('.kvr-modal button:text-is("Tøm")');
   await tab('Filter');
   // skanne-fella: filter som krever skanning før noe er skannet skjuler alt, men viser hva som mangler
   await page.selectOption('select[aria-label="Pant"]', 'sale');

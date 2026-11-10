@@ -360,3 +360,4 @@ tr.kvr-follow>td.kvr-cb-cell::after{color:#e37400}
 #kvr-panel .kvr-net-l{stroke:var(--kv-edge)}
 #kvr-panel .kvr-net-ret{stroke:var(--kv-warn)}
 #kvr-panel:not(.kvr-showall) .kvr-meta,#kvr-panel:not(.kvr-showall) .kvr-nohit,#kvr-panel:not(.kvr-showall) .kvr-adv{display:none}
+#kvr-panel button.kvr-ifon:disabled{display:none}

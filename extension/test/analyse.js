@@ -111,8 +111,9 @@ setRows(FIRST);
   assert.ok(!/Filtrene i pluginen skjuler alle/.test(await page.innerText('#kvr-panel')));
 
   // Tøm cache fjerner også analysen
-  await go('Skann');
-  await page.click('button:text-is("Tøm cache")');
+  await go('Mer', 'Innstillinger');
+  await page.click('[data-sec=set-general] button:text-is("Tøm cache")');
+  await page.click('.kvr-modal button:text-is("Tøm")');
   await go('Analyse', 'Sjekk først');
   assert.ok(!/sjekk først \(/i.test(await txt('#kvr-panel')), 'analysen er tømt sammen med cachen');
 

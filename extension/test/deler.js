@@ -127,6 +127,13 @@ search();
   const go = async (main, sub) => { await page.click(`.kvr-tab:has-text("${main}")`); if (sub) await page.click(`.kvr-sub:text-is("${sub}")`); };
   const txt = async (sel) => (await page.innerText(sel)).replace(/\s+/g, ' ');
   const status = () => page.innerText('[data-sec=parts] [role=status]');
+  // «Tøm samlet grunnlag» ligger under Mer → Innstillinger → Generelt
+  const clearArch = async () => {
+    await go('Mer', 'Innstillinger');
+    await page.click('[data-sec=set-general] button:text-is("Tøm samlet grunnlag")');
+    await page.click('.kvr-modal button:text-is("Tøm")');
+    await go('Hent');
+  };
   const run = async () => {
     await page.evaluate(() => { document.querySelector('[data-sec=parts] [role=status]').textContent = ''; window.__searches = []; });
     await page.click('button:text-is("Hent og skann i deler")');
@@ -182,8 +189,7 @@ search();
   assert.strictEqual((await page.evaluate(() => window.__searches)).length, 1, 'bare søket ditt tilbake');
 
   // CW bruker ikke klokkeslett-feltene: dagen kuttes, og det står tydelig
-  await page.click('[data-sec=parts] button:text-is("Tøm samlet grunnlag")');
-  await page.click('.kvr-modal button:text-is("Tøm")');
+  await clearArch();
   await page.evaluate(() => { window.__ignoreTime = true; });
   await run();
   const s3 = (await page.evaluate(() => window.__searches)).slice(0, -1).map((x) => x.f + ' ' + x.a + '–' + x.b);
@@ -193,8 +199,7 @@ search();
   assert.match(await txt('[data-sec=parts]'), /Kuttet ved 1000: 2026-09-21/);
 
   // CW svarer ikke: kjøringen stopper, dagen fortsetter neste gang, og søket ditt settes tilbake
-  await page.click('[data-sec=parts] button:text-is("Tøm samlet grunnlag")');
-  await page.click('.kvr-modal button:text-is("Tøm")');
+  await clearArch();
   await page.evaluate(() => { window.__ignoreTime = false; window.__noAnswerDay = '2026-09-21'; });
   await run();
   assert.match(await txt('[data-sec=parts]'), /CW svarte ikke på søket for 2026-09-21 \(hele dagen\) innen 2 s\. Kjøringen ble stoppet; start igjen senere, så fortsetter den der den slapp\./);
@@ -207,8 +212,7 @@ search();
 
   // CW tømmer listen og viser et lastesymbol før svaret kommer: pluginen venter på svaret
   for (const mode of [{ slow: 300 }, { slow: 300, noMask: true }, { slow: 300, rawUtc: true }, { slow: 300, stray: true }, { slow: 300, noAngular: true }]) {
-    await page.click('[data-sec=parts] button:text-is("Tøm samlet grunnlag")');
-    await page.click('.kvr-modal button:text-is("Tøm")');
+    await clearArch();
     await page.evaluate((m) => { window.__slow = m.slow; window.__noMask = !!m.noMask; window.__rawUtc = !!m.rawUtc; window.__stray = !!m.stray; window.__noAngular = !!m.noAngular; if (m.noAngular) window.__kvrSearch.settle = 60; const x = document.getElementById('stray'); if (x) x.remove(); }, mode);
     const tRun = Date.now();
     await run();
@@ -221,8 +225,7 @@ search();
   await page.evaluate(() => { window.__slow = 0; window.__noMask = false; window.__rawUtc = false; window.__stray = false; window.__noAngular = false; window.__kvrSearch.settle = 0; const x = document.getElementById('stray'); if (x) x.remove(); });
 
   // søket ditt hadde klokkeslett, og widgeten har en gammel dato: settes tilbake riktig og uten at CW feiler
-  await page.click('[data-sec=parts] button:text-is("Tøm samlet grunnlag")');
-  await page.click('.kvr-modal button:text-is("Tøm")');
+  await clearArch();
   await page.evaluate(() => {
     const f = document.getElementById('fromTimePicker').__w.kendoTimePicker, t = document.getElementById('toTimePicker').__w.kendoTimePicker;
     f.value(new Date(2000, 0, 1, 8, 0)); t.value(new Date(2000, 0, 1, 20, 0)); f.trigger('change'); t.trigger('change');
@@ -244,8 +247,7 @@ search();
 
 
   // CW viser en annen dag enn den som ble søkt på: stopper uten å lagre
-  await page.click('[data-sec=parts] button:text-is("Tøm samlet grunnlag")');
-  await page.click('.kvr-modal button:text-is("Tøm")');
+  await clearArch();
   await page.evaluate(() => { window.__forceDay = '2026-09-22'; });
   await run();
   assert.match(await txt('[data-sec=parts]'), /Listen i CW viser 2026-09-22, ikke 2026-09-20 som det ble søkt på\. Datofeltet i CW ble trolig ikke satt/);

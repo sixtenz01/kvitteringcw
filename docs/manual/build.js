@@ -31,7 +31,7 @@ const IMG = {
   'sjekk-kampanje': ['Spørsmål om sentral kampanje under en bong', 'Sjekk først: bongen får et notat og spørsmålet «Stemmer det?» med Ja og Nei.'],
   'kampanje-dialog': ['Dialogen Mulige sentrale kampanjer', 'Svar nå: alle varer som kan være sentral kampanje, med svar og Angre.'],
   'ch-hours': ['Salg per time', 'Salg per time.'], 'ch-days': ['Salg per dag', 'Salg per dag.'], 'ch-cash': ['Returandel per kasserer', 'Returandel per kasserer.'],
-  'ch-heat': ['Kasse mot time', 'Kasse × time.'], 'ch-benford': ['Benford', 'Benford: første siffer i totalbeløp.'], 'ch-pant': ['Pant per dag', 'Pant per dag.'],
+  'ch-heat': ['Kasse mot time', 'Kasse × time.'], 'ch-pant': ['Pant per dag', 'Pant per dag.'],
   rapport: ['Dagsrapport', 'Rapport-fanen: dagsrapport per kasse.'],
   'fokus-start': ['Fokus uten valg', 'Fokus uten valg: velg kasserer eller kasse.'], 'fokus-a': ['Fokus for en kasserer', 'Fokus for kasserer 4103.'],
   'detaljer-topp': ['Detaljer, øverste del', 'Detaljer: resultat og kontroller, deretter kortene.'],

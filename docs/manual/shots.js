@@ -145,7 +145,7 @@ async function main() {
   if (want('skanner')) { await view(520); await save('skanner'); }
   await page.waitForFunction(() => /Ferdig\. Skannet/.test(document.getElementById('kvr-panel').innerText), null, { timeout: 120000 });
   await view(900);
-  if (want('skann')) { await go('Skann'); await scrollTo(0); await save('skann-etter'); await scrollTo(500); await save('skann-grupper'); }
+  if (want('skann')) { await go('Skann'); await scrollTo(0); await save('skann-etter'); await page.evaluate(() => document.querySelector('[data-sec=groups]').__set(true)); await scrollTo(500); await save('skann-grupper'); }
 
   // ---- analyse
   await go('Analyse', 'Sjekk først');
@@ -197,7 +197,7 @@ async function main() {
   }
   if (want('diagram')) {
     await go('Analyse', 'Diagram'); await view(1000);
-    for (const id of ['ch-hours', 'ch-days', 'ch-cash', 'ch-heat', 'ch-benford', 'ch-pant']) await cardShot(id, `[data-sec=${id}]`);
+    for (const id of ['ch-hours', 'ch-days', 'ch-cash', 'ch-heat', 'ch-pant']) await cardShot(id, `[data-sec=${id}]`);
   }
   if (want('rapport')) { await go('Analyse', 'Rapport'); await view(900); await save('rapport'); }
   if (want('fokus')) {
