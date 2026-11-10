@@ -9,7 +9,7 @@
 
   var L = window.KvLogic;
   var K = {
-    saved: 'kvr.saved.v1', collapsed: 'kvr.collapsed.v1', scan: 'kvr.scan.v2', pos: 'kvr.pos.v1',
+    showall: 'kvr.showall.v1', saved: 'kvr.saved.v1', collapsed: 'kvr.collapsed.v1', scan: 'kvr.scan.v2', pos: 'kvr.pos.v1',
     size: 'kvr.size.v1', sec: 'kvr.sec.v1', rules: 'kvr.rules.v1', anom: 'kvr.anom.v1',
     stores: 'kvr.stores.v1', tab: 'kvr.tab.v1', layout: 'kvr.layout.v1', arules: 'kvr.arules.v1', notes: 'kvr.notes.v1', tasks: 'kvr.tasks.v1', ctl: 'kvr.ctl.v1', keynav: 'kvr.keynav.v1', tshift: 'kvr.tshift.v1', nlog: 'kvr.nlog.v1', wide: 'kvr.wide.v1', sub: 'kvr.sub.v1', weights: 'kvr.weights.v1', camp: 'kvr.camp.v1', lastrun: 'kvr.lastrun.v1', scope: 'kvr.scope.v1', help: 'kvr.help.v1', sub2: 'kvr.sub2.v1', reports: 'kvr.reports.v1', repopts: 'kvr.repopts.v1', pantmig: 'kvr.pantmig.v1', pos2: 'kvr.pos2.v1', campmig: 'kvr.campmig.v1', discmig: 'kvr.discmig.v1', evmig: 'kvr.evmig.v1', folder: 'kvr.folder.v1', folderAt: 'kvr.folderat.v1', cwx: 'kvr.cwx.v1', arch: 'kvr.arch.v1', quick: 'kvr.quick.v1'
   };
@@ -47,7 +47,7 @@
   var rules, anomCfg, manualStores, customRules = [];
   var scope = null, lastMode = 'scope', fetched = null;
   var weights = null, checkState = { newIds: {}, at: null, shown: 15, showChecked: false }, expanded = {};
-  var notes = {}, ctlRes = null, ctlCfg = null, tasksCustom = [], boundCount = 0, keyNav = true, settingsStale = false, timeShift = 0;
+  var notes = {}, ctlRes = null, ctlCfg = null, tasksCustom = [], boundCount = 0, keyNav = true, settingsStale = false, timeShift = 0, showAll = false;
   var cwx = null, cwRun = null;   // tilleggsdata fra CWs filtre, og kjøringen som pågår
   var lastLoadMs = 0, lastSearchMs = 0, quickScan = false;   // svartid for siste bong og søk; målrettet skanning
   // samlet grunnlag fra «Hent og skann i deler»: listerader fra mange CW-søk. Medlemsnummer bare i minnet (archMem).
@@ -1646,6 +1646,11 @@
     ui.stSelected.textContent = String(sm.count);
     ui.stSum.textContent = fmt(sm.sum);
     ui.stDup.textContent = String(ui.dup ? ui.dup.groups.length : 0);
+    // tellere som står på 0 sier ingenting: Valgt og Sum valgt vises når noe er valgt, Duplikater når det finnes
+    ui.tSel.forEach(function (n) { n.style.display = sm.count ? '' : 'none'; });
+    ui.tDup.style.display = ui.dup && ui.dup.groups.length ? '' : 'none';
+    if (ui.footClear) ui.footClear.style.display = sm.count ? '' : 'none';
+    ui.footPng.style.display = sm.count ? '' : 'none';
     ui.pantLine.textContent = 'Pant valgte: salg ' + fmt(p.sale) + ' · retur ' + fmt(p.ret) + ' · netto ' + fmt(p.net) +
       ' kr (' + p.scanned + ' av ' + p.total + ' skannet)';
     ui.badge.textContent = (active ? active + ' filter' : 'ingen filter') + (sm.count ? ' · ' + sm.count + ' valgt' : '');
@@ -2136,6 +2141,8 @@
   }
 
   function hintEl(t) { return el('div', { class: 'kvr-hint', text: t }); }
+  // Dekning og status (hvor mange som er skannet, at en test er av o.l.): vises bare med «Vis alt».
+  function metaEl(t) { return el('div', { class: 'kvr-hint kvr-meta', text: t }); }
 
   // Øyeblikksbilde av det analysen brukte, slik at rapporten viser det som faktisk ble analysert,
   // også om listen, innstillinger eller skanninger endres etterpå.
@@ -2290,9 +2297,9 @@
 
   function renderDiscCard(D) {
     var box = ui.ctlDisc;
-    if (!D || !D.scanned) { box.appendChild(hintEl('Ingen skannede salg med rabattdata i omfanget. Skann på nytt (eldre skanninger mangler rabattdata) og kjør analysen igjen.')); return; }
+    if (!D || !D.scanned) { box.appendChild(metaEl('Ingen skannede salg med rabattdata i omfanget. Skann på nytt (eldre skanninger mangler rabattdata) og kjør analysen igjen.')); return; }
     var T = D.total;
-    box.appendChild(hintEl('Rabattdata for ' + D.scanned + ' av ' + D.sales + ' salg. ' + T.withDisc + ' bonger har rabattlinje (' + fmt(T.disc) + ' kr), ' + T.withNR + ' av dem uten årsak (' + fmt(T.nr) + ' kr). ' + T.withCpn + ' bonger har kupong/kampanje (' + T.cpn + ' kuponger).'));
+    box.appendChild(metaEl('Rabattdata for ' + D.scanned + ' av ' + D.sales + ' salg. ' + T.withDisc + ' bonger har rabattlinje (' + fmt(T.disc) + ' kr), ' + T.withNR + ' av dem uten årsak (' + fmt(T.nr) + ' kr). ' + T.withCpn + ' bonger har kupong/kampanje (' + T.cpn + ' kuponger).'));
     var rows = D.rows.map(function (r) {
       return [{ node: entLink('kasserer', r.id) }, r.n, r.withDisc, fmt(r.disc), { t: r.withNR, bad: r.flag }, fmt(r.nr), { t: pct(r.share), bad: r.flag }, { t: r.withW, bad: r.flagW }, r.withCpn, r.cpn];
     });
@@ -2330,9 +2337,9 @@
       if (D.camp.pending) box.appendChild(el('div', { class: 'kvr-notice' }, [el('span', { text: D.camp.pending + (D.camp.pending === 1 ? ' vare venter' : ' varer venter') + ' på svar: er det en kampanje fra sentralt hold?' }), btn('Svar nå', openCampDialog, 'kvr-sm kvr-primary')]));
       if (D.camp.items.length) box.appendChild(campTable(D.camp.items.slice(0, 30)));
       if (D.camp.days.length) box.appendChild(tbl(['Kampanjedag', 'Butikk', 'Dag', 'Andel', 'Bonger'], D.camp.days.slice(0, 8).map(function (d) { return ['Mange bonger med rabatt', sLabel(d.store), d.day, pct(d.share), d.withDisc + ' av ' + d.n]; })));
-      if (ctlCfg.campAuto) box.appendChild(hintEl(D.camp.auto + ' varer er klassifisert som kampanjevare: minst ' + ctlCfg.campCashiers + ' kasserere har solgt varen med rabatt, på minst ' + (ctlCfg.campBongs || '–') + ' bonger til sammen (én bong hos hver av to kasserere er nok). Rabatten på dem flagges ikke. Trykk «Ikke kampanje» for å flagge som vanlig. Slå av under Innstillinger → Rabatt for å bli spurt i stedet.'));
+      if (ctlCfg.campAuto) box.appendChild(metaEl(D.camp.auto + ' varer er klassifisert som kampanjevare: minst ' + ctlCfg.campCashiers + ' kasserere har solgt varen med rabatt, på minst ' + (ctlCfg.campBongs || '–') + ' bonger til sammen (én bong hos hver av to kasserere er nok). Rabatten på dem flagges ikke. Trykk «Ikke kampanje» for å flagge som vanlig. Slå av under Innstillinger → Rabatt for å bli spurt i stedet.'));
       var S = D.camp.scan, popTodo = popScanTodo();
-      box.appendChild(hintEl('Kampanjesjekken ser ' + S.scanned + ' av ' + S.sales + ' salg i grunnlaget (' + S.cashiers + ' av ' + S.cashiersAll + ' kasserere har skannede bonger). En vare blir bare kampanjevare når de skannede bongene viser den hos flere kasserere.' +
+      box.appendChild(metaEl('Kampanjesjekken ser ' + S.scanned + ' av ' + S.sales + ' salg i grunnlaget (' + S.cashiers + ' av ' + S.cashiersAll + ' kasserere har skannede bonger). En vare blir bare kampanjevare når de skannede bongene viser den hos flere kasserere.' +
         (ctlCfg.campCoupon ? ' ' + D.camp.coupon + ' rabattlinjer står i en kupong på samme bong og regnes som kampanje.' : '') +
         (ctlCfg.campMulti ? ' ' + D.camp.multi + ' rabattlinjer er like varer med samme rabatt på samme bong (multipakk) og regnes som kampanje.' : '')));
       if (popTodo.length) box.appendChild(el('div', { class: 'kvr-row' }, [btn('Skann hele grunnlaget (' + popTodo.length + ')', scanPopulation, 'kvr-sm')]));
@@ -2350,12 +2357,12 @@
       }
       box.appendChild(hintEl('Samme vare med rabatt på minst ' + (ctlCfg.campBongs || '–') + ' bonger hos minst ' + ctlCfg.campCashiers + ' kasserere (over alle dager og butikker) kan være en kampanje fra sentralt hold. Uten automatisk kampanjevare tas bongene med i analysen med et notat, og du blir spurt. Svaret gjelder varen, uansett rabattprosent. Svar Ja: rabatten flagges ikke lenger og telles ikke mot kassereren (' + D.camp.confirmed + ' bekreftet). Svar Nei: flagges som vanlig (' + D.camp.denied + ' avvist). En dag der minst ' + (ctlCfg.campDay || '–') + ' % av minst 30 salg har rabatt får bare notat.'));
     }
-    box.appendChild(hintEl('Rabatt = linjen «Rabatt: Kr x (y %)» på en vare med årsak 1 Datovare, 2 Feil pris, 3 Prisløfte, 4 Reserveløsning kupong, 5 Annen rabattårsak eller 6 Best før (tom = ingen årsak valgt). Klikk en årsak for å filtrere listen. Kupong = linjen «Kupong (id - navn)», antatt lagt inn sentralt (CN/VPI); beløpet er ofte 0,00, så den viser at kampanjen er knyttet til bongen, ikke at den er innløst. Rødt = andel bonger med rabatt uten årsak er minst ' + ctlCfg.profFactor + '× butikkens (minst ' + ctlCfg.profMin + ' bonger). Funn «Rabatt uten årsak» ' + (ctlCfg.discPct ? 'krever minst ' + ctlCfg.discPct + ' % rabatt' : 'er av') + '. «Høy rabattprosent» flagger rabatt med årsak på ' + (ctlCfg.discHiFrom ? ctlCfg.discHiFrom + '–' + ctlCfg.discHiTo + ' %' : 'ingenting (av)') + '. «Varen solgt av én kasserer» ' + (ctlCfg.discOneN ? 'flagger rabatt med årsak når færre enn ' + ctlCfg.discOneN + ' kasserere solgte varen i butikken den dagen' + (D.oneSkip ? ' (' + D.oneSkip + ' linjer sto over fordi under 80 % av dagens salg var skannet)' : '') : 'er av') + '. «Rabatt uten treff» krever minst ' + (ctlCfg.discMatchPct || '–') + ' % og at ingen andre bonger samme dag har varen med samme rabatt. Søk på rabatt-prosent under Skann.'));
+    box.appendChild(metaEl('Rabatt = linjen «Rabatt: Kr x (y %)» på en vare med årsak 1 Datovare, 2 Feil pris, 3 Prisløfte, 4 Reserveløsning kupong, 5 Annen rabattårsak eller 6 Best før (tom = ingen årsak valgt). Klikk en årsak for å filtrere listen. Kupong = linjen «Kupong (id - navn)», antatt lagt inn sentralt (CN/VPI); beløpet er ofte 0,00, så den viser at kampanjen er knyttet til bongen, ikke at den er innløst. Rødt = andel bonger med rabatt uten årsak er minst ' + ctlCfg.profFactor + '× butikkens (minst ' + ctlCfg.profMin + ' bonger). Funn «Rabatt uten årsak» ' + (ctlCfg.discPct ? 'krever minst ' + ctlCfg.discPct + ' % rabatt' : 'er av') + '. «Høy rabattprosent» flagger rabatt med årsak på ' + (ctlCfg.discHiFrom ? ctlCfg.discHiFrom + '–' + ctlCfg.discHiTo + ' %' : 'ingenting (av)') + '. «Varen solgt av én kasserer» ' + (ctlCfg.discOneN ? 'flagger rabatt med årsak når færre enn ' + ctlCfg.discOneN + ' kasserere solgte varen i butikken den dagen' + (D.oneSkip ? ' (' + D.oneSkip + ' linjer sto over fordi under 80 % av dagens salg var skannet)' : '') : 'er av') + '. «Rabatt uten treff» krever minst ' + (ctlCfg.discMatchPct || '–') + ' % og at ingen andre bonger samme dag har varen med samme rabatt. Søk på rabatt-prosent under Skann.'));
   }
 
   function renderMemberCard(M) {
     var box = ui.ctlMember;
-    if (!M || !M.members) { box.appendChild(hintEl('Ingen bonger med medlemsnr blant de innlastede bongene i valgte butikker.')); return; }
+    if (!M || !M.members) { box.appendChild(metaEl('Ingen bonger med medlemsnr blant de innlastede bongene i valgte butikker.')); return; }
     box.appendChild(hintEl(M.members + ' ulike medlemsnr på ' + M.sales + ' salg i valgte butikker. Viser de ' + Math.min(15, M.rows.length) + ' med flest funn og bruk (d = dager, b = butikker, kasserer med andel av bongene). Trenger ikke skanning.'));
     var short = { 'flere butikker': 'butikker', 'samme dag': 'dag', 'mye brukt': 'mye', 'én kasserer': 'kasserer', 'eget nummer': 'eget', 'ansatt': 'ansatt' };
     var vText = { 'høy': 'sterk indikasjon', middels: 'mulig, sjekk', lav: 'trolig uskyldig' };
@@ -2373,25 +2380,25 @@
   function renderMiscCard(R) {
     var box = ui.ctlMisc, P = R.price, K = R.ku, E = R.ev;
     box.appendChild(el('b', { class: 'kvr-subh', text: 'Pris per vare' }));
-    box.appendChild(hintEl(P.scanned + ' av ' + P.sales + ' salg har enhetspris (ny skanning), ' + P.lines + ' varelinjer. ' + P.groups + ' vare/butikk/dag-grupper har klar vanlig pris. ' + P.deviating + ' varelinjer i omfanget avviker minst ' + (ctlCfg.priceDevPct || '–') + ' %.' + (P.coverage < 1 ? ' Eldre skanninger mangler enhetspris: skann på nytt for full dekning.' : '')));
+    box.appendChild(metaEl(P.scanned + ' av ' + P.sales + ' salg har enhetspris (ny skanning), ' + P.lines + ' varelinjer. ' + P.groups + ' vare/butikk/dag-grupper har klar vanlig pris. ' + P.deviating + ' varelinjer i omfanget avviker minst ' + (ctlCfg.priceDevPct || '–') + ' %.' + (P.coverage < 1 ? ' Eldre skanninger mangler enhetspris: skann på nytt for full dekning.' : '')));
     if (P.rows.length) box.appendChild(tbl(['Kasserer', 'Avvikende linjer'], P.rows.map(function (r) { return [{ node: entLink('kasserer', r.id) }, r.n]; })));
     box.appendChild(el('b', { class: 'kvr-subh', text: 'Kjøpeutbytte' }));
-    box.appendChild(hintEl(K.members + ' medlemssalg, ' + K.scanned + ' skannet med ny skanning, ' + K.withTable + ' med Kjøpeutbytte-tabell. ' +
+    box.appendChild(metaEl(K.members + ' medlemssalg, ' + K.scanned + ' skannet med ny skanning, ' + K.withTable + ' med Kjøpeutbytte-tabell. ' +
       (K.applicable ? 'Tabellen finnes på de fleste medlemsbonger, så fravær regnes som avvik.' : 'Tabellen finnes ikke på nok medlemsbonger (eller for få er skannet) til at fravær regnes som avvik.') +
       (K.ratio !== null ? ' Vanlig forhold grunnlag/varesum: ' + Math.round(K.ratio * 100) + ' %.' : '')));
     box.appendChild(el('b', { class: 'kvr-subh', text: 'Hendelsesord' }));
-    box.appendChild(hintEl(E.hits + ' av ' + E.scanned + ' skannede bonger har ord som annullert, parkert, manuell eller spør pris. Slike hendelser er ikke observert i ekte data ennå.' + (E.covered ? ' ' + E.covered + ' av dem har bare ord som allerede har egne tester (spør pris, manuell kvittering) og flagges der.' : '') +
+    box.appendChild(metaEl(E.hits + ' av ' + E.scanned + ' skannede bonger har ord som annullert, parkert, manuell eller spør pris. Slike hendelser er ikke observert i ekte data ennå.' + (E.covered ? ' ' + E.covered + ' av dem har bare ord som allerede har egne tester (spør pris, manuell kvittering) og flagges der.' : '') +
       (R.copies ? ' ' + R.copies + ' bongkopier («Bong kopi») flagges bare her og er holdt utenfor de andre testene.' : '')));
     box.appendChild(el('div', { class: 'kvr-row' }, [btn('Diagnostikk: ukjente linjer…', openDiag)]));
     var ML = R.ml;
     if (ML) {
       box.appendChild(el('b', { class: 'kvr-subh', text: 'Maskinlæring: uvanlige bonger' }));
-      box.appendChild(hintEl(!ML.applicable ? 'Ikke kjørt: ' + ML.n + ' skannede salg, minst ' + ML.minN + ' trengs (Innstillinger → Maskinlæring).' :
+      box.appendChild(metaEl(!ML.applicable ? 'Ikke kjørt: ' + ML.n + ' skannede salg, minst ' + ML.minN + ' trengs (Innstillinger → Maskinlæring).' :
         ML.topPct === null ? 'Uvanlighet er regnet for ' + ML.n + ' skannede salg, men flagging er av (Innstillinger → Maskinlæring).' :
         'Modellen har lært av ' + ML.n + ' skannede salg i datagrunnlaget og flagger ' + ML.flagged + ' bonger i omfanget blant de ' + String(ML.topPct).replace('.', ',') + ' % mest uvanlige (uvanlighet minst ' + Math.round(Math.max(ML.cut, (Number(ctlCfg.mlMinScore) || 60) / 100) * 100) + ' av 100, og minst én egenskap som under 1 % av bongene har). ' +
         'Den kjører lokalt, uten kall mot CW, og bruker ikke medlemsnummer eller kasserer. Samme data gir samme resultat.'));
       var LN = mlLearnNow();
-      box.appendChild(hintEl(!LN.on ? 'Lær av vurderingene er av.' : LN.trained ? 'Lært av ' + LN.pos + ' bonger «Til oppfølging» og ' + LN.neg + ' «Sjekket». Treffsikkerhet på bonger modellen ikke har trent på: ' + (LN.auc === null ? 'for få til å måle' : 'AUC ' + String(Math.round(LN.auc * 100) / 100).replace('.', ',') + ' (0,5 = tilfeldig, 1 = perfekt)' + (LN.auc < 0.65 ? '. Ikke bedre enn tilfeldig ennå: fortsett å merke bonger' : '')) + '. «Sjekk først» kan sorteres etter den.' :
+      box.appendChild(metaEl(!LN.on ? 'Lær av vurderingene er av.' : LN.trained ? 'Lært av ' + LN.pos + ' bonger «Til oppfølging» og ' + LN.neg + ' «Sjekket». Treffsikkerhet på bonger modellen ikke har trent på: ' + (LN.auc === null ? 'for få til å måle' : 'AUC ' + String(Math.round(LN.auc * 100) / 100).replace('.', ',') + ' (0,5 = tilfeldig, 1 = perfekt)' + (LN.auc < 0.65 ? '. Ikke bedre enn tilfeldig ennå: fortsett å merke bonger' : '')) + '. «Sjekk først» kan sorteres etter den.' :
         'Lær av vurderingene: ' + LN.pos + ' «Til oppfølging» og ' + LN.neg + ' «Sjekket» så langt; minst ' + LN.minL + ' av hver trengs.'));
     }
   }
@@ -2402,8 +2409,8 @@
     var box = ui.ctlNet;
     if (!N) return;
     box.innerHTML = '';
-    if (!N.scanned) { box.appendChild(hintEl('Ingen skannede salg med kortdata. Kort leses fra skanning versjon 6.')); return; }
-    box.appendChild(hintEl(N.scanned + ' av ' + N.sales + ' salg er skannet med kortdata. ' + plur(N.groups.length, 'gruppe', 'grupper') + ' med minst tre ledd (medlemsnr og kort). ' + N.links + ' koblinger kort–medlemsnr er brukt; ' + N.weak + ' kort uten utstedernr som bare står én gang med et medlemsnr, er ikke koblet (kan være et annet kort med like siste fire siffer).'));
+    if (!N.scanned) { box.appendChild(metaEl('Ingen skannede salg med kortdata. Kort leses fra skanning versjon 6.')); return; }
+    box.appendChild(metaEl(N.scanned + ' av ' + N.sales + ' salg er skannet med kortdata. ' + plur(N.groups.length, 'gruppe', 'grupper') + ' med minst tre ledd (medlemsnr og kort). ' + N.links + ' koblinger kort–medlemsnr er brukt; ' + N.weak + ' kort uten utstedernr som bare står én gang med et medlemsnr, er ikke koblet (kan være et annet kort med like siste fire siffer).'));
     if (!N.groups.length) return;
     var uniq = function (a) { return a.filter(function (x, i) { return a.indexOf(x) === i; }); };
     box.appendChild(tbl(['Medlemsnr', 'Kort', 'Bonger', 'Mest hos kasserer', 'Retur til kortene', 'Funn'], N.groups.slice(0, 15).map(function (g) {
@@ -2514,39 +2521,39 @@
 
   function renderLappCard(R) {
     var box = ui.ctlLapp, P = R.lapp;
-    if (!P.scanned) { box.appendChild(hintEl('Ingen skannede salg i valgte butikker. Skann og kjør analysen på nytt.')); return; }
-    box.appendChild(hintEl(P.scanned + ' av ' + P.sales + ' salg er skannet. Pantemaskin (kode 399): ' + P.mach.n + ' pantelapper, ' + fmt(P.mach.sum) + ' kr. Manuelt innlagt (kode 99): ' + P.man.n + ' pantelapper, ' + fmt(P.man.sum) + ' kr. Slettet: ' + P.del + '. Gjenbrukt: ' + P.reuse + '.'));
+    if (!P.scanned) { box.appendChild(metaEl('Ingen skannede salg i valgte butikker. Skann og kjør analysen på nytt.')); return; }
+    box.appendChild(metaEl(P.scanned + ' av ' + P.sales + ' salg er skannet. Pantemaskin (kode 399): ' + P.mach.n + ' pantelapper, ' + fmt(P.mach.sum) + ' kr. Manuelt innlagt (kode 99): ' + P.man.n + ' pantelapper, ' + fmt(P.man.sum) + ' kr. Slettet: ' + P.del + '. Gjenbrukt: ' + P.reuse + '.'));
     var rows = P.rows.filter(function (r) { return r.bongs || r.del || r.reuse; }).map(function (r) {
       return [{ node: entLink('kasserer', r.id) }, r.bongs, r.mach.n + ' · ' + fmt(r.mach.sum), { t: r.man.n + ' · ' + fmt(r.man.sum), bad: r.flag }, { t: pct(r.share), bad: r.flag }, r.del, r.reuse];
     });
     if (rows.length) {
       box.appendChild(tbl(['Kasserer', 'Bonger', 'Maskin 399', 'Manuell 99', 'Andel manuell', 'Slettet', 'Gjenbruk'], rows));
       box.appendChild(hintEl('Maskin og manuell vises som antall · kr. Maskin = «399 PANTELAPP», lest fra pantemaskinen. Manuell = «99 PANTELAPP», lagt inn for hånd. Rødt = minst ' + (ctlCfg.lappManualN || '–') + ' bonger med manuell pantelapp og andel over butikkens (' + pct(P.storeShare) + ') × ' + ctlCfg.profFactor + '. Slettet = en pantelapp og en motlinje med samme beløp på samme bong. Gjenbruk = samme sum (minst ' + ctlCfg.pantMin + ' kr) på ulike bonger innen ' + (ctlCfg.lappReuseMin || '–') + ' min, eller samme lappnummer hvis bongen viser det. Flaskepant fra andre butikker gir noen tilfeldige treff.'));
-    } else box.appendChild(hintEl('Ingen pantelapper i omfanget.'));
+    } else box.appendChild(metaEl('Ingen pantelapper i omfanget.'));
   }
 
   function renderLinesCard(R) {
     var box = ui.ctlLines, V = R.voids, S = R.special, A = R.ask, C = R.card, M = R.manual;
     box.appendChild(el('b', { class: 'kvr-subh', text: 'Slettede og makulerte linjer' }));
-    box.appendChild(hintEl(V.scanned + ' av ' + V.sales + ' salg skannet. ' + plur(V.voided, 'varelinje', 'varelinjer') + ' slettet på ' + plur(V.bongs, 'bong', 'bonger') + ', ' + V.combos + ' av dem med pant og kontant tilbake. ' +
+    box.appendChild(metaEl(V.scanned + ' av ' + V.sales + ' salg skannet. ' + plur(V.voided, 'varelinje', 'varelinjer') + ' slettet på ' + plur(V.bongs, 'bong', 'bonger') + ', ' + V.combos + ' av dem med pant og kontant tilbake. ' +
       (V.applicable ? 'Makulerte EAN-varer: ' + V.resold + ' solgt på nytt ' + (ctlCfg.voidResaleDay ? 'i butikken samme dag' : 'innen ' + (ctlCfg.voidResaleMin || '–') + ' min') + ', ' + V.unresolved + ' ikke' + (V.inShrink ? ' (' + V.inShrink + ' av dem registrert som svinn samme dag)' : '') + '.' : 'Gjensalg vurderes ikke: under 80 % av salgene er skannet.')));
     var vrows = V.rows.filter(function (r) { return r.lines; }).map(function (r) { return [{ node: entLink('kasserer', r.id) }, r.sales, { t: r.lines, bad: r.flag }, r.unresolved, r.combos]; });
     if (vrows.length) box.appendChild(tbl(['Kasserer', 'Salg', 'Slettet', 'Uten gjensalg', 'Pant+kontant'], vrows));
     box.appendChild(el('b', { class: 'kvr-subh', text: 'Spesialbetalinger' }));
-    if (!S.words.length) box.appendChild(hintEl('Av: ordlisten er tom under Innstillinger.'));
+    if (!S.words.length) box.appendChild(metaEl('Av: ordlisten er tom under Innstillinger.'));
     else {
-      box.appendChild(hintEl(S.hits + ' av ' + S.scanned + ' skannede bonger har ett av ordene: ' + S.words.join(', ') + '.'));
+      box.appendChild(metaEl(S.hits + ' av ' + S.scanned + ' skannede bonger har ett av ordene: ' + S.words.join(', ') + '.'));
       var wr = Object.keys(S.byWord).map(function (w) { return [{ node: btn(w.charAt(0).toUpperCase() + w.slice(1), function () { filters.special = w; writeForm(); apply(); say('Viser kvitteringer med «' + w + '».'); }, 'kvr-ent') }, S.byWord[w].bongs, fmt(S.byWord[w].sum)]; });
       if (wr.length) box.appendChild(tbl(['Ord', 'Bonger', 'Beløp kr'], wr));
       if (S.rows.length) box.appendChild(tbl(['Kasserer', 'Bonger'], S.rows.map(function (r) { return [{ node: entLink('kasserer', r.id) }, { t: r.n, bad: r.flag }]; })));
     }
     box.appendChild(el('b', { class: 'kvr-subh', text: 'Spør pris' }));
-    box.appendChild(hintEl('Spør pris: ' + plur(A.lines, 'linje', 'linjer') + ' funnet (' + A.noRef + ' uten sammenligningsgrunnlag samme dag), ' + A.deviating + ' avviker minst ' + (ctlCfg.askDevPct || '–') + ' % fra dagens salg. ' + A.evOnly + ' bonger har ordet «spør pris» uten at linjen er identifisert. Formatet er ikke bekreftet i ekte data.'));
+    box.appendChild(metaEl('Spør pris: ' + plur(A.lines, 'linje', 'linjer') + ' funnet (' + A.noRef + ' uten sammenligningsgrunnlag samme dag), ' + A.deviating + ' avviker minst ' + (ctlCfg.askDevPct || '–') + ' % fra dagens salg. ' + A.evOnly + ' bonger har ordet «spør pris» uten at linjen er identifisert. Formatet er ikke bekreftet i ekte data.'));
     if (A.rows.length) box.appendChild(tbl(['Kasserer', 'Bonger', 'Avvikende'], A.rows.map(function (r) { return [{ node: entLink('kasserer', r.id) }, { t: r.n, bad: r.flag }, r.dev]; })));
     box.appendChild(el('b', { class: 'kvr-subh', text: 'Returer på samme kort' }));
-    if (!C.scanned) box.appendChild(hintEl('Ingen salg med kortdata. Kortnummer leses først i skanning versjon 6: bruk «Skann på nytt» under Bongregnskap.'));
+    if (!C.scanned) box.appendChild(metaEl('Ingen salg med kortdata. Kortnummer leses først i skanning versjon 6: bruk «Skann på nytt» under Bongregnskap.'));
     else {
-      box.appendChild(hintEl(C.returns + ' returer blant ' + C.scanned + ' skannede salg, ' + C.withCard + ' med kort på bongen. Samme kort = samme leverandør og samme kortnummer slik det er trykt (siste fire siffer, eventuelt utsteder). Formatet er ikke bekreftet i ekte data.'));
+      box.appendChild(metaEl(C.returns + ' returer blant ' + C.scanned + ' skannede salg, ' + C.withCard + ' med kort på bongen. Samme kort = samme leverandør og samme kortnummer slik det er trykt (siste fire siffer, eventuelt utsteder). Formatet er ikke bekreftet i ekte data.'));
       var cr = C.rows.filter(function (r) { return r.n > 1; }).slice(0, 10).map(function (r) { return [r.label, { t: r.n, bad: r.flag }, r.best, fmt(r.sum), Object.keys(r.cashiers).map(function (k) { return k + ' ×' + r.cashiers[k]; }).join(', ')]; });
       if (cr.length) box.appendChild(tbl(['Kort', 'Returer', 'Innen ' + ctlCfg.cardRetDays + ' d', 'Sum kr', 'Kasserer'], cr));
     }
@@ -2559,29 +2566,29 @@
       return [{ node: btn(L.schemeLabel(k) + (open ? ' (åpen retur)' : ''), function () { filters.cardRet = k || '?'; writeForm(); apply(); say('Viser returer til ' + L.schemeLabel(k) + '.'); }, 'kvr-ent') }, { t: C.refunds[k].n, bad: open }, fmt(C.refunds[k].sum)];
     })));
     box.appendChild(el('b', { class: 'kvr-subh', text: 'Manuell kvittering og til gode-lapp' }));
-    box.appendChild(hintEl(M.words.length ? M.manual + ' bonger med ordene «' + M.words.join('», «') + '» blant ' + M.scanned + ' skannede; ' + M.findings.length + ' har samme beløp som en annen bong innen ' + ctlCfg.manualDays + ' dager. Ordene er ikke bekreftet i ekte data; se Diagnostikk.' : 'Av: ordlisten er tom under Innstillinger.'));
+    box.appendChild(metaEl(M.words.length ? M.manual + ' bonger med ordene «' + M.words.join('», «') + '» blant ' + M.scanned + ' skannede; ' + M.findings.length + ' har samme beløp som en annen bong innen ' + ctlCfg.manualDays + ' dager. Ordene er ikke bekreftet i ekte data; se Diagnostikk.' : 'Av: ordlisten er tom under Innstillinger.'));
     renderTempo(box, R.tempo);
     renderWatch(box, R.watch);
     renderRetReason(box, R.retR);
     renderRetEan(box, R.retEan);
-    box.appendChild(hintEl('Kortdata krever ny skanning: bruk «Skann på nytt» under Bongregnskap og referanser. Ukjente linjer og ord finner du i Diagnostikk under Pris, kjøpeutbytte og hendelser.'));
+    box.appendChild(metaEl('Kortdata krever ny skanning: bruk «Skann på nytt» under Bongregnskap og referanser. Ukjente linjer og ord finner du i Diagnostikk under Pris, kjøpeutbytte og hendelser.'));
   }
 
   function renderTempo(box, T) {
     box.appendChild(el('b', { class: 'kvr-subh', text: 'Tempo: tid mellom bonger' }));
-    if (!T.sales) { box.appendChild(hintEl('Ingen salg med klokkeslett i omfanget.')); return; }
+    if (!T.sales) { box.appendChild(metaEl('Ingen salg med klokkeslett i omfanget.')); return; }
     var how = T.secOK
       ? 'Listen viser sekunder (' + pct(T.secShare) + ' av bongene). ' + (T.gapOn ? T.series + ' serier på ' + T.inSeries + ' bonger: minst ' + ctlCfg.paceN + ' bonger på samme kasse med høyst ' + ctlCfg.paceSec + ' s mellom.' : 'Serietesten er av.') + (T.minGap !== null ? ' Kortest tid mellom to bonger: ' + T.minGap + ' s.' : '')
       : 'Listen viser bare hele minutter (' + pct(T.secShare) + ' har sekunder). ' + (T.gapOn ? T.series + ' minutter med minst ' + ctlCfg.paceMinuteN + ' bonger på samme kasse.' : 'Testen er av.');
-    box.appendChild(hintEl(T.sales + ' salg. ' + how + ' ' + T.zero + ' bonger har sum 0,00 kr.'));
+    box.appendChild(metaEl(T.sales + ' salg. ' + how + ' ' + T.zero + ' bonger har sum 0,00 kr.'));
     if (T.rows.length) box.appendChild(tbl(['Kasserer', 'Serier', 'Bonger i serie', '0-kr-bonger'], T.rows.map(function (r) { return [{ node: entLink('kasserer', r.id) }, r.series, r.inSeries, { t: r.zero, bad: r.zeroFlag }]; })));
     box.appendChild(hintEl('Raske serier kan være kø med få varer, selvbetjening eller opprydding etter en feil. Se bongene før du konkluderer. Rødt = minst ' + (ctlCfg.zeroN || '–') + ' bonger på 0,00 kr.'));
   }
 
   function renderWatch(box, W) {
     box.appendChild(el('b', { class: 'kvr-subh', text: 'Overvåkede varer' }));
-    if (!W.terms.length) { box.appendChild(hintEl('Av: legg inn EAN eller del av navn under Innstillinger → Overvåkede varer (for eksempel tobakk, gavekort, energidrikk).')); return; }
-    box.appendChild(hintEl(W.bongs + ' av ' + W.scanned + ' skannede salg har varene: ' + W.terms.join(', ') + '.'));
+    if (!W.terms.length) { box.appendChild(metaEl('Av: legg inn EAN eller del av navn under Innstillinger → Overvåkede varer (for eksempel tobakk, gavekort, energidrikk).')); return; }
+    box.appendChild(metaEl(W.bongs + ' av ' + W.scanned + ' skannede salg har varene: ' + W.terms.join(', ') + '.'));
     var tr = Object.keys(W.byTerm).map(function (t) {
       var b = W.byTerm[t];
       return [{ node: btn(t, function () { filters.item = t; writeForm(); apply(); say('Viser kvitteringer med «' + t + '».'); }, 'kvr-ent') }, b.bongs, b.lines, fmt(b.sale), fmt(b.ret), fmt(b.del)];
@@ -2597,8 +2604,8 @@
     box.appendChild(el('b', { class: 'kvr-subh', text: 'Retur per årsak' }));
     var oldTxt = E.old ? ' ' + E.old + ' bonger med mulig retur er skannet med en eldre versjon som ikke leser årsaken.' : '';
     if (E.old) box.appendChild(el('div', { class: 'kvr-row' }, [btn('Skann returbonger på nytt (' + E.old + ')', rescanReturns)]));
-    if (!E.bongs) { box.appendChild(hintEl('Ingen returer av varer (utenom pant) blant ' + E.scanned + ' skannede salg.' + oldTxt)); return; }
-    box.appendChild(hintEl(E.bongs + ' bonger med ' + E.lines + ' returlinjer (' + fmt(E.sum) + ' kr) blant ' + E.scanned + ' skannede salg. ' +
+    if (!E.bongs) { box.appendChild(metaEl('Ingen returer av varer (utenom pant) blant ' + E.scanned + ' skannede salg.' + oldTxt)); return; }
+    box.appendChild(metaEl(E.bongs + ' bonger med ' + E.lines + ' returlinjer (' + fmt(E.sum) + ' kr) blant ' + E.scanned + ' skannede salg. ' +
       (E.words.length ? E.watched + ' bonger har overvåket årsak (' + E.words.join(', ') + ').' : 'Ingen overvåkede årsaker.') + oldTxt));
     box.appendChild(tbl(['Årsak', 'Bonger', 'Linjer', 'Kr', 'Kasserere'], E.reasons.slice(0, 15).map(function (r) {
       var name = r.name === L.NO_RET_REASON ? { t: r.name } : { node: btn(r.name + (r.known ? '' : ' (ukjent årsak)'), function () { filters.text = r.name; writeForm(); apply(); say('Viser kvitteringer med «' + r.name + '».'); }, 'kvr-ent') };
@@ -2613,29 +2620,29 @@
 
   function renderRetEan(box, E) {
     box.appendChild(el('b', { class: 'kvr-subh', text: 'Retur av vare uten kjøp' }));
-    if (!E.on) { box.appendChild(hintEl('Av: se Innstillinger → Retur av vare uten kjøp.')); return; }
+    if (!E.on) { box.appendChild(metaEl('Av: se Innstillinger → Retur av vare uten kjøp.')); return; }
     if (!E.applicable) { box.appendChild(hintEl('Ikke vurdert: bare ' + pct(E.coverage) + ' av salgene er skannet (krever minst 80 %). Skann alle salgene og kjør analysen på nytt.')); return; }
-    box.appendChild(hintEl(E.returns + ' returer med ' + E.lines + ' vare-linjer vurdert. ' + E.flagged + ' uten kjøp av samme vare (kort ' + E.byCard + ', medlem ' + E.byMember + ', samme dag ' + E.byDay + '). ' + E.short + ' ikke vurdert fordi mindre enn ' + (ctlCfg.retEanDays || '–') + ' dager er lastet før returen, ' + E.unlinked + ' uten kjøp å sammenligne med.'));
+    box.appendChild(metaEl(E.returns + ' returer med ' + E.lines + ' vare-linjer vurdert. ' + E.flagged + ' uten kjøp av samme vare (kort ' + E.byCard + ', medlem ' + E.byMember + ', samme dag ' + E.byDay + '). ' + E.short + ' ikke vurdert fordi mindre enn ' + (ctlCfg.retEanDays || '–') + ' dager er lastet før returen, ' + E.unlinked + ' uten kjøp å sammenligne med.'));
     if (E.rows.length) box.appendChild(tbl(['Når', 'Kasserer', 'Grunnlag', 'Linjer', 'Beløp kr'], E.rows.slice(0, 12).map(function (r) { return [r.when, { node: entLink('kasserer', r.cashier) }, r.basis, r.n, fmt(r.amt)]; })));
     box.appendChild(hintEl('Kortet eller medlemmet har andre kjøp i perioden, men ikke denne varen (EAN). Kunden kan ha kjøpt varen før perioden, kontant eller i en annen butikk, så dette er en indikasjon, ikke bevis.'));
   }
 
   function renderAcctCard(R) {
     var box = ui.ctlAcct, G = R.ledger;
-    box.appendChild(hintEl(G.scanned + ' av ' + G.sales + ' salg har ny skanning (' + G.withTot + ' med Totalt). Eldre skanninger mangler Totalt, MVA og betalingsreferanse.'));
-    box.appendChild(hintEl(calText('Linjer mot Totalt', G.lines)));
-    box.appendChild(hintEl(calText('Betaling mot Totalt', G.pay)));
-    box.appendChild(hintEl(calText('MVA-tabell (' + G.vat.tables + ' tabeller)', G.vat) + ' Ugyldig sats flagges uansett.'));
-    box.appendChild(hintEl(G.refs.n + ' betalingsreferanser lest, ' + G.refs.dup + ' brukt på flere bonger.'));
+    box.appendChild(metaEl(G.scanned + ' av ' + G.sales + ' salg har ny skanning (' + G.withTot + ' med Totalt). Eldre skanninger mangler Totalt, MVA og betalingsreferanse.'));
+    box.appendChild(metaEl(calText('Linjer mot Totalt', G.lines)));
+    box.appendChild(metaEl(calText('Betaling mot Totalt', G.pay)));
+    box.appendChild(metaEl(calText('MVA-tabell (' + G.vat.tables + ' tabeller)', G.vat) + ' Ugyldig sats flagges uansett.'));
+    box.appendChild(metaEl(G.refs.n + ' betalingsreferanser lest, ' + G.refs.dup + ' brukt på flere bonger.'));
     var H = R.hdr;
     box.appendChild(el('b', { class: 'kvr-subh', text: 'Topptekst og bunn' }));
-    if (!H.scanned) box.appendChild(hintEl('Ingen salg med topptekst og bunn. Bruk «Skann på nytt» (versjon 7).'));
+    if (!H.scanned) box.appendChild(metaEl('Ingen salg med topptekst og bunn. Bruk «Skann på nytt» (versjon 7).'));
     else {
-      box.appendChild(hintEl(H.withHdr + ' av ' + H.scanned + ' skannede salg har lest topptekst (' + Object.keys(H.fields).map(function (k) {
+      box.appendChild(metaEl(H.withHdr + ' av ' + H.scanned + ' skannede salg har lest topptekst (' + Object.keys(H.fields).map(function (k) {
         var f = H.fields[k];
         return f.name + ': ' + (f.n ? f.ok + ' av ' + f.n + ' stemmer med listen (' + pct(f.rate) + ')' + (f.trusted ? '' : ', ikke kalibrert') : 'ingen lest');
       }).join('; ') + '). ' + H.withFt + ' har tekst fra kortterminalen, ' + H.withAuth + ' med autorisasjonskode, ' + H.auth + ' koder brukt på flere bonger.'));
-      box.appendChild(hintEl('Feltet kontrolleres bare når minst 90 % av minst 10 bonger stemmer fra før. Formatet er ikke bekreftet i ekte data: se Diagnostikk for linjene som ikke gjenkjennes.'));
+      box.appendChild(metaEl('Feltet kontrolleres bare når minst 90 % av minst 10 bonger stemmer fra før. Formatet er ikke bekreftet i ekte data: se Diagnostikk for linjene som ikke gjenkjennes.'));
     }
     var old = oldScans().length;
     if (old) box.appendChild(el('div', { class: 'kvr-row' }, [btn('Skann på nytt (' + old + ' eldre)', rescanOld)]));
@@ -2646,9 +2653,9 @@
     var box = ui.ctlCwx, C = R.cw, S = R.shift, P = R.copy, W = R.shrink;
     var getBtn = function () { return el('div', { class: 'kvr-row' }, [btn('Hent tilleggsdata fra CW', function () { fetchCwExtra(); }), btn('Til Hent', function () { ui.go('cw'); }, 'kvr-sm')]); };
     box.appendChild(el('b', { class: 'kvr-subh', text: 'Innhold og betaling ifølge CWs filtre' }));
-    if (!C.on) { box.appendChild(hintEl('Ikke hentet. «Hent tilleggsdata fra CW» bruker CWs egne filtre på søket i listen og merker bongene med innhold og betaling. Kjør analysen på nytt etterpå.')); box.appendChild(getBtn()); }
+    if (!C.on) { box.appendChild(metaEl('Ikke hentet. «Hent tilleggsdata fra CW» bruker CWs egne filtre på søket i listen og merker bongene med innhold og betaling. Kjør analysen på nytt etterpå.')); box.appendChild(getBtn()); }
     else {
-      box.appendChild(hintEl(C.tagged + ' av ' + C.sales + ' salg er merket av CWs filtre. ' + C.combos + ' bonger har en kombinasjon som flagges.' + (cwx && cwx.runs[0] && cwx.runs[0].cut ? ' Søket var kuttet ved 1000 bonger; tallene gjelder bongene i listen.' : '')));
+      box.appendChild(metaEl(C.tagged + ' av ' + C.sales + ' salg er merket av CWs filtre. ' + C.combos + ' bonger har en kombinasjon som flagges.' + (cwx && cwx.runs[0] && cwx.runs[0].cut ? ' Søket var kuttet ved 1000 bonger; tallene gjelder bongene i listen.' : '')));
       if (C.tags.length) box.appendChild(tbl(['Innhold', 'Bonger', 'Andel av salg'], C.tags.map(function (t) { return [t.tag.replace(/^Betaling: /, 'Betaling: '), t.n, pct(C.sales ? t.n / C.sales : 0)]; })));
       var cols = C.tags.filter(function (t) { return t.rate; }).slice(0, 6).map(function (t) { return t.tag; });
       var rows = C.rows.filter(function (r) { return cols.some(function (t) { return r.cells[t].n; }); });
@@ -2658,18 +2665,18 @@
       box.appendChild(hintEl('Rødt = minst ' + (ctlCfg.cwRateN || '–') + ' bonger og minst ' + ctlCfg.profFactor + '× andelen hos de andre kassererne i samme kanal (eller i butikken). Kontant, kreditt, finansiering og skannet pant sammenlignes ikke. Merkingen er CWs egen; se bongene før du konkluderer.'));
     }
     box.appendChild(el('b', { class: 'kvr-subh', text: 'Innlogging og utlogging' }));
-    if (!S.hasLogins) box.appendChild(hintEl('Ingen innlogginger i grunnlaget. De hentes med «Hent tilleggsdata fra CW».' + (S.dual ? ' ' + S.dual + ' kasserere har salg på to betjente kasser om hverandre (se funn).' : '')));
+    if (!S.hasLogins) box.appendChild(metaEl('Ingen innlogginger i grunnlaget. De hentes med «Hent tilleggsdata fra CW».' + (S.dual ? ' ' + S.dual + ' kasserere har salg på to betjente kasser om hverandre (se funn).' : '')));
     else {
-      box.appendChild(hintEl(S.logins + ' innlogginger og ' + S.logouts + ' utlogginger gir ' + S.sessions.length + ' økter. ' + S.short + ' korte innlogginger med retur eller sletting, ' + S.dual + ' kasserere med salg på to betjente kasser om hverandre.'));
+      box.appendChild(metaEl(S.logins + ' innlogginger og ' + S.logouts + ' utlogginger gir ' + S.sessions.length + ' økter. ' + S.short + ' korte innlogginger med retur eller sletting, ' + S.dual + ' kasserere med salg på to betjente kasser om hverandre.'));
       if (S.rows.length) box.appendChild(tbl(['Kasserer', 'Økter', 'Tid innlogget', 'Korteste', 'Kasser', 'Kort med retur/sletting'], S.rows.map(function (r) {
         return [{ node: entLink('kasserer', r.id) }, r.sessions, (r.minutes / 60).toFixed(1).replace('.', ',') + ' t', r.shortest === null ? '–' : r.shortest + ' min', r.kasser.join(', '), { t: r.short, bad: r.short > 0 }];
       })));
       box.appendChild(hintEl('En økt varer fra innlogging til utlogging eller neste innlogging på samme kasse. Kort = høyst ' + (ctlCfg.shortMin || '–') + ' min med høyst ' + ctlCfg.shortSales + ' salg.'));
     }
     box.appendChild(el('b', { class: 'kvr-subh', text: 'Bongkopier' }));
-    if (!P.n) box.appendChild(hintEl('Ingen bongkopier i grunnlaget. De hentes med «Hent tilleggsdata fra CW».'));
+    if (!P.n) box.appendChild(metaEl('Ingen bongkopier i grunnlaget. De hentes med «Hent tilleggsdata fra CW».'));
     else {
-      box.appendChild(hintEl(P.n + ' bongkopier. ' + P.found + ' av de opprinnelige bongene står i listen. ' + P.ret + ' kopier er fulgt av en retur.'));
+      box.appendChild(metaEl(P.n + ' bongkopier. ' + P.found + ' av de opprinnelige bongene står i listen. ' + P.ret + ' kopier er fulgt av en retur.'));
       box.appendChild(tbl(['Når', 'Kasse', 'Kasserer', 'Kopi av bong', 'Opprinnelig', 'Retur etterpå'], P.copies.slice(0, 15).map(function (x) {
         var o = x.orig;
         return [x.copy.endDateTime.slice(5), x.copy.workstationNumber, { node: entLink('kasserer', x.copy.cashierNumber) }, x.ref || '–',
@@ -2678,9 +2685,9 @@
       })));
     }
     box.appendChild(el('b', { class: 'kvr-subh', text: 'Synlig svinn og internt forbruk' }));
-    if (!W.n) box.appendChild(hintEl('Ingen bonger med synlig svinn eller internt forbruk i omfanget. I CW hører de til bongtypen Varetransaksjoner.'));
+    if (!W.n) box.appendChild(metaEl('Ingen bonger med synlig svinn eller internt forbruk i omfanget. I CW hører de til bongtypen Varetransaksjoner.'));
     else {
-      box.appendChild(hintEl(W.n + ' registreringer, til sammen ' + fmt(W.kr) + ' kr (' + Object.keys(W.byType).map(function (k) { return k.toLowerCase() + ' ' + W.byType[k].n + ' · ' + fmt(W.byType[k].kr) + ' kr'; }).join(', ') + '). ' + W.scanned + ' av ' + W.n + ' er skannet; varene leses bare fra skannede bonger.'));
+      box.appendChild(metaEl(W.n + ' registreringer, til sammen ' + fmt(W.kr) + ' kr (' + Object.keys(W.byType).map(function (k) { return k.toLowerCase() + ' ' + W.byType[k].n + ' · ' + fmt(W.byType[k].kr) + ' kr'; }).join(', ') + '). ' + W.scanned + ' av ' + W.n + ' er skannet; varene leses bare fra skannede bonger.'));
       box.appendChild(tbl(['Registrert av', 'Bonger', 'Kr', 'Varelinjer', 'Flagget'], W.rows.map(function (r) { return [{ node: entLink('kasserer', r.id) }, r.n, fmt(r.kr), r.lines, { t: r.flags, bad: r.flags > 0 }]; })));
       if (W.items.length) box.appendChild(tbl(['Vare', 'EAN', 'Linjer', 'Kr'], W.items.slice(0, 10).map(function (e) { return [e.n, e.c, e.lines, fmt(e.kr)]; })));
       box.appendChild(hintEl('Svinn er ofte helt i orden (utgått dato, knust vare). Se etter mønstre: overvåkede varer, samme vare som er returnert samme dag, store beløp og registreringer utenom åpningstid.'));
@@ -2689,7 +2696,7 @@
 
   function renderAuditCards(R) {
     var D = R.diff;
-    if (!D || !D.rows.length) ui.ctlDiff.appendChild(hintEl('Ingen skannede kassaoppgjør i omfanget. Skann og kjør analysen på nytt.'));
+    if (!D || !D.rows.length) ui.ctlDiff.appendChild(metaEl('Ingen skannede kassaoppgjør i omfanget. Skann og kjør analysen på nytt.'));
     else {
       ui.ctlDiff.appendChild(tbl(['Enhet', 'Oppgjør', 'Minus', 'Pluss', 'Sum minus', 'Netto', 'Siste differanser'], D.rows.map(function (e) {
         return [{ node: entLink(e.kind, e.id) }, e.n, { t: e.minus, bad: e.flag }, e.plus, { t: fmt(e.sumMinus), bad: e.flag }, fmt(e.net),
@@ -2723,6 +2730,39 @@
     ui.ctlNum.appendChild(hintEl('MAD under 0,006 er nær Benford, 0,006–0,012 akseptabel, 0,012–0,015 marginal, over 0,015 avvikende (Nigrini). Avvik er en indikasjon som må forklares, ikke et bevis. Kasserere med færre enn ' + ctlCfg.benfordCashMin + ' bonger vurderes ikke.'));
   }
 
+  // Detaljer viser bare kort med funn eller rød markering; resten og dekningstekstene kommer med «Vis alt».
+  function tidyResults(R) {
+    var kinds = {};
+    R.findings.forEach(function (f) { kinds[f.kind] = (kinds[f.kind] || 0) + 1; });
+    var clean = [];
+    ui.ctlJump.innerHTML = '';
+    ui.resCards.forEach(function (c) {
+      var card = c[2], n = c[3] === null ? R.findings.length : c[3].reduce(function (a, k) { return a + (kinds[k] || 0); }, 0);
+      if (c[3] !== null) n += card.querySelectorAll('.kvr-bad').length;
+      card.classList.toggle('kvr-nohit', !n);
+      card.querySelectorAll('b.kvr-subh').forEach(function (h) {
+        var only = true;
+        for (var x = h.nextElementSibling; x && !(x.tagName === 'B' && x.classList.contains('kvr-subh')); x = x.nextElementSibling) if (!x.classList.contains('kvr-meta')) { only = false; break; }
+        h.classList.toggle('kvr-meta', only);
+      });
+      if (!n) { clean.push(c[1]); return; }
+      ui.ctlJump.appendChild(btn(c[1] + ' ' + n, function () {
+        var s = openSec(c[0]);
+        if (s) s.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      }, 'kvr-chip'));
+    });
+    ui.ctlClean.textContent = clean.length ? 'Uten funn: ' + clean.join(', ') + '.' : '';
+  }
+
+  function setShowAll(on) {
+    showAll = !!on;
+    store(K.showall, showAll);
+    var p = document.getElementById('kvr-panel');
+    if (p) p.classList.toggle('kvr-showall', showAll);
+    if (ui.showAllBtn) ui.showAllBtn.textContent = showAll ? 'Vis bare funn' : 'Vis alt';
+    if (showAll) foldAll(true);
+  }
+
   function renderControl() {
     if (!ui.ctlProfile) return;
     var R = ctlRes;
@@ -2736,7 +2776,7 @@
     var pantFlag = R.pant.balance.filter(function (b) { return b.flag; }).length;
     ui.ctlSum.textContent = R.findings.length + ' funn · ' + Object.keys(anomMap).length + ' flaggede bonger · ' + profFlag + ' kasserere avviker · ' + reconFlag + ' avstemmingsavvik · ' + pantFlag + ' pantavvik' + (R.disc && R.disc.camp && R.disc.camp.pending ? ' · ' + R.disc.camp.pending + ' kampanjer å bekrefte' : '');
     // kassererprofil
-    if (!R.profile.rows.length) ui.ctlProfile.appendChild(hintEl('Ingen salg blant synlige kvitteringer.'));
+    if (!R.profile.rows.length) ui.ctlProfile.appendChild(metaEl('Ingen salg blant synlige kvitteringer.'));
     else {
       var st = R.profile.store, chs = R.profile.channels || [], multi = chs.length > 1;
       var avgRow = function (name, m, last) { return [name, m.count, pct(m.retShare), fmt(m.avg), m.scanned ? m.lapperPer.toFixed(2) : '–', m.scanned ? m.negPer.toFixed(2) : '–'].concat(multi ? [last] : []); };
@@ -2751,7 +2791,7 @@
       ui.ctlProfile.appendChild(hintEl('Rødt = minst ' + ctlCfg.profFactor + '× ' + refTxt + ' (snitt også under 1/' + ctlCfg.profFactor + '). Returandel = salg med negativ sum, uten rene pantereturer. Manuell pant = pantelapper med kode 99. Den og korrigeringer (negative varelinjer utenom pant, og linjer merket slettet) krever skanning. Kasserere med færre enn ' + ctlCfg.profMin + ' bonger vurderes ikke.' + (ctlCfg.profShrink ? ' Tallene krympes mot snittet (som ' + ctlCfg.profShrink + ' bonger), så få bonger gir små utslag.' : '')));
     }
     // funn
-    if (!R.findings.length) ui.ctlFindings.appendChild(hintEl('Ingen funn med gjeldende terskler.'));
+    if (!R.findings.length) ui.ctlFindings.appendChild(metaEl('Ingen funn med gjeldende terskler.'));
     R.findings.forEach(function (f) {
       var row = el('div', { class: 'kvr-li kvr-fl' + (f.flag ? '' : ' kvr-na') }, [el('div', { class: 'kvr-fl-t' }, [el('b', { text: f.kind + ': ' + f.title }), el('span', { text: f.detail })])]);
       var people = {}, desks = {};
@@ -2769,9 +2809,9 @@
       }, 'kvr-sm'));
       ui.ctlFindings.appendChild(row);
     });
-    ui.ctlFindings.appendChild(hintEl('Funn merket som avvik får rød markering og vises under «Kun avvik».'));
+    ui.ctlFindings.appendChild(metaEl('Funn merket som avvik får rød markering og vises under «Kun avvik».'));
     // pantebalanse
-    if (!R.pant.balance.length) ui.ctlPant.appendChild(hintEl('Ingen skannede salg.'));
+    if (!R.pant.balance.length) ui.ctlPant.appendChild(metaEl('Ingen skannede salg.'));
     else {
       ui.ctlPant.appendChild(tbl(['Dag', 'Butikk', 'Pant salg', 'Pantelapper ut', 'Diff'], R.pant.balance.map(function (b) {
         return [b.day, L.storeShort(b.store), fmt(b.sale), { t: fmt(b.ret), bad: b.flag }, fmt(b.diff)];
@@ -2779,7 +2819,7 @@
       ui.ctlPant.appendChild(hintEl('Rødt = utbetalt panteretur er over ' + ctlCfg.pantRatio + '× pantesalget samme dag. Pantelapper kan stamme fra flasker kjøpt andre steder, så vurder over flere dager.'));
     }
     // dagsavstemming
-    if (!R.recon.length) ui.ctlRecon.appendChild(hintEl('Ingen skannede salg eller kassaoppgjør.'));
+    if (!R.recon.length) ui.ctlRecon.appendChild(metaEl('Ingen skannede salg eller kassaoppgjør.'));
     else {
       ui.ctlRecon.appendChild(tbl(['Dag', 'Kasse', 'Kontant', 'Tilbake', 'Bank/kort', 'Forventet', 'Telt', 'Diff'], R.recon.map(function (r) {
         return [r.day, { node: entLink('kasse', r.kasse, String(r.kasse)) }, fmt(r.pay['Kontant'] || 0), fmt(r.pay['Kontant tilbake'] || 0), fmt(r.pay['Bank'] || 0), fmt(r.expected),
@@ -2788,6 +2828,7 @@
       ui.ctlRecon.appendChild(hintEl('Forventet = kontant − kontant tilbake fra skannede salg. Telt = telt kontant i kassaoppgjør samme dag og kasse. Diff = telt − forventet. * = ikke alle salg er skannet. Oppgjør etter midnatt eller samlet over flere dager gir falske avvik. Rapport-fanens «Diff» er oppgjørets egen differanse.'));
     }
     renderAuditCards(R);
+    tidyResults(R);
   }
 
   // ---- modal ------------------------------------------------------------------
@@ -4787,6 +4828,7 @@
 
   function buildPanel() {
     var panel = el('div', { id: 'kvr-panel' });
+    if (showAll) panel.classList.add('kvr-showall');
     panelEl = panel;
 
     ui.badge = el('span', { class: 'kvr-badge', text: 'ingen filter' });
@@ -4808,6 +4850,7 @@
 
     var t1 = tile('Viser'), t2 = tile('Valgt'), t3 = tile('Sum valgt (kr)'), t4 = tile('Duplikater');
     ui.stVisible = t1.value; ui.stSelected = t2.value; ui.stSum = t3.value; ui.stDup = t4.value;
+    ui.tSel = [t2.node, t3.node]; ui.tDup = t4.node;
     ui.pantLine = el('div', { class: 'kvr-pantline', text: '' });
     ui.bar = el('div', { class: 'kvr-bar' });
     ui.barWrap = el('div', { class: 'kvr-barwrap', style: 'display:none' }, [ui.bar]);
@@ -5104,15 +5147,15 @@
     secCwx.classList.add('kvr-span');
     ui.ctlSum = el('div', { class: 'kvr-ctlsum' });
     ui.ctlJump = el('div', { class: 'kvr-chips' });
-    [['profile', 'Profil'], ['findings', 'Funn'], ['pantbal', 'Pant'], ['recon', 'Avstemming'], ['diff', 'Differanse'], ['numbers', 'Tall'], ['disc', 'Rabatt'], ['member', 'Medlem'], ['net', 'Nettverk'], ['misc', 'Pris m.m.'], ['lapp', 'Pantelapper'], ['lines', 'Linjer m.m.'], ['acct', 'Regnskap'], ['cwx', 'Fra CW']].forEach(function (j) {
-      ui.ctlJump.appendChild(btn(j[1], function () {
-        var n = openSec(j[0]);
-        if (n) n.scrollIntoView({ block: 'start', behavior: 'smooth' });
-      }, 'kvr-chip'));
-    });
-    ui.ctlSumCard = section('ctlsum', 'Resultat', [ui.ctlSum, ui.ctlJump,
-      el('div', { class: 'kvr-row' }, [btn('Fold sammen alle', function () { foldAll(false); }, 'kvr-sm'), btn('Åpne alle', function () { foldAll(true); }, 'kvr-sm'), btn('⤢ Større', function () { ui.wideBtn.click(); }, 'kvr-sm')]),
-      hintEl('Tabellene har mange kolonner. «Større» (⤢ i tittelfeltet) gir plass til alle: Stor dokker panelet til høyre og beholder lista i Lindbak, Full bruker hele skjermen.')]);
+    ui.ctlClean = hintEl('');
+    ui.showAllBtn = btn(showAll ? 'Vis bare funn' : 'Vis alt', function () { setShowAll(!showAll); }, 'kvr-sm');
+    ui.ctlSumCard = section('ctlsum', 'Resultat', [ui.ctlSum, ui.ctlJump, ui.ctlClean, el('div', { class: 'kvr-row' }, [ui.showAllBtn])]);
+    ui.resCards = [['profile', 'Profil', secProfile, []], ['findings', 'Funn', secFindings, null], ['cwx', 'Fra CW', secCwx, ['Fra CW', 'Innlogging', 'Bongkopi', 'Svinn']],
+      ['pantbal', 'Pant', secPantBal, []], ['recon', 'Avstemming', secRecon, []], ['diff', 'Differanse', secDiff, ['Kassadifferanse']], ['numbers', 'Tall', secNum, ['Tallanalyse']],
+      ['disc', 'Rabatt', secDisc, ['Rabatt']], ['member', 'Medlem', secMember, ['Medlem']], ['net', 'Nettverk', secNet, ['Nettverk']],
+      ['misc', 'Pris m.m.', secMisc, ['Pris', 'Kjøpeutbytte', 'Hendelse', 'Maskinlæring']], ['lapp', 'Pantelapper', secLapp, ['Pantelapp']],
+      ['lines', 'Linjer m.m.', secLines, ['Slettede linjer', 'Kort', 'Spesialbetaling', 'Overvåket vare', 'Retur av vare', 'Retur', 'Spør pris', 'Manuell kvittering', 'Tempo']],
+      ['acct', 'Regnskap', secAcct, ['Regnskap', 'Topptekst', 'Sekvens']]];
     ui.ctlResults = el('div', { class: 'kvr-pane' }, [secProfile, secFindings, secCwx, secPantBal, secRecon, secDiff, secNum, secDisc, secMember, secNet, secMisc, secLapp, secLines, secAcct]);
     ui.noteList = el('div', { class: 'kvr-list' });
     ui.noteCount = hintEl('');
@@ -5281,7 +5324,7 @@
       ['charts', 'Diagram', [ui.chartsBody]],
       ['report', 'Rapport', [secReport, secSettle]],
       ['focus', 'Fokus', [ui.focusBody]],
-      ['details', 'Detaljer', [ui.ctlSumCard, secChecks, ui.ctlResults, secAnom, secCustom, secTasks, secNotes]]
+      ['details', 'Detaljer', [ui.ctlSumCard, ui.ctlResults, secChecks, secAnom, secCustom, secTasks, secNotes]]
     ];
     ui.subBtns = {}; ui.subPanes = {};
     var subNav = el('div', { class: 'kvr-subnav', role: 'tablist' });
@@ -5330,6 +5373,7 @@
     tabKeys(moreNav);
     tabKeys(subNav);
 
+    secChecks.classList.add('kvr-adv'); secAnom.classList.add('kvr-adv');
     var tabDefs = [
       ['cw', 'Hent', [hintEl('Henter nye kvitteringer fra Lindbak (hele journalen). Resultatet kan så filtreres under «Filtrer».'), secCw, secParts]],
       ['filter', 'Filtrer', [hintEl('Filtrerer kvitteringene som allerede er listet. Ingenting hentes på nytt.'), secStore, secTime, secContent, secWho, secSum, secSaved]],
@@ -5383,7 +5427,7 @@
         recs.forEach(function (r) { if (r.show) selected[r.item.transactionId] = r.item; });
         apply();
       }),
-      btn('Fjern valg', function () { selected = {}; apply(); }),
+      ui.footClear = btn('Fjern valg', function () { selected = {}; apply(); }),
       ui.footCmp,
       ui.footCsv,
       ui.footPng
@@ -5503,6 +5547,7 @@
         store(K.campmig, 1);
       }
       keyNav = store(K.keynav) !== false;
+      showAll = store(K.showall) === true;
       timeShift = Number(store(K.tshift)) || 0;
       weights = L.sanitizeWeights(store(K.weights));
       if (!store(K.evmig)) {

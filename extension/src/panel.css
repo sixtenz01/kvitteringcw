@@ -26,8 +26,8 @@
 
 /* status */
 #kvr-panel .kvr-stats{padding:10px 12px;background:var(--kv-soft);border-bottom:1px solid var(--kv-line)}
-#kvr-panel .kvr-tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
-#kvr-panel .kvr-tile{background:#fff;border:1px solid var(--kv-line);border-radius:10px;padding:6px 4px;text-align:center;min-width:0}
+#kvr-panel .kvr-tiles{display:flex;gap:6px}
+#kvr-panel .kvr-tile{flex:1 1 0;background:#fff;border:1px solid var(--kv-line);border-radius:10px;padding:6px 4px;text-align:center;min-width:0}
 #kvr-panel .kvr-tile b{display:block;font-size:15px;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #kvr-panel .kvr-tile span{display:block;font-size:10px;color:var(--kv-muted)}
 #kvr-panel .kvr-pantline{margin-top:6px;font-size:11px;color:var(--kv-muted)}
@@ -146,7 +146,7 @@ tr.kvr-follow>td.kvr-cb-cell::after{color:#e37400}
 #kvr-panel.kvr-big .kvr-stats .kvr-tile,#kvr-panel.kvr-full .kvr-stats .kvr-tile{padding:3px 4px}
 #kvr-panel.kvr-big .kvr-stats .kvr-first,#kvr-panel.kvr-full .kvr-stats .kvr-first,#kvr-panel.kvr-big .kvr-stats .kvr-barwrap,#kvr-panel.kvr-full .kvr-stats .kvr-barwrap{flex:1 1 100%}
 #kvr-panel.kvr-big .kvr-small th,#kvr-panel.kvr-big .kvr-small td,#kvr-panel.kvr-full .kvr-small th,#kvr-panel.kvr-full .kvr-small td{font-size:12.5px;padding:4px 6px}
-#kvr-panel.kvr-big .kvr-tiles,#kvr-panel.kvr-full .kvr-tiles{grid-template-columns:repeat(4,minmax(120px,1fr))}
+#kvr-panel.kvr-big .kvr-tile,#kvr-panel.kvr-full .kvr-tile{min-width:120px}
 .kvr-bigui .kvr-dlg{width:min(1180px,100%)}
 #kvr-panel .kvr-small th,#kvr-panel .kvr-small td{font-size:11.5px}
 #kvr-panel .kvr-tablewrap th{position:sticky;top:0;background:#fff;z-index:1;cursor:help}
@@ -359,3 +359,4 @@ tr.kvr-follow>td.kvr-cb-cell::after{color:#e37400}
 #kvr-panel .kvr-net-t{font-size:10px;fill:var(--kv-fg)}
 #kvr-panel .kvr-net-l{stroke:var(--kv-edge)}
 #kvr-panel .kvr-net-ret{stroke:var(--kv-warn)}
+#kvr-panel:not(.kvr-showall) .kvr-meta,#kvr-panel:not(.kvr-showall) .kvr-nohit,#kvr-panel:not(.kvr-showall) .kvr-adv{display:none}

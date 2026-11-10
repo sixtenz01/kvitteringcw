@@ -212,11 +212,12 @@ async function main() {
   if (want('detaljer')) {
     await go('Analyse', 'Detaljer'); await view(1000);
     await save('detaljer-topp');
-    await page.evaluate(() => { document.getElementById('kvr-panel').style.width = '860px'; });
+    // kortbildene i veiledningen viser alle kortene slik «Vis alt» gjør
+    await page.evaluate(() => { const p = document.getElementById('kvr-panel'); p.style.width = '860px'; p.classList.add('kvr-showall'); });
     for (const id of ['profile', 'findings', 'pantbal', 'recon', 'diff', 'numbers', 'disc', 'member', 'misc', 'lapp', 'lines', 'acct']) { await unfold(id); }
     for (const id of ['profile', 'findings', 'pantbal', 'recon', 'diff', 'numbers', 'disc', 'member', 'misc', 'lapp', 'lines', 'acct']) await cardShot('d-' + id, `[data-sec=${id}]`);
     await cardShot('d-anom', '[data-sec=anom]'); await cardShot('d-custom', '[data-sec=custom]'); await cardShot('d-tasks', '[data-sec=tasks]'); await cardShot('d-notes', '[data-sec=notes]');
-    await page.evaluate(() => { document.getElementById('kvr-panel').style.width = ''; });
+    await page.evaluate(() => { const p = document.getElementById('kvr-panel'); p.style.width = ''; p.classList.remove('kvr-showall'); });
   }
 
   if (want('stor')) {

@@ -65,7 +65,7 @@ render(ALL);
   await load();
   await analyse();
   await page.click('.kvr-sub:text-is("Detaljer")');
-  await page.click('button:text-is("Åpne alle")');
+  await page.evaluate(() => { const b = [...document.querySelectorAll('#kvr-panel button')].find(x => x.textContent === 'Vis alt'); if (b) b.click(); });
   const all = (await page.innerText('#kvr-panel')).replace(/\s+/g, ' ');
   assert.match(all, /Nettverk: Kort brukt med mange medlemsnr 5 medlemsnr \(M1, M2, M3, M4 …\) og 1 kort \(VISA …1111\) henger sammen på 11 bonger; kasserer K \(10\)\./);
   assert.match(all, /Nettverk: Retur til kort i kassererens nettverk Kasse 1 [\d:]+ kasserer K: 200\.00 kr tilbake til VISA …1111/);
@@ -89,7 +89,7 @@ render(ALL);
   await emp.fill('K=M3'); await emp.press('Tab');
   await analyse();
   await page.click('.kvr-sub:text-is("Detaljer")');
-  await page.click('button:text-is("Åpne alle")');
+  await page.evaluate(() => { const b = [...document.querySelectorAll('#kvr-panel button')].find(x => x.textContent === 'Vis alt'); if (b) b.click(); });
   assert.match((await page.innerText('#kvr-panel')).replace(/\s+/g, ' '), /Nettverk: Retur til kort knyttet til ansatt Kasse 1 [\d:]+ kasserer K: 200\.00 kr tilbake til VISA …1111, som er brukt med ansattnummer M3 \(kasserer K\)\./);
 
   assert.deepStrictEqual(errors, []);

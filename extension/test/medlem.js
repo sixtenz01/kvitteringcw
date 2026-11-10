@@ -77,7 +77,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   await go('Analyse', 'Sjekk først');
   await runAnalysis();
   await go('Analyse', 'Detaljer');
-  await page.click('button:text-is("Åpne alle")');
+  await page.evaluate(() => { const b = [...document.querySelectorAll('#kvr-panel button')].find(x => x.textContent === 'Vis alt'); if (b) b.click(); });
   const fnd = await txt('[data-sec=findings]');
   // medlemsnummer
   assert.match(fnd, /Medlem: Medlem i flere butikker samtidig Medlemsnr M1: butikk 1005 2026-10-06 10:00 og butikk 1010 10:15 \(innen 30 min\)/);

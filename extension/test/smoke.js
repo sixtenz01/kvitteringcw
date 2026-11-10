@@ -115,7 +115,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   await page.click('#kvr-select-all');
   assert.match(await tiles(), /5\s+Valgt/);
   await page.click('#kvr-select-all');
-  assert.match(await tiles(), /0\s+Valgt/);
+  assert.doesNotMatch(await tiles(), /Valgt/);
 
   await page.click('text=Negativ sum');
   assert.match(await page.innerText('.kvr-chipsrow'), /Negativ sum/);
@@ -135,11 +135,11 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   const chipTxt = await page.innerText('.kvr-chipsrow');
   for (const re of [/Negativ sum/, /Sortert: sum høyest/, /\d+ valgt/, /CW: .*vare «xyz»/]) assert.match(chipTxt, re);
   await page.click('.kvr-fchip:has-text("valgt")');
-  assert.match(await tiles(), /0\s+Valgt/);
+  assert.doesNotMatch(await tiles(), /Valgt/);
   await page.click('button:text-is("Velg alle")');
   await page.click('.kvr-chipsrow .kvr-link:text-is("Nullstill alt")');
   assert.strictEqual(await page.$$eval('.kvr-fchip', n => n.length), 0);
-  assert.match(await tiles(), /0\s+Valgt/);
+  assert.doesNotMatch(await tiles(), /Valgt/);
   assert.deepStrictEqual(await page.$$eval('tbody tr', t => t.map(x => x.getAttribute('data-id'))), ['t-1', 't-2', 't-3', 't-4', 't-5']);
   assert.strictEqual(await page.inputValue('input[placeholder="EAN eller varenavn"]'), '');
   assert.ok((await page.evaluate(() => window.__reset)) >= 1, 'CW-filter nullstilt');
@@ -251,6 +251,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   assert.strictEqual(await page.$$eval('tr.kvr-flag', n => n.length), 0);
   await setting('bong', 'Stor panteretur fra', '200');
   await tab('Avvik');
+  await page.evaluate(() => document.getElementById('kvr-panel').classList.add('kvr-showall'));
   await page.click('text=Kjør avviksjekk');
   await page.waitForFunction(() => /Avviksjekk ferdig/.test(document.getElementById('kvr-panel').innerText));
   assert.match(await page.innerText('[data-sec=anom] .kvr-list'), /Stor panteretur \(256 kr\)/);
@@ -294,6 +295,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   await page.click('button:text-is("Ny regel")');
   await page.fill('.kvr-cond input[type=text]', '-200');
   await page.press('.kvr-cond input[type=text]', 'Tab');
+  await page.evaluate(() => document.getElementById('kvr-panel').classList.add('kvr-showall'));
   await page.click('text=Kjør avviksjekk');
   await page.waitForFunction(() => /Regel: Ny regel/.test(document.querySelector('[data-sec=anom] .kvr-list').innerText));
   await wipe();
@@ -314,6 +316,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   // kontroller på tvers av bonger
   await tab('Kontroll');
   assert.ok(await page.isHidden('[data-sec=profile]'), 'resultat skjules før kontrollene er kjørt');
+  await page.evaluate(() => document.getElementById('kvr-panel').classList.add('kvr-showall'));
   await page.click('button:text-is("Kjør alle kontroller (synlige)")');
   await page.waitForFunction(() => /Kontroller ferdig/.test(document.getElementById('kvr-panel').innerText), null, { timeout: 30000 });
   assert.match(await page.innerText('[data-sec=profile]'), /Butikksnitt/);
@@ -321,13 +324,16 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   await unfold('recon');
   assert.match(await page.innerText('[data-sec=recon]'), /Forventet/);
   assert.match(await page.innerText('[data-sec=ctlsum]'), /\d+ funn · \d+ flaggede bonger/);
-  await page.click('[data-sec=ctlsum] button:text-is("Avstemming")');
+  // snarveiene viser bare kort med funn (med antall); resten står under «Uten funn»
+  assert.match(await page.innerText('[data-sec=ctlsum]'), /Avstemming/);
+  assert.match(await page.innerText('[data-sec=ctlsum] .kvr-chips'), /^Funn \d+/);
+  await page.click('[data-sec=ctlsum] .kvr-chips button >> nth=0');
   await unfold('pantbal');
   assert.match(await page.innerText('[data-sec=pantbal]'), /2026-10-02/);
   await wipe();
 
   // notater, tastaturflyt og sammenligning
-  await page.click('button:text-is("Fjern valg")');
+  await page.evaluate(() => [...document.querySelectorAll('.kvr-foot button')].find(x => x.textContent === 'Fjern valg').click());
   const sel = () => page.evaluate(() => { const s = grid.select()[0]; return s ? s.getAttribute('data-id') : null; });
   await page.evaluate(() => grid.select(document.querySelector('tr[data-id="t-3"]')));
   await page.evaluate(() => document.activeElement && document.activeElement.blur());
@@ -362,7 +368,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   assert.match(await page.innerText('.kvr-modal'), /0 like linjer · 3 bare i venstre · 2 bare i høyre/);
   await page.keyboard.press('Escape');
   assert.strictEqual(await page.$$eval('.kvr-modal', n => n.length), 0);
-  await page.click('button:text-is("Fjern valg")');
+  await page.evaluate(() => [...document.querySelectorAll('.kvr-foot button')].find(x => x.textContent === 'Fjern valg').click());
   assert.ok(await page.$eval('.kvr-foot button:text-is("Sammenlign")', b => b.style.display === 'none'));
 
   // arbeidsoppgave: Morgenkontroll
@@ -422,7 +428,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   assert.match(await page.innerText('[data-sec=chk-list] .kvr-ck:has(.kvr-new)'), /Treffer din regel «Ny regel 2»: Sum \(kr\) = 50/);
   await page.click('[data-sec=chk-list] .kvr-ck:has(.kvr-new) button:text-is("Til oppfølging")');
   assert.match(await page.innerText('[data-sec=chk-list] .kvr-ck:has(.kvr-new)'), /Til oppfølging/);
-  await page.click('button:text-is("Fjern valg")');
+  await page.evaluate(() => [...document.querySelectorAll('.kvr-foot button')].find(x => x.textContent === 'Fjern valg').click());
   await wipe();
 
   // diagrammer: klikk filtrerer, tooltip og tabellvisning

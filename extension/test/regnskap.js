@@ -72,7 +72,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
     await page.click('[data-sec=chk-top] button:text-is("Kjør analyse")');
     await page.waitForFunction(() => /Kontroller ferdig/.test(document.getElementById('kvr-panel').innerText), null, { timeout: 60000 });
     await go('Analyse', 'Detaljer');
-    await page.click('button:text-is("Åpne alle")');
+    await page.evaluate(() => { const b = [...document.querySelectorAll('#kvr-panel button')].find(x => x.textContent === 'Vis alt'); if (b) b.click(); });
   };
   await analyse();
   const fnd = await txt('[data-sec=findings]');

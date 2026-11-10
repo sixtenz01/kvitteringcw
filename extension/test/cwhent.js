@@ -174,7 +174,7 @@ search();
   await page.click('[data-sec=chk-top] button:text-is("Kjør analyse")');
   await page.waitForFunction(() => /Kontroller ferdig/.test(document.getElementById('kvr-panel').innerText), null, { timeout: 60000 });
   await go('Analyse', 'Detaljer');
-  await page.click('button:text-is("Åpne alle")');
+  await page.evaluate(() => { const b = [...document.querySelectorAll('#kvr-panel button')].find(x => x.textContent === 'Vis alt'); if (b) b.click(); });
   const fnd = await txt('[data-sec=findings]');
   assert.match(fnd, /Fra CW: Mye av ett innhold hos kasserer Kasserer C: Slettet vare på 8 av 30 salg \(26,7 %, de andre i kanalen 3,2 %\)/);
   assert.match(fnd, /Fra CW: Kombinasjon av innhold på bong Kasse 1 08:00 kasserer A: vensafe \+ slettet vare \(ifølge CWs filtre\)/);

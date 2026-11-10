@@ -203,16 +203,22 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   assert.strictEqual(await page.$$eval('[data-sec=custom] .kvr-rule', n => n.length), 0);
   assert.deepStrictEqual(dialogs, [], 'ingen native dialoger');
 
-  // sammenfoldbare kort husker tilstanden
+  // kort uten funn er skjult til «Vis alt»; sammenfoldbare kort husker tilstanden
+  const shownNoHit = () => page.$$eval('#kvr-panel .kvr-nohit', n => n.filter(x => getComputedStyle(x).display !== 'none').length);
+  assert.strictEqual(await shownNoHit(), 0);
+  await page.click('button:text-is("Vis alt")');
+  await page.waitForTimeout(300);
+  assert.strictEqual(await idbGet('kv', 'kvr.showall.v1'), true);
+  assert.ok(await shownNoHit() > 0);
   assert.ok(!(await page.$eval('[data-sec=disc]', n => n.classList.contains('kvr-folded'))));
   await page.click('[data-sec=disc] > h4');
   assert.ok(await page.$eval('[data-sec=disc]', n => n.classList.contains('kvr-folded')));
   await page.waitForTimeout(300);
   assert.strictEqual((await idbGet('kv', 'kvr.sec.v1')).disc, false);
-  await page.click('button:text-is("Åpne alle")');
+  await page.click('button:text-is("Vis bare funn")');
+  assert.strictEqual(await shownNoHit(), 0);
+  await page.click('button:text-is("Vis alt")');
   assert.ok(!(await page.$eval('[data-sec=disc]', n => n.classList.contains('kvr-folded'))));
-  await page.click('button:text-is("Fold sammen alle")');
-  assert.strictEqual(await page.$$eval('.kvr-fold:not(.kvr-folded)', n => n.length), 0);
 
   // piltaster bytter fane
   await page.focus('.kvr-tab:has-text("Hent")');

@@ -91,7 +91,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
     await page.click('[data-sec=chk-top] button:text-is("Kjør analyse")');
     await page.waitForFunction(() => /Kontroller ferdig/.test(document.getElementById('kvr-panel').innerText), null, { timeout: 60000 });
     await go('Analyse', 'Detaljer');
-    await page.click('button:text-is("Åpne alle")');
+    await page.evaluate(() => { const b = [...document.querySelectorAll('#kvr-panel button')].find(x => x.textContent === 'Vis alt'); if (b) b.click(); });
   };
   await analyse();
   const fnd = await txt('[data-sec=findings]');
@@ -144,9 +144,10 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   await page.fill('input[placeholder="til %"]', '');
   assert.strictEqual(await viser(), String(rows.length));
 
-  // pantelapp-chip i hopplisten finnes
+  // pantelapper og linjer står i Resultat: som snarvei med antall funn, ellers under «Uten funn»
   await go('Analyse', 'Detaljer');
-  assert.ok(await page.$('.kvr-chips button:text-is("Pantelapper")') && await page.$('.kvr-chips button:text-is("Linjer m.m.")'));
+  const res = await txt('[data-sec=ctlsum]');
+  assert.match(res, /Pantelapper/); assert.match(res, /Linjer m\.m\./);
 
   assert.deepStrictEqual(errors, []);
   assert.deepStrictEqual(apiCalls, []);

@@ -68,7 +68,7 @@ render(ALL);
   const top = await page.innerText('[data-sec=chk-list] .kvr-ck:first-child');
   assert.match(top, /Uvanlig bong \(maskinlæring\)/, top);
   await page.click('.kvr-sub:text-is("Detaljer")');
-  await page.click('button:text-is("Åpne alle")');
+  await page.evaluate(() => { const b = [...document.querySelectorAll('#kvr-panel button')].find(x => x.textContent === 'Vis alt'); if (b) b.click(); });
   const all = (await page.innerText('#kvr-panel')).replace(/\s+/g, ' ');
   assert.match(all, /Maskinlæring: Uvanlig bong \(maskinlæring\) Kasse 2 05:10 kasserer K1: uvanlighet \d+ av 100 \(blant de 1 % mest uvanlige av 231 skannede salg\)\. Uvanlig: -150\.00 kr \([\d,]+ % av bongene har så lavt\); kl\. 05:10/);
   assert.match(all, /Modellen har lært av 231 skannede salg i datagrunnlaget og flagger \d+ bonger i omfanget/);

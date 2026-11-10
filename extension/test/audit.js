@@ -107,7 +107,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   for (const re of [/Salg og retur av samme beløp/, /Kortkjøp refundert kontant/, /Retur uten salg/, /Salg etter kassaoppgjør/, /Gjentatte kassadifferanser/]) assert.match(lt, re);
   assert.ok(!/Hull i bongnummer/.test(lt), 'hull i bongnummer er fjernet');
   await go('Analyse', 'Detaljer');
-  await page.click('button:text-is("Åpne alle")');
+  await page.evaluate(() => { const b = [...document.querySelectorAll('#kvr-panel button')].find(x => x.textContent === 'Vis alt'); if (b) b.click(); });
   const fnd = (await page.innerText('[data-sec=findings]')).replace(/\s+/g, ' ');
   assert.match(fnd, /Kasse 1: salg 10:00 og retur 10:20, begge 100 kr \(kasserer A\)/);
   assert.match(fnd, /UKJENT VARE \(50 kr\) uten tilsvarende salg/);

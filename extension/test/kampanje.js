@@ -88,7 +88,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   assert.strictEqual(await flagged(), 0, 'kampanjevare flagges ikke');
   assert.ok(!/venter på svar/.test(await txt('[data-sec=chk-top]')), 'ingen spørsmål');
   await go('Analyse', 'Detaljer');
-  await page.click('button:text-is("Åpne alle")');
+  await page.evaluate(() => { const b = [...document.querySelectorAll('#kvr-panel button')].find(x => x.textContent === 'Vis alt'); if (b) b.click(); });
   assert.match(await txt('[data-sec=disc]'), /Kampanjevarer .*KAMPANJEVARE 40 % og 33 % 6 6 1 1 Kampanjevare \(automatisk\) Ikke kampanje/);
   assert.match(await txt('[data-sec=disc]'), /1 varer er klassifisert som kampanjevare/);
   // dekning og varer som ikke er kampanjevare, med manuell merking
@@ -125,7 +125,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   assert.ok(!/\.\./.test(await txt('[data-sec=chk-list]')), 'forklaringen slutter ikke på to punktum');
   assert.ok(await page.$('[data-sec=chk-list] .kvr-camp button:text-is("Ja, kampanje")') && await page.$('[data-sec=chk-list] .kvr-camp button:text-is("Nei, ikke kampanje")'));
   await go('Analyse', 'Detaljer');
-  await page.click('button:text-is("Åpne alle")');
+  await page.evaluate(() => { const b = [...document.querySelectorAll('#kvr-panel button')].find(x => x.textContent === 'Vis alt'); if (b) b.click(); });
   const disc = await txt('[data-sec=disc]');
   assert.match(disc, /Mulige sentrale kampanjer 1 vare venter på svar/);
   assert.match(disc, /KAMPANJEVARE 40 % og 33 % 6 6 1 1/);
@@ -148,7 +148,7 @@ window.jQuery=function(a){ if(typeof a==='string') return a.indexOf('#storesWrap
   await analyse();
   assert.strictEqual(await flagged(), 0);
   await go('Analyse', 'Detaljer');
-  await page.click('button:text-is("Åpne alle")');
+  await page.evaluate(() => { const b = [...document.querySelectorAll('#kvr-panel button')].find(x => x.textContent === 'Vis alt'); if (b) b.click(); });
   assert.match(await txt('[data-sec=disc]'), /KAMPANJEVARE 40 % og 33 % 6 6 1 1 Kampanje Angre/);
   // angre: flagges igjen, med spørsmål
   await page.click('[data-sec=disc] button:text-is("Angre")');
