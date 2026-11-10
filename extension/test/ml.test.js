@@ -15,24 +15,33 @@ const odd = { transactionId: 'ODD', endDateTime: '2026-10-03 05:10', storeNumber
 pop.push(odd);
 scan.ODD = { v: 9, items: [{ c: '7038010000027', n: 'VARE', a: 150 }, { c: '7038010000027', n: 'VARE', a: -150 }, { c: '399', n: 'PANTELAPP', a: -150 }], pay: { 'Kontant tilbake': 150 }, tot: -150, ret: -150, retLines: 1, coupons: [] };
 const cfg = L.defaultControl();
-assert.deepStrictEqual([cfg.mlTopPct, cfg.mlMinScore, cfg.mlMinN, cfg.mlLearnMin], ['1', '60', '200', '8']);
+assert.deepStrictEqual([cfg.mlTopPct, cfg.mlMinScore, cfg.mlMinN, cfg.mlLearnMin, cfg.mlCtxMin], ['1', '60', '200', '8', '100']);
 
 const r = L.mlAnomaly(pop, pop, scan, cfg);
 assert.ok(r.applicable && r.n === 601);
 const f = r.findings.find((x) => x.ids[0] === 'ODD');
 assert.ok(f && f.flag && f.code === 'mlOdd' && f.title === 'Uvanlig bong (maskinlæring)');
-assert.match(f.detail, /Kasse 2 05:10 kasserer K1: uvanlighet \d+ av 100 \(blant de 1 % mest uvanlige av 601 skannede salg\)\. Uvanlig: .*kl\. 05:10 \(0,2 % av bongene har så tidlig\)/);
+// sammenlignet med kassen (201 bonger) og kassereren (151); for få bonger kl. 03–06, så der brukes butikken
+assert.match(f.detail, /Kasse 2 05:10 kasserer K1: uvanlighet \d+ av 100 \(blant de 1 % mest uvanlige av 601 skannede salg\)\. Uvanlig: .*kl\. 05:10 \(høyst 0,5 % av bongene på kassen og i butikken har så tidlig\)/);
+assert.ok(r.ctx.on && r.ctx.min === 100 && r.ctx.ws === 3 && r.ctx.ca === 4 && r.ctx.tod >= 3 && r.ctx.rows >= 500, JSON.stringify(r.ctx));
 assert.ok(r.scores.ODD > 0.65 && r.scores.ODD === Math.max(...Object.values(r.scores)), 'den avvikende bongen er mest uvanlig');
 assert.ok(r.findings.length <= Math.ceil(601 * 0.01), 'høyst 1 %');
-assert.ok(r.findings.every((x) => /Uvanlig: .*\(\d|Uvanlig: .*under 0,1/.test(x.detail)), 'hvert funn har en tydelig egenskap');
+assert.ok(r.findings.every((x) => /Uvanlig: .*\(høyst (\d|under 0,1)/.test(x.detail)), 'hvert funn har en tydelig egenskap');
 assert.strictEqual(L.RISK_WEIGHTS['Uvanlig bong (maskinlæring)'], 2);
 
 // samme data gir samme resultat, uansett rekkefølge i listen
 const rev = pop.slice().reverse();
 assert.deepStrictEqual(L.mlAnomaly(rev, rev, scan, cfg).scores, r.scores);
-// medlemsnummer og kasserer er ikke med i modellen
+// medlemsnummer er ikke med i modellen
+const noMem = pop.map((it) => Object.assign({}, it, { memberNumber: null }));
+assert.deepStrictEqual(L.mlAnomaly(noMem, noMem, scan, cfg).scores, r.scores);
+// uten sammenheng (tom): sammenlignet med alle bonger som før, og da er heller ikke kasserer med
+const cfgAll = Object.assign({}, cfg, { mlCtxMin: '' });
+const ra = L.mlAnomaly(pop, pop, scan, cfgAll);
+assert.ok(!ra.ctx.on && ra.applicable);
+assert.match(ra.findings.find((x) => x.ids[0] === 'ODD').detail, /Uvanlig: .*kl\. 05:10 \(0,2 % av bongene har så tidlig\)/);
 const anon = pop.map((it) => Object.assign({}, it, { cashierNumber: 'X', memberNumber: null }));
-assert.deepStrictEqual(L.mlAnomaly(anon, anon, scan, cfg).scores, r.scores);
+assert.deepStrictEqual(L.mlAnomaly(anon, anon, scan, cfgAll).scores, ra.scores);
 // bare bonger i omfanget flagges; modellen lærer av hele grunnlaget
 assert.deepStrictEqual(L.mlAnomaly([pop[0]], pop, scan, cfg).findings.length, 0);
 assert.strictEqual(L.mlAnomaly([odd], pop, scan, cfg).findings.length, 1);
@@ -78,6 +87,47 @@ ids.forEach((id, i) => { if (i % 2 === 0) anomM[id] = anom[id].concat([L.MANUAL_
 assert.strictEqual(L.MANUAL_FLAG, 'Flagget av deg');
 assert.strictEqual(L.RISK_WEIGHTS['Flagget av deg'], 8);
 assert.deepStrictEqual(L.mlLearn(cand, anomM, notes, r, cfg).p, lr.p);
+
+// ---- i sammenheng: samme kasse, tid på døgnet og kasserer
+{
+  let s3 = 5;
+  const r3 = () => (s3 = (s3 * 16807) % 2147483647) / 2147483647;
+  const P = [], S = {};
+  const add = (id, ws, ca, h, m, amt, ret) => {
+    P.push({ transactionId: id, endDateTime: '2026-10-0' + (1 + (P.length % 5)) + ' ' + String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0'), storeNumber: 1005, workstationNumber: ws, cashierNumber: ca, totalAmount: amt, receiptType: 1 });
+    S[id] = ret ? { v: 9, items: [{ c: '7038010000027', n: 'VARE', a: amt }], pay: { Bank: amt }, tot: amt, ret: 0, retLines: 1, coupons: [] }
+      : { v: 9, items: [{ c: '7038010000010', n: 'VARE', a: amt }], pay: { Bank: amt }, tot: amt, ret: 0, coupons: [] };
+  };
+  for (let i = 0; i < 600; i++) add('N-' + String(i).padStart(4, '0'), 1 + (i % 3), 'K' + (i % 4), 8 + Math.floor(r3() * 12), Math.floor(r3() * 60), Math.round((40 + r3() * 250) * 100) / 100, false);
+  // kundeservice: kasse 9 og kasserer S tar returer hele dagen (6 av 40 bonger)
+  const svc = [];
+  for (let i = 0; i < 40; i++) {
+    const id = 'SVC-' + String(i).padStart(2, '0'), isRet = i % 7 === 0 && svc.length < 6;
+    if (isRet) svc.push(id);
+    add(id, 9, 'S', 8 + Math.floor(r3() * 12), Math.floor(r3() * 60), isRet ? -Math.round((50 + r3() * 250) * 100) / 100 : Math.round((40 + r3() * 250) * 100) / 100, isRet);
+  }
+  // én retur på kasse 1 hos K0, som ellers aldri tar returer
+  add('REV', 1, 'K0', 12, 30, -20, true);
+  assert.strictEqual(svc.length, 6);
+  const c40 = Object.assign({}, L.defaultControl(), { mlCtxMin: '40' });
+  const ctx = L.mlAnomaly(P, P, S, c40), all = L.mlAnomaly(P, P, S, Object.assign({}, c40, { mlCtxMin: '' }));
+  const hit = (res, id) => res.findings.find((x) => x.ids[0] === id);
+  // sammenlignet med alle bonger: returene i kundeservice er sjeldne (6 av 641) og flagges; den ene på kasse 1 drukner (7 av 641 er over 1 %)
+  assert.ok(svc.filter((id) => hit(all, id)).length >= 3, 'alle bonger: ' + all.findings.map((x) => x.ids[0]).join(','));
+  assert.ok(!hit(all, 'REV'));
+  // i sammenheng: retur er vanlig på kasse 9 og hos S (15 %), så ingen av dem flagges; returen på kasse 1 hos K0 flagges
+  assert.deepStrictEqual(svc.filter((id) => hit(ctx, id)), [], 'i sammenheng: ' + ctx.findings.map((x) => x.ids[0]).join(','));
+  const rv = hit(ctx, 'REV');
+  assert.ok(rv, 'i sammenheng: ' + ctx.findings.map((x) => x.ids[0]).join(','));
+  assert.match(rv.detail, /1 returlinje \(høyst 0,[5-7] % av bongene på kassen(, på samme tid på døgnet)? og hos kassereren har så mange\)/);
+  assert.ok(ctx.ctx.ws === 4 && ctx.ctx.ca === 5, JSON.stringify(ctx.ctx));
+  // for små grupper: alt sammenlignes med butikken, og resultatet er som en sammenligning med alle bonger i butikken
+  const big = L.mlAnomaly(P, P, S, Object.assign({}, c40, { mlCtxMin: '5000' }));
+  assert.ok(big.ctx.on && big.ctx.ws === 0 && big.ctx.rows === 0);
+  assert.ok(big.findings.length && big.findings.every((x) => /av bongene i butikken har/.test(x.detail) && !/av bongene (på kassen|på samme tid|hos kassereren)/.test(x.detail)));
+  // samme data gir samme resultat
+  assert.deepStrictEqual(L.mlAnomaly(P.slice().reverse(), P, S, c40).scores, ctx.scores);
+}
 
 // ---- selvtrening: lærer av reglenes sikre funn og flagger bonger som ligner
 {

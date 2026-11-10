@@ -2405,7 +2405,10 @@
       box.appendChild(metaEl(!ML.applicable ? 'Ikke kjørt: ' + ML.n + ' skannede salg, minst ' + ML.minN + ' trengs (Innstillinger → Maskinlæring).' :
         ML.topPct === null ? 'Uvanlighet er regnet for ' + ML.n + ' skannede salg, men flagging er av (Innstillinger → Maskinlæring).' :
         'Modellen har lært av ' + ML.n + ' skannede salg i datagrunnlaget og flagger ' + ML.flagged + ' bonger i omfanget blant de ' + String(ML.topPct).replace('.', ',') + ' % mest uvanlige (uvanlighet minst ' + Math.round(Math.max(ML.cut, (Number(ctlCfg.mlMinScore) || 60) / 100) * 100) + ' av 100, og minst én egenskap som under 1 % av bongene har). ' +
-        'Den kjører lokalt, uten kall mot CW, og bruker ikke medlemsnummer eller kasserer. Samme data gir samme resultat.'));
+        (ML.ctx && ML.ctx.on ? 'Hver bong sammenlignes med samme kasse, samme tid på døgnet og kassererens egne bonger, og en egenskap må være uvanlig i minst to av de tre. Grupper med minst ' + ML.ctx.min + ' bonger: ' +
+          plur(ML.ctx.ws, 'kasse', 'kasser') + ', ' + plur(ML.ctx.tod, 'tidsrom', 'tidsrom') + ' og ' + plur(ML.ctx.ca, 'kasserer', 'kasserere') + '; mindre grupper sammenlignes med butikken (' + ML.ctx.rows + ' av ' + ML.n + ' bonger har minst to egne grupper). ' :
+          'Hver bong sammenlignes med alle bongene (sammenligning med samme kasse, tid og kasserer er av). ') +
+        'Den kjører lokalt, uten kall mot CW, og bruker ikke medlemsnummer. Samme data gir samme resultat.'));
       var LN = mlLearnNow();
       box.appendChild(metaEl(!LN.on ? 'Lær av vurderingene er av.' : LN.trained ? 'Lært av ' + LN.pos + ' bonger «Til oppfølging» og ' + LN.neg + ' «Sjekket». Treffsikkerhet på bonger modellen ikke har trent på: ' + (LN.auc === null ? 'for få til å måle' : 'AUC ' + String(Math.round(LN.auc * 100) / 100).replace('.', ',') + ' (0,5 = tilfeldig, 1 = perfekt)' + (LN.auc < 0.65 ? '. Ikke bedre enn tilfeldig ennå: fortsett å merke bonger' : '')) + '. «Sjekk først» kan sorteres etter den.' :
         'Lær av vurderingene: ' + LN.pos + ' «Til oppfølging» og ' + LN.neg + ' «Sjekket» så langt; minst ' + LN.minL + ' av hver trengs.'));

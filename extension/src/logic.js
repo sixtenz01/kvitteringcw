@@ -1060,6 +1060,7 @@
     ['openRetSchemes', 'Åpen retur: kortleverandører der hver retur til kort flagges (komma, tom = av)', 'Mastercard'],
     ['netMembers', 'Nettverk: kort brukt med minst så mange medlemsnr (tom = av)', '4'], ['netSelfN', 'Nettverk: retur til kort der kassereren har minst så mange av kjøpene (tom = av)', '3'], ['netEmpOn', 'Nettverk: retur til kort knyttet til ansattnummer (tom = av)', '1'],
     ['mlTopPct', 'Maskinlæring: flagg de mest uvanlige bongene, % (tom = av)', '1'], ['mlMinScore', 'Maskinlæring: uvanlighet minst (0–100)', '60'], ['mlMinN', 'Maskinlæring: minst antall skannede salg', '200'],
+    ['mlCtxMin', 'Maskinlæring: sammenlign med samme kasse, tid og kasserer, minst bonger per gruppe (tom = av)', '100'],
     ['mlLearnMin', 'Maskinlæring: lær av vurderingene, minst bonger av hver (tom = av)', '8'],
     ['mlSelfP', 'Maskinlæring: ligner sikre funn, likhet minst % (tom = av)', '80'], ['mlSelfMinPos', 'Maskinlæring: selvtrening, minst sikre funn', '10'],
     ['mlSelfAuc', 'Maskinlæring: selvtrening, treffsikkerhet minst (AUC × 100)', '75'], ['mlSelfTop', 'Maskinlæring: ligner sikre funn, høyst % av skannede salg', '1'],
@@ -1209,10 +1210,11 @@
       sf('netSelfN', 'ctl', 'num', 'Retur til kort i kassererens nettverk: minst', 'kjøp', 'Kassereren som gir returen, står for minst så mange og minst 60 % av gruppens kjøp.', true),
       sf('netEmpOn', 'ctl', 'flag', 'Retur til kort knyttet til ansattnummer', '', 'Bruker listen «Ansattes medlemsnr» under Medlemsnummer. Kortet er brukt med et ansattnummer, og det er gitt retur til det.')
     ], weights: ['Kort brukt med mange medlemsnr', 'Retur til kort i kassererens nettverk', 'Retur til kort knyttet til ansatt'] },
-    { id: 'ml', title: 'Maskinlæring', text: 'Lokalt i nettleseren, uten kall mot CW. Uvanlige bonger: en isolasjonsskog lærer hvordan salgene i datagrunnlaget ser ut (beløp, klokkeslett, varelinjer, retur, rabatt, slettede linjer, pant, kontant tilbake, kontantandel og tid siden forrige bong på kassen) og flagger de mest avvikende. Lær av vurderingene: bonger du merker «Til oppfølging» og «Sjekket» brukes til å sortere «Sjekk først», og «Vurder disse neste» velger bongene modellen lærer mest av. Ligner sikre funn: modellen trenes på bongene reglene gir høy risiko (og dem du har vurdert) mot rene bonger, og flagger bonger som ligner de sikre funnene. Medlemsnummer og kasserer er ikke med i modellen. Krever skanning.', fields: [
+    { id: 'ml', title: 'Maskinlæring', text: 'Lokalt i nettleseren, uten kall mot CW. Uvanlige bonger: hver bong sammenlignes med bongene på samme kasse, på samme tid på døgnet og hos samme kasserer (beløp, klokkeslett, varelinjer, retur, rabatt, slettede linjer, pant, kontant tilbake, kontantandel og tid siden forrige bong på kassen), og en isolasjonsskog flagger de mest avvikende. En egenskap regnes som uvanlig først når minst to av de tre sammenligningene sier det. Lær av vurderingene: bonger du merker «Til oppfølging» og «Sjekket» brukes til å sortere «Sjekk først», og «Vurder disse neste» velger bongene modellen lærer mest av. Ligner sikre funn: modellen trenes på bongene reglene gir høy risiko (og dem du har vurdert) mot rene bonger, og flagger bonger som ligner de sikre funnene. Medlemsnummer er ikke med i modellene. Kasse og kasserer brukes bare til å velge hvilke bonger en bong sammenlignes med. Krever skanning.', fields: [
       sf('mlTopPct', 'ctl', 'num', 'Uvanlige bonger: flagg de mest uvanlige', '%', 'Andel av de skannede salgene som regnes som uvanlige.', true),
       sf('mlMinScore', 'ctl', 'num', 'Uvanlighet minst', 'av 100', '50 er vanlig; over 60 skiller seg klart ut.'),
       sf('mlMinN', 'ctl', 'num', 'Minst antall skannede salg', 'stk', 'Færre gir for usikker modell.'),
+      sf('mlCtxMin', 'ctl', 'num', 'Sammenlign med samme kasse, tid på døgnet og kasserer: minst', 'bonger per gruppe', 'Bongen må være uvanlig i minst to av de tre sammenligningene. Grupper med færre bonger sammenlignes med butikken. Tom = sammenlign med alle bonger.', true),
       sf('mlLearnMin', 'ctl', 'num', 'Lær av vurderingene: minst', 'av hver', 'Antall bonger merket «Til oppfølging» og «Sjekket» som trengs før «Sjekk først» kan sorteres etter dem.', true),
       sf('mlSelfP', 'ctl', 'num', 'Ligner sikre funn: likhet minst', '%', 'Modellen trenes på bonger med høy risiko og rene bonger, og flagger bonger som ligner de sikre funnene.', true),
       sf('mlSelfMinPos', 'ctl', 'num', 'Selvtrening: minst sikre funn', 'stk', 'Bonger med høy risiko (eller merket «Til oppfølging») som trengs før modellen trenes.'),
@@ -3230,8 +3232,10 @@
   // Uvanlige bonger: modellen lærer hvordan salgene i datagrunnlaget ser ut og flagger de mest avvikende i omfanget.
   // Forklaringen er egenskapene der bongen ligger ytterst (få andre bonger har så høy eller lav verdi).
   function mlAnomaly(items, pop, scanMap, cfg) {
-    var topPct = cnum(cfg.mlTopPct, null), minN = cnum(cfg.mlMinN, 200), minScore = cnum(cfg.mlMinScore, 60) / 100;
-    var res = { findings: [], applicable: false, n: 0, sales: 0, scores: {}, raw: {}, cut: null, topPct: topPct, flagged: 0, minN: minN };
+    var topPct = cnum(cfg.mlTopPct, null), minN = cnum(cfg.mlMinN, 200), minScore = cnum(cfg.mlMinScore, 60) / 100, ctxMin = cnum(cfg.mlCtxMin, null);
+    if (ctxMin !== null) ctxMin = Math.max(10, ctxMin);
+    var res = { findings: [], applicable: false, n: 0, sales: 0, scores: {}, raw: {}, cut: null, topPct: topPct, flagged: 0, minN: minN,
+      ctx: { on: ctxMin !== null, min: ctxMin, ws: 0, tod: 0, ca: 0, rows: 0 } };
     // tid siden forrige bong på samme kasse (alle bonger i listen, også uskannede)
     // (samme dag; dagens første bong får median-verdien, så den ikke ser uvanlig ut)
     var gaps = {}, byWs = {}, first = {};
@@ -3255,33 +3259,75 @@
     rows.forEach(function (r) { res.raw[r.it.transactionId] = r.raw; });
     if (rows.length < minN) return res;
     res.applicable = true;
-    var X = rows.map(function (r) { return r.raw.map(function (v, i) { return ML_FEATURES[i].t(v); }); });
+    var num = function (a, b) { return a - b; };
+    var bound = function (a, v, upper) { var lo = 0, hi = a.length; while (lo < hi) { var m = (lo + hi) >> 1; if (upper ? a[m] <= v : a[m] < v) lo = m + 1; else hi = m; } return lo; };
+    var sortedCols = function (list) { return ML_FEATURES.map(function (_, i) { return list.map(function (r) { return r.raw[i]; }).sort(num); }); };
+    // andelen bonger med like høy (eller like lav) verdi
+    var tailIn = function (cols, i, v) {
+      var n = cols[i].length, up = n - bound(cols[i], v, false), dn = bound(cols[i], v, true);
+      return up <= dn ? { share: up / n, dir: 'hi' } : { share: dn / n, dir: 'lo' };
+    };
+    var cols = sortedCols(rows), X, cons = null;
+    if (ctxMin === null) X = rows.map(function (r) { return r.raw.map(function (v, i) { return ML_FEATURES[i].t(v); }); });
+    else {
+      // I sammenheng: hver bong sammenlignes med bongene på samme kasse, på samme tid på døgnet (tretimers bolker) og hos
+      // samme kasserer. En gruppe med færre enn ctxMin bonger er for liten, og da brukes butikken. For hver egenskap er
+      // overraskelsen −log10(2 × andelen med like høy eller like lav verdi), med fortegn. Modellen får den midterste av de
+      // tre, så en egenskap er uvanlig først når minst to av sammenligningene sier det.
+      var grp = function (keyOf) {
+        var g = {}, out = {};
+        rows.forEach(function (r) { var k = keyOf(r.it); (g[k] = g[k] || []).push(r); });
+        Object.keys(g).forEach(function (k) { if (g[k].length >= ctxMin) out[k] = sortedCols(g[k]); });
+        return out;
+      };
+      var kSt = function (it) { return String(it.storeNumber); }, kWs = function (it) { return it.storeNumber + '|' + it.workstationNumber; };
+      var kTod = function (it) { return it.storeNumber + '|' + Math.floor((mins(parseDT(it.endDateTime).time) || 0) / 180); };
+      var kCa = function (it) { return it.storeNumber + '|' + it.cashierNumber; };
+      var G = { st: grp(kSt), ws: grp(kWs), tod: grp(kTod), ca: grp(kCa) };
+      res.ctx.ws = Object.keys(G.ws).length; res.ctx.tod = Object.keys(G.tod).length; res.ctx.ca = Object.keys(G.ca).length;
+      var surprise = function (tl) { return (tl.dir === 'hi' ? 1 : -1) * Math.max(0, -Math.log10(2 * tl.share)); };
+      cons = rows.map(function (r) {
+        var it = r.it, st = G.st[kSt(it)] || cols;
+        var c = [{ cols: G.ws[kWs(it)], w: 'på kassen' }, { cols: G.tod[kTod(it)], w: 'på samme tid på døgnet' }, { cols: G.ca[kCa(it)], w: 'hos kassereren' }];
+        if (c.filter(function (x) { return x.cols; }).length >= 2) res.ctx.rows++;
+        return ML_FEATURES.map(function (_, j) {
+          var parts = c.map(function (x, ci) {
+            var use = x.cols && !(j === 1 && ci === 1) ? x.cols : null;   // klokkeslettet sammenlignes ikke med samme tid på døgnet
+            var tl = tailIn(use || st, j, r.raw[j]);
+            return { s: surprise(tl), share: tl.share, dir: tl.dir, w: use ? x.w : 'i butikken' };
+          });
+          var mid = parts.slice().sort(function (a, b) { return a.s - b.s || a.share - b.share; })[1], where = [];
+          parts.forEach(function (p) { if (p.dir === mid.dir && p.share <= mid.share && where.indexOf(p.w) === -1) where.push(p.w); });
+          return { s: mid.s, share: mid.share, dir: mid.dir, where: where };
+        });
+      });
+      X = cons.map(function (f) { return f.map(function (x) { return Math.max(-4, Math.min(4, x.s)); }); });
+    }
     var forest = isolationForest(X, { trees: 100, sample: 256 });
     var scored = rows.map(function (r, i) { var sc = forest.score(X[i]); res.scores[r.it.transactionId] = Math.round(sc * 100) / 100; return sc; });
     if (topPct === null) return res;
     var sorted = scored.slice().sort(function (a, b) { return b - a; });
     res.cut = sorted[Math.min(sorted.length - 1, Math.max(0, Math.floor(sorted.length * topPct / 100) - 1))];
-    var thr = Math.max(res.cut, minScore), cols = ML_FEATURES.map(function (_, i) { return rows.map(function (r) { return r.raw[i]; }).sort(function (a, b) { return a - b; }); });
-    var bound = function (a, v, upper) { var lo = 0, hi = a.length; while (lo < hi) { var m = (lo + hi) >> 1; if (upper ? a[m] <= v : a[m] < v) lo = m + 1; else hi = m; } return lo; };
-    // andelen bonger med like høy (eller like lav) verdi
-    var tail = function (i, v) {
-      var n = cols[i].length, up = n - bound(cols[i], v, false), dn = bound(cols[i], v, true);
-      return up <= dn ? { share: up / n, dir: 'hi' } : { share: dn / n, dir: 'lo' };
-    };
+    var thr = Math.max(res.cut, minScore);
     var scope = {};
     items.forEach(function (it) { scope[it.transactionId] = true; });
+    var og = function (a) { return a.length > 1 ? a.slice(0, -1).join(', ') + ' og ' + a[a.length - 1] : a[0]; };
     rows.forEach(function (r, i) {
       var s = scored[i];
       if (!scope[r.it.transactionId] || s < thr) return;
-      var odd = ML_FEATURES.map(function (fe, j) { var tl = tail(j, r.raw[j]); return { fe: fe, v: r.raw[j], share: tl.share, dir: tl.dir, j: j }; })
-        .filter(function (x) { return x.share <= 0.05 && !(x.j === 9 && first[r.it.transactionId]); }).sort(function (a, b) { return a.share - b.share; }).slice(0, 3);
+      var odd = ML_FEATURES.map(function (fe, j) {
+        var tl = cons ? cons[i][j] : tailIn(cols, j, r.raw[j]);
+        return { fe: fe, v: r.raw[j], share: tl.share, dir: tl.dir, where: tl.where, j: j };
+      }).filter(function (x) { return x.share <= 0.05 && !(x.j === 9 && first[r.it.transactionId]); }).sort(function (a, b) { return a.share - b.share; }).slice(0, 3);
       // minst én egenskap må være tydelig uvanlig (under 1 % av bongene), ellers er det bare støy
       if (!odd.length || odd[0].share > 0.01) return;
       res.flagged++;
       var pct = function (x) { return x < 0.001 ? 'under 0,1' : String(Math.round(x * 1000) / 10).replace('.', ','); };
       res.findings.push({ kind: 'Maskinlæring', code: 'mlOdd', title: 'Uvanlig bong (maskinlæring)', flag: true, cashier: r.it.cashierNumber,
         detail: whereText(r.it) + ': uvanlighet ' + Math.round(s * 100) + ' av 100 (blant de ' + String(topPct).replace('.', ',') + ' % mest uvanlige av ' + rows.length + ' skannede salg). ' +
-          'Uvanlig: ' + odd.map(function (x) { return x.fe.f(x.v) + ' (' + pct(x.share) + ' % av bongene har ' + x.fe[x.dir] + ')'; }).join('; ') + '.',
+          'Uvanlig: ' + odd.map(function (x) {
+            return x.fe.f(x.v) + ' (' + (cons ? 'høyst ' + pct(x.share) + ' % av bongene ' + og(x.where) : pct(x.share) + ' % av bongene') + ' har ' + x.fe[x.dir] + ')';
+          }).join('; ') + '.',
         ids: [r.it.transactionId] });
     });
     return res;
