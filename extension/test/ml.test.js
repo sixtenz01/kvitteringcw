@@ -73,4 +73,63 @@ assert.ok(!L.mlLearn(cand, anom, notes, r, Object.assign({}, cfg, { mlLearnMin: 
 // samme vurderinger gir samme modell
 assert.deepStrictEqual(L.mlLearn(cand, anom, notes, r, cfg).p, lr.p);
 
+// ---- selvtrening: lærer av reglenes sikre funn og flagger bonger som ligner
+{
+  let s2 = 11;
+  const r2 = () => (s2 = (s2 * 16807) % 2147483647) / 2147483647;
+  const items = [], raw = {}, an = {};
+  for (let i = 0; i < 400; i++) {
+    const id = 'T' + String(i).padStart(4, '0');
+    items.push({ transactionId: id, endDateTime: '2026-10-02 12:' + String(i % 60).padStart(2, '0'), storeNumber: 1, workstationNumber: 1 + (i % 4), cashierNumber: 'K' + (i % 5), totalAmount: 100, receiptType: 1 });
+    let back = 0;
+    if (i % 20 === 0) back = 300 + r2() * 200;      // sikre funn (høy risiko fra reglene)
+    if (i % 50 === 7) back = 180 + r2() * 40;        // like under: reglene ser dem ikke
+    raw[id] = [100 + r2() * 200, 600 + r2() * 300, 1 + Math.floor(r2() * 8), 0, 0, 0, 0, back, r2(), 2 + r2() * 5];
+    if (i % 20 === 0) an[id] = ['Kontant tilbake uten salg'];
+  }
+  const ml = { raw }, w8 = Object.assign({}, L.sanitizeWeights({}), { 'Kontant tilbake uten salg': 8 });
+  const near = items.filter((_, i) => i % 50 === 7).map((it) => it.transactionId);
+  const c0 = L.defaultControl();
+  assert.deepStrictEqual([c0.mlSelfP, c0.mlSelfMinPos, c0.mlSelfAuc, c0.mlSelfTop], ['80', '10', '75', '1']);
+  assert.strictEqual(L.RISK_WEIGHTS['Ligner sikre funn (maskinlæring)'], 2);
+  const c5 = Object.assign({}, c0, { mlSelfTop: '5' });
+  const sf = L.mlSelf(items, an, {}, ml, w8, c5);
+  assert.ok(sf.applicable && sf.trained && sf.pos === 20 && sf.neg === 380 && sf.auc >= 0.9, JSON.stringify({ pos: sf.pos, neg: sf.neg, auc: sf.auc }));
+  assert.deepStrictEqual(sf.findings.map((f) => f.ids[0]).sort(), near.slice().sort(), 'alle bongene like under terskelen, og ingen andre');
+  const f0 = sf.findings[0];
+  assert.ok(f0.flag && f0.code === 'mlSelf' && f0.kind === 'Maskinlæring' && f0.title === 'Ligner sikre funn (maskinlæring)');
+  assert.match(f0.detail, /^Kasse \d \d\d:\d\d kasserer K\d: \d+ % likhet med bonger som har høy risiko \([\d.]+ kr kontant tilbake\), men reglene har ikke gitt den høy risiko\. Modellen er trent på 20 sikre funn og 380 rene bonger; treffsikkerhet på bonger den ikke har trent på \(AUC\) 1\.$/);
+  // bonger med høy risiko fra før flagges ikke igjen
+  assert.ok(sf.findings.every((f) => !an[f.ids[0]]));
+  // standard: høyst 1 % av salgene
+  assert.strictEqual(L.mlSelf(items, an, {}, ml, w8, c0).findings.length, 4);
+  // vurderingene dine: «Sjekket» flagges ikke og teller som ren; «Til oppfølging» teller som sikkert funn
+  const nt = { [near[0]]: { status: 'sjekket' }, [items[3].transactionId]: { status: 'oppfolging' } };
+  const su = L.mlSelf(items, an, nt, ml, w8, c5);
+  assert.ok(su.user === 2 && su.pos === 21 && !su.findings.some((f) => f.ids[0] === near[0]));
+  assert.match(su.findings[0].detail, /trent på 21 sikre funn og 379 rene bonger, 2 av dem vurdert av deg;/);
+  // samme data gir samme modell, uansett rekkefølge
+  assert.deepStrictEqual(L.mlSelf(items.slice().reverse(), an, {}, ml, w8, c5).p, sf.p);
+  // av, for få sikre funn, eller modellen skiller ikke (tilfeldige funn): ingen funn
+  assert.ok(!L.mlSelf(items, an, {}, ml, w8, Object.assign({}, c5, { mlSelfP: '' })).on);
+  const fewPos = L.mlSelf(items, an, {}, ml, w8, Object.assign({}, c5, { mlSelfMinPos: '30' }));
+  assert.ok(fewPos.on && !fewPos.applicable && fewPos.findings.length === 0);
+  const rnd2 = {};
+  items.forEach((it, i) => { if (i % 20 === 3) rnd2[it.transactionId] = ['Kontant tilbake uten salg']; });
+  const noise = L.mlSelf(items, rnd2, {}, ml, w8, c5);
+  assert.ok(noise.trained && noise.auc < 0.75 && noise.findings.length === 0, 'AUC ' + noise.auc);
+  // maskinlæringsfunn teller ikke som regler: en bong med bare «Uvanlig bong» er ren
+  const an2 = Object.assign({}, an, { [items[1].transactionId]: ['Uvanlig bong (maskinlæring)'] });
+  assert.strictEqual(L.mlSelf(items, an2, {}, ml, w8, c5).neg, 380);
+}
+
+// ---- «Vurder disse neste»: mest usikre først, høyst N per kasserer; uten modell etter poeng
+{
+  const rows = [{ id: 'a', cashier: 1, p: 0.9, score: 1 }, { id: 'b', cashier: 1, p: 0.52, score: 1 }, { id: 'c', cashier: 2, p: 0.45, score: 3 }, { id: 'd', cashier: 1, p: 0.5, score: 0 }, { id: 'e', cashier: 3, p: 0.1, score: 9 }];
+  assert.deepStrictEqual(L.reviewNext(rows, 3, 1), { ids: ['d', 'c', 'e'], mode: 'usikker' });
+  assert.deepStrictEqual(L.reviewNext(rows, 10, 3).ids, ['d', 'b', 'c', 'e', 'a'], 'like usikre (0,9 og 0,1): høyest poeng først');
+  const np = rows.map((r) => ({ id: r.id, cashier: r.cashier, score: r.score }));
+  assert.deepStrictEqual(L.reviewNext(np, 3, 3), { ids: ['e', 'c', 'a'], mode: 'poeng' });
+}
+
 console.log('ml: ok');

@@ -2244,6 +2244,10 @@
         e.notes.push(f.title.toLowerCase());
       }
     });
+    // selvtrening: lærer av reglenes sikre funn (og vurderingene dine) og flagger bonger som ligner
+    res.self = L.mlSelf(items, anomMap, notes, res.ml, weights, ctlCfg);
+    res.self.findings.forEach(function (f) { f.ids.forEach(function (id) { if (scopeIds[id]) addFlag(id, f.title); }); });
+    res.findings = res.findings.concat(res.self.findings);
     res.snap = analysisSnapshot(res, mode, allItems, allPop);
     ctlRes = res;
     apply();
@@ -2400,6 +2404,10 @@
       var LN = mlLearnNow();
       box.appendChild(metaEl(!LN.on ? 'Lær av vurderingene er av.' : LN.trained ? 'Lært av ' + LN.pos + ' bonger «Til oppfølging» og ' + LN.neg + ' «Sjekket». Treffsikkerhet på bonger modellen ikke har trent på: ' + (LN.auc === null ? 'for få til å måle' : 'AUC ' + String(Math.round(LN.auc * 100) / 100).replace('.', ',') + ' (0,5 = tilfeldig, 1 = perfekt)' + (LN.auc < 0.65 ? '. Ikke bedre enn tilfeldig ennå: fortsett å merke bonger' : '')) + '. «Sjekk først» kan sorteres etter den.' :
         'Lær av vurderingene: ' + LN.pos + ' «Til oppfølging» og ' + LN.neg + ' «Sjekket» så langt; minst ' + LN.minL + ' av hver trengs.'));
+      var SF = R.self, auc = function (v) { return String(Math.round(v * 100) / 100).replace('.', ','); };
+      if (SF) box.appendChild(metaEl(!SF.on ? 'Ligner sikre funn er av.' : !SF.applicable ? 'Ligner sikre funn: ' + SF.pos + ' sikre funn og ' + SF.neg + ' rene bonger; minst ' + SF.minPos + ' sikre funn og 30 rene trengs.' :
+        'Ligner sikre funn: trent på ' + SF.pos + ' sikre funn og ' + SF.neg + ' rene bonger' + (SF.user ? ' (' + SF.user + ' vurdert av deg)' : '') + ', treffsikkerhet ' + (SF.auc === null ? 'ikke målt' : 'AUC ' + auc(SF.auc)) + '. ' +
+        (SF.auc === null || SF.auc < SF.aucMin ? 'Under grensen ' + auc(SF.aucMin) + ', så ingen funn.' : SF.flagged + ' bonger flagget.')));
     }
   }
 
@@ -2467,6 +2475,7 @@
     var key = Object.keys(notes).filter(function (id) { return notes[id] && notes[id].status; }).sort().map(function (id) { return id + notes[id].status; }).join('|') + '#' + ctlRes.at + '#' + ctlCfg.mlLearnMin;
     if (mlLearnCache && mlLearnCache.key === key) return mlLearnCache.res;
     var cand = Object.keys(anomMap);
+    Object.keys(ctlRes.ml.raw || {}).forEach(function (id) { if (!anomMap[id]) cand.push(id); });
     mlLearnCache = { key: key, res: L.mlLearn(cand, anomMap, notes, ctlRes.ml, ctlCfg) };
     return mlLearnCache.res;
   }
@@ -3459,6 +3468,7 @@
     if (prev) ids.forEach(function (id) { if (!prevSet[id]) checkState.newIds[id] = true; });
     checkState.at = Date.now();
     checkState.shown = 15;
+    checkState.review = null;
     store(K.lastrun, { at: checkState.at, ids: ids });
     renderCheck();
     ui.go('check');
@@ -3716,7 +3726,9 @@
       ls.box.checked = !!checkState.learnSort;
       top.push(ls.node);
     } else if (all.length && LN.on && (LN.pos || LN.neg)) top.push(hintEl('Maskinlæring: merk minst ' + LN.minL + ' bonger «Til oppfølging» og ' + LN.minL + ' «Sjekket» (nå ' + LN.pos + ' og ' + LN.neg + '), så kan listen sorteres etter vurderingene dine.'));
+    if (checkState.at && ctlRes && !checkState.review) top.push(btn('Vurder disse neste', startReview));
     ui.checkTop.appendChild(section('chk-top', 'Analyse', top));
+    if (checkState.review) { renderReview(items); return; }
     if (!all.length) return;
 
     var cash = L.rankCashiers(items, anomMap, weights, ctlRes ? ctlRes.profile : null, ctlRes ? ctlRes.cashierExtra : null).slice(0, 5);
@@ -3742,6 +3754,38 @@
     }
 
     body.appendChild(section('chk-list', 'Sjekk først (' + vis.length + ')', listKids));
+  }
+
+  // «Vurder disse neste»: ti bonger modellen lærer mest av (den er mest usikker på dem), høyst tre per kasserer.
+  // Uten modell: bongene med høyest poeng, til det finnes nok vurderinger.
+  function startReview() {
+    var src = checkSource(), LN = mlLearnNow(), SF = ctlRes && ctlRes.self, raw = (ctlRes && ctlRes.ml && ctlRes.ml.raw) || {};
+    var pm = LN.trained ? LN.p : SF && SF.trained ? SF.p : null;
+    var rows = src.items.filter(function (it) { var id = it.transactionId; return (anomMap[id] || raw[id]) && !(notes[id] && notes[id].status); })
+      .map(function (it) { var id = it.transactionId; return { id: id, cashier: it.cashierNumber, p: pm ? pm[id] : undefined, score: L.riskScore(anomMap[id] || [], weights) }; });
+    var pick = L.reviewNext(rows, 10, 3);
+    checkState.review = { ids: pick.ids, model: pick.mode === 'poeng' ? '' : LN.trained ? 'lært' : 'selv' };
+    renderCheck();
+    if (!pick.ids.length) say('Ingen bonger å vurdere: alle er vurdert, eller ingen er skannet.');
+  }
+
+  function renderReview(items) {
+    var R0 = checkState.review, byId = {};
+    items.forEach(function (it) { byId[it.transactionId] = it; });
+    var ids = R0.ids.filter(function (id) { return byId[id]; });
+    var done = ids.filter(function (id) { return notes[id] && notes[id].status; }).length;
+    var next = ids.filter(function (id) { return !(notes[id] && notes[id].status); })[0];
+    var why = R0.model === 'lært' ? 'Valgt fordi modellen som lærer av vurderingene dine, er mest usikker på dem.' :
+      R0.model === 'selv' ? 'Valgt fordi modellen som er trent på sikre funn, er mest usikker på dem.' :
+      'Valgt blant bongene med høyest poeng, til modellen har nok å lære av.';
+    var kids = [hintEl(why + ' Åpne hver bong og trykk «Sjekket» (i orden) eller «Til oppfølging». Modellen lærer av hver vurdering.')];
+    ids.forEach(function (id) {
+      var r = anomMap[id] || [];
+      kids.push(checkRow({ id: id, item: byId[id], reasons: r, score: L.riskScore(r, weights) }, id === next));
+    });
+    if (!ids.length) kids.push(hintEl('Ingen bonger å vurdere.'));
+    kids.push(el('div', { class: 'kvr-row' }, [btn('Neste 10', startReview, done === ids.length ? 'kvr-primary' : ''), btn('Tilbake til listen', function () { checkState.review = null; renderCheck(); })]));
+    ui.checkBody.appendChild(section('chk-review', 'Vurder disse (' + done + ' av ' + ids.length + ' vurdert)', kids));
   }
 
   // ---- diagrammer -------------------------------------------------------------------

@@ -73,6 +73,7 @@ render(ALL);
   assert.match(all, /Maskinlæring: Uvanlig bong \(maskinlæring\) Kasse 2 05:10 kasserer K1: uvanlighet \d+ av 100 \(blant de 1 % mest uvanlige av 231 skannede salg\)\. Uvanlig: -150\.00 kr \([\d,]+ % av bongene har så lavt\); kl\. 05:10/);
   assert.match(all, /Modellen har lært av 231 skannede salg i datagrunnlaget og flagger \d+ bonger i omfanget/);
   assert.match(all, /Lær av vurderingene: 0 «Til oppfølging» og 0 «Sjekket» så langt; minst 8 av hver trengs\./);
+  assert.match(all, /Ligner sikre funn: \d+ sikre funn og \d+ rene bonger; minst 10 sikre funn og 30 rene trengs\./);
 
   // 2) lær av vurderingene: 8 + 8 bonger med status, så kan «Sjekk først» sorteres etter dem
   const ids = ROWS.slice(0, 16).map((r) => r.transactionId);
@@ -91,6 +92,21 @@ render(ALL);
   await page.click('[data-sec=chk-top] label:has-text("Sorter etter vurderingene dine")');
   const ps = await page.$$eval('[data-sec=chk-list] .kvr-ck .kvr-ml', (n) => n.map((x) => parseInt(x.textContent.replace(/\D/g, ''), 10)));
   assert.deepStrictEqual(ps, ps.slice().sort((a, b) => b - a), 'sortert etter lært sannsynlighet: ' + ps.join(','));
+
+  // 3) «Vurder disse neste»: ti bonger som ikke er vurdert, høyst tre per kasserer; vurderingen teller med en gang
+  await page.click('[data-sec=chk-top] button:text-is("Vurder disse neste")');
+  await page.waitForSelector('[data-sec=chk-review]');
+  assert.match(await page.innerText('[data-sec=chk-review] h4'), /Vurder disse \(0 av 10 vurdert\)/i);
+  assert.match(await page.innerText('[data-sec=chk-review]'), /Valgt fordi modellen som lærer av vurderingene dine, er mest usikker på dem\./);
+  assert.ok(!(await page.$('[data-sec=chk-list]')), 'listen er byttet ut med de ti');
+  const picked = await page.$$eval('[data-sec=chk-review] .kvr-ck .kvr-ck-t', (n) => n.map((x) => x.textContent));
+  assert.strictEqual(picked.length, 10);
+  assert.ok(!(await page.$('[data-sec=chk-review] .kvr-st')), 'ingen av dem er vurdert fra før');
+  await page.click('[data-sec=chk-review] .kvr-ck.kvr-open button:text-is("Sjekket")');
+  await page.waitForFunction(() => /1 av 10 vurdert/i.test(document.querySelector('[data-sec=chk-review] h4').textContent));
+  assert.strictEqual(await page.$$eval('[data-sec=chk-review] .kvr-ck.kvr-open', (n) => n.length), 1, 'neste bong er åpnet');
+  await page.click('[data-sec=chk-review] button:text-is("Tilbake til listen")');
+  await page.waitForSelector('[data-sec=chk-list]');
 
   assert.deepStrictEqual(errors, []);
   await browser.close();
