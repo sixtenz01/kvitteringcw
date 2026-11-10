@@ -1283,7 +1283,7 @@
       sf('profChannel', 'ctl', 'flag', 'Sammenlign innen egen kanal', '', 'Kassereren sammenlignes med snittet i kanalen der hen har flest salg (betjent kasse, selvbetjent). Kanaler med én kasserer bruker butikksnittet.'),
       sf('reconTol', 'ctl', 'num', 'Avstemming: toleranse', 'kr')
     ], weights: [] },
-    { id: 'rules', title: 'Egne regler', text: 'Reglene bygges under Analyse → Detaljer → Egne avviksregler.', fields: [], weights: ['Regel'] }
+    { id: 'rules', title: 'Egne regler og egne flagg', text: 'Reglene bygges under Analyse → Detaljer → Egne avviksregler. «Flagget av deg» er bonger du har flagget med «Flagg som avvik» nederst i panelet.', fields: [], weights: ['Regel', 'Flagget av deg'] }
   ];
 
   function groupForReason(reason) {
@@ -1586,7 +1586,7 @@
     'Manuell pantelapp': 3, 'Mange manuelle pantelapper': 3, 'Pantelapp slettet': 4, 'Pantelapp innløst flere ganger': 4,
     'Varelinjer slettet, pant utbetalt kontant': 5, 'Makulert vare ikke solgt på ny': 3, 'Mange makulerte varelinjer': 3,
     'Spesialbetaling på bong': 3, 'Mange spesialbetalinger': 3, 'Høy rabattprosent': 3, 'Rabatt med årsak, varen solgt av én kasserer': 3, 'Rabatt uten treff på andre salg': 4,
-    'Spør pris avviker fra dagens salg': 3, 'Mange spør pris': 2, 'Gjentatte returer på samme kort': 4, 'Retur til kort med åpen retur': 3, 'Uvanlig bong (maskinlæring)': 2, 'Ligner sikre funn (maskinlæring)': 2, 'Kort brukt med mange medlemsnr': 2, 'Retur til kort i kassererens nettverk': 3, 'Retur til kort knyttet til ansatt': 4, 'Manuell kvittering matcher annen bong': 4,
+    'Spør pris avviker fra dagens salg': 3, 'Mange spør pris': 2, 'Gjentatte returer på samme kort': 4, 'Retur til kort med åpen retur': 3, 'Uvanlig bong (maskinlæring)': 2, 'Ligner sikre funn (maskinlæring)': 2, 'Flagget av deg': 8, 'Kort brukt med mange medlemsnr': 2, 'Retur til kort i kassererens nettverk': 3, 'Retur til kort knyttet til ansatt': 4, 'Manuell kvittering matcher annen bong': 4,
     'Bonger i rask rekkefølge': 2, 'Mange 0-kr-bonger': 2, 'Overvåket vare i retur': 3, 'Overvåket vare slettet': 3, 'Mange overvåkede varer hos kasserer': 2,
     'Retur av vare uten kjøp på kortet': 4, 'Retur av vare uten kjøp av medlemmet': 3, 'Retur av vare uten salg samme dag': 1,
     'Topptekst stemmer ikke med listen': 3, 'Samme autorisasjonskode på flere bonger': 3, 'Makulert linje på bong': 2,
@@ -3313,10 +3313,14 @@
     pos.forEach(function (a) { neg.forEach(function (b) { win += a.p > b.p ? 1 : a.p === b.p ? 0.5 : 0; }); });
     return win / (pos.length * neg.length);
   }
-  function mlLearn(candidates, anomMap, notes, ml, cfg) {
+  var MANUAL_FLAG = 'Flagget av deg';
+  function mlLearn(candidates, anomMap0, notes, ml, cfg) {
     var minL = cnum(cfg.mlLearnMin, null), res = { on: minL !== null, trained: false, pos: 0, neg: 0, minL: minL, p: {}, why: {}, auc: null };
     if (minL === null) return res;
-    var lab = Object.keys(notes || {}).filter(function (id) { var st = notes[id] && notes[id].status; return (st === 'oppfolging' || st === 'sjekket') && ((anomMap && anomMap[id]) || (ml && ml.raw[id])); }).sort();
+    // «Flagget av deg» følger vurderingen og er derfor ikke en egenskap modellen får se
+    var anomMap = {};
+    Object.keys(anomMap0 || {}).forEach(function (id) { var r = anomMap0[id].filter(function (x) { return reasonBase(x) !== MANUAL_FLAG; }); if (r.length) anomMap[id] = r; });
+    var lab = Object.keys(notes || {}).filter(function (id) { var st = notes[id] && notes[id].status; return (st === 'oppfolging' || st === 'sjekket') && (anomMap[id] || (ml && ml.raw[id])); }).sort();
     lab.forEach(function (id) { if (notes[id].status === 'oppfolging') res.pos++; else res.neg++; });
     if (res.pos < minL || res.neg < minL) return res;
     var vocab = {};
@@ -3372,7 +3376,7 @@
     items.forEach(function (it) { if (ml.raw[it.transactionId]) byId[it.transactionId] = it; });
     var ids = Object.keys(byId).sort();
     res.n = ids.length;
-    var rules = function (id) { return ((anomMap && anomMap[id]) || []).filter(function (r) { return !/maskinlæring/i.test(r); }); };
+    var rules = function (id) { return ((anomMap && anomMap[id]) || []).filter(function (r) { return !/maskinlæring/i.test(r) && reasonBase(r) !== MANUAL_FLAG; }); };
     var lab = [];
     ids.forEach(function (id) {
       var st = notes && notes[id] && notes[id].status, rs = rules(id);
@@ -4581,7 +4585,7 @@
     specialChecks: specialChecks,
     specialHits: specialHits,
     askPrice: askPrice,
-    cardChecks: cardChecks, cardRefund: cardRefund, mlAnomaly: mlAnomaly, mlLearn: mlLearn, mlSelf: mlSelf, reviewNext: reviewNext, netChecks: netChecks, isolationForest: isolationForest, ML_FEATURES: ML_FEATURES, schemeLabel: schemeLabel, schemeList: schemeList, SCHEME_LABELS: SCHEME_LABELS,
+    cardChecks: cardChecks, cardRefund: cardRefund, mlAnomaly: mlAnomaly, mlLearn: mlLearn, mlSelf: mlSelf, reviewNext: reviewNext, MANUAL_FLAG: MANUAL_FLAG, netChecks: netChecks, isolationForest: isolationForest, ML_FEATURES: ML_FEATURES, schemeLabel: schemeLabel, schemeList: schemeList, SCHEME_LABELS: SCHEME_LABELS,
     manualReceipts: manualReceipts,
     cancelled: cancelled,
     netNp: netNp,

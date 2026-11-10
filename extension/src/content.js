@@ -1319,6 +1319,7 @@
       var reasons = L.anomalies(r.item, scanMap[r.item.transactionId], anomCfg, customRules, groupsOf(r.item.transactionId));
       if (reasons.length) { anomMap[r.item.transactionId] = reasons; n++; }
     });
+    list.forEach(function (r) { if (manualFlagged(r.item.transactionId)) syncManual(r.item.transactionId); });
     settingsStale = false; renderStale();
     say('Avviksjekk ferdig: ' + n + ' kvitteringer flagget.');
     apply();
@@ -1651,6 +1652,10 @@
     ui.tDup.style.display = ui.dup && ui.dup.groups.length ? '' : 'none';
     if (ui.footClear) ui.footClear.style.display = sm.count ? '' : 'none';
     ui.footPng.style.display = sm.count ? '' : 'none';
+    if (ui.footFlag) {
+      ui.footFlag.style.display = sm.count ? '' : 'none';
+      ui.footFlag.textContent = (sm.count && Object.keys(selected).every(manualFlagged) ? 'Fjern flagg' : 'Flagg som avvik') + (sm.count ? ' (' + sm.count + ')' : '');
+    }
     ui.pantLine.textContent = 'Pant valgte: salg ' + fmt(p.sale) + ' · retur ' + fmt(p.ret) + ' · netto ' + fmt(p.net) +
       ' kr (' + p.scanned + ' av ' + p.total + ' skannet)';
     ui.badge.textContent = (active ? active + ' filter' : 'ingen filter') + (sm.count ? ' · ' + sm.count + ' valgt' : '');
@@ -3029,11 +3034,12 @@
       field('Status', st), field('Notat', ta)
     ]);
     openModal('Notat og status', body, [
-      btn('Slett', function () { delete notes[id]; saveNotes(); closeModal(); apply(); renderNotes(); }),
+      btn('Slett', function () { delete notes[id]; syncManual(id); saveNotes(); closeModal(); apply(); renderNotes(); }),
       btn('Lagre', function () {
         var note = ta.value.trim();
         if (!st.value && !note) delete notes[id];
-        else notes[id] = { status: st.value, note: note, t: Date.now(), tid: it.endDateTime, kasse: it.workstationNumber, kasserer: it.cashierNumber, bong: it.bongnr, sum: it.totalAmount };
+        else notes[id] = { status: st.value, note: note, t: Date.now(), tid: it.endDateTime, kasse: it.workstationNumber, kasserer: it.cashierNumber, bong: it.bongnr, sum: it.totalAmount, flag: cur.flag && st.value === 'oppfolging' ? 1 : 0 };
+        syncManual(id);
         saveNotes(); closeModal(); apply(); renderNotes();
       }, 'kvr-primary')
     ]);
@@ -3450,10 +3456,40 @@
   function setStatus(rec, status) {
     var it = rec.item, id = it.transactionId, cur = notes[id] || { note: '' };
     if (!status && !cur.note) delete notes[id];
-    else notes[id] = { status: status, note: cur.note || '', t: Date.now(), tid: it.endDateTime, kasse: it.workstationNumber, kasserer: it.cashierNumber, bong: it.bongnr, sum: it.totalAmount };
+    else notes[id] = { status: status, note: cur.note || '', t: Date.now(), tid: it.endDateTime, kasse: it.workstationNumber, kasserer: it.cashierNumber, bong: it.bongnr, sum: it.totalAmount, flag: cur.flag && status === 'oppfolging' ? 1 : 0 };
+    syncManual(id);
     saveNotes();
     apply();
     renderNotes();
+  }
+
+  // «Flagg som avvik»: valgte bonger får status «Til oppfølging» og avviket «Flagget av deg» (høy risiko), så de står i
+  // Sjekk først og rapporten, og maskinlæringen bruker dem som sikre funn. Er alle valgte flagget fra før, fjernes flagget.
+  function manualFlagged(id) { var n = notes[id]; return !!(n && n.flag && n.status === 'oppfolging'); }
+  function syncManual(id) {
+    if (manualFlagged(id)) { addFlag(id, L.MANUAL_FLAG); return; }
+    var a = anomMap[id];
+    if (!a) return;
+    a = a.filter(function (r) { return r !== L.MANUAL_FLAG; });
+    if (a.length) anomMap[id] = a; else delete anomMap[id];
+  }
+  function flagSelected() {
+    var ids = Object.keys(selected);
+    if (!ids.length) return;
+    var off = ids.every(manualFlagged);
+    ids.forEach(function (id) {
+      var it = selected[id], cur = notes[id] || { note: '' };
+      if (off) {
+        if (cur.note) notes[id] = Object.assign({}, cur, { status: '', flag: 0, t: Date.now() }); else delete notes[id];
+      } else notes[id] = { status: 'oppfolging', flag: 1, note: cur.note || '', t: Date.now(), tid: it.endDateTime, kasse: it.workstationNumber, kasserer: it.cashierNumber, bong: it.bongnr, sum: it.totalAmount };
+      syncManual(id);
+    });
+    saveNotes();
+    apply();
+    renderNotes();
+    if (checkState.at) renderCheck();
+    say(off ? 'Flagget er fjernet fra ' + plur(ids.length, 'bong', 'bonger') + '.' :
+      plur(ids.length, 'bong', 'bonger') + ' flagget som avvik («Flagget av deg», Til oppfølging). De står i Sjekk først, og maskinlæringen lærer av dem ved neste analyse.');
   }
 
   async function runAnalysis() {
@@ -5449,6 +5485,8 @@
     ui.footCmp = btn('Sammenlign', compareSelected);
     ui.footCmp.style.display = 'none';
     ui.footCmp.title = 'Sammenlign de to valgte bongene side om side';
+    ui.footFlag = btn('Flagg som avvik', flagSelected);
+    ui.footFlag.title = 'Flagg de valgte bongene som avvik: status «Til oppfølging» og høy risiko. Er alle flagget fra før, fjernes flagget.';
     ui.footCsv = btn('CSV', function () { exportCsv(Object.keys(selected).length > 0); });
     ui.footCsv.title = 'Eksporter valgte (eller synlige hvis ingen er valgt) til CSV';
     var foot = el('div', { class: 'kvr-foot' }, [
@@ -5458,6 +5496,7 @@
       }),
       ui.footClear = btn('Fjern valg', function () { selected = {}; apply(); }),
       ui.footCmp,
+      ui.footFlag,
       ui.footCsv,
       ui.footPng
     ]);

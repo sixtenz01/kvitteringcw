@@ -108,6 +108,25 @@ render(ALL);
   await page.click('[data-sec=chk-review] button:text-is("Tilbake til listen")');
   await page.waitForSelector('[data-sec=chk-list]');
 
+  // 4) «Flagg som avvik»: valgte bonger får «Flagget av deg» (høy risiko) og «Til oppfølging»; trykk igjen fjerner flagget
+  const pickIds = ROWS.slice(100, 103).map((r) => r.transactionId);
+  for (const id of pickIds) await page.evaluate((x) => [...document.querySelectorAll('#g tbody input.kvr-cb')].find((c) => c.getAttribute('data-id') === x).click(), id);
+  assert.strictEqual(await page.innerText('.kvr-foot button:has-text("Flagg som avvik")'), 'Flagg som avvik (3)');
+  await page.click('.kvr-foot button:has-text("Flagg som avvik")');
+  await page.waitForFunction(() => /3 bonger flagget som avvik/.test(document.getElementById('kvr-panel').innerText));
+  const st = await page.evaluate((list) => new Promise((res) => {
+    const rq = indexedDB.open('kvr-store', 1);
+    rq.onsuccess = () => { const g = rq.result.transaction('kv').objectStore('kv').get('kvr.notes.v1'); g.onsuccess = () => { res(list.map((id) => g.result[id] && g.result[id].status + ':' + g.result[id].flag)); rq.result.close(); }; };
+  }), pickIds);
+  assert.deepStrictEqual(st, ['oppfolging:1', 'oppfolging:1', 'oppfolging:1']);
+  while (await page.$('[data-sec=chk-list] button:has-text("Vis flere")')) await page.click('[data-sec=chk-list] button:has-text("Vis flere")');
+  const flaggedRows = await page.$$eval('[data-sec=chk-list] .kvr-ck', (n) => n.filter((x) => /Flagget av deg/.test(x.textContent)).length);
+  assert.strictEqual(flaggedRows, 3, 'de flaggede står i Sjekk først');
+  assert.strictEqual(await page.innerText('.kvr-foot button:has-text("Fjern flagg")'), 'Fjern flagg (3)');
+  await page.click('.kvr-foot button:has-text("Fjern flagg")');
+  await page.waitForFunction(() => /Flagget er fjernet fra 3 bonger/.test(document.getElementById('kvr-panel').innerText));
+  assert.strictEqual(await page.$$eval('[data-sec=chk-list] .kvr-ck', (n) => n.filter((x) => /Flagget av deg/.test(x.textContent)).length), 0);
+
   assert.deepStrictEqual(errors, []);
   await browser.close();
   console.log('ml e2e: ok');

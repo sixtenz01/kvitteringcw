@@ -72,6 +72,12 @@ assert.ok(!lf.trained && lf.on && lf.pos === 5 && lf.neg === 5);
 assert.ok(!L.mlLearn(cand, anom, notes, r, Object.assign({}, cfg, { mlLearnMin: '' })).on);
 // samme vurderinger gir samme modell
 assert.deepStrictEqual(L.mlLearn(cand, anom, notes, r, cfg).p, lr.p);
+// «Flagget av deg» følger vurderingen og er ikke en egenskap: samme modell med og uten
+const anomM = Object.assign({}, anom);
+ids.forEach((id, i) => { if (i % 2 === 0) anomM[id] = anom[id].concat([L.MANUAL_FLAG]); });
+assert.strictEqual(L.MANUAL_FLAG, 'Flagget av deg');
+assert.strictEqual(L.RISK_WEIGHTS['Flagget av deg'], 8);
+assert.deepStrictEqual(L.mlLearn(cand, anomM, notes, r, cfg).p, lr.p);
 
 // ---- selvtrening: lærer av reglenes sikre funn og flagger bonger som ligner
 {
@@ -121,6 +127,9 @@ assert.deepStrictEqual(L.mlLearn(cand, anom, notes, r, cfg).p, lr.p);
   // maskinlæringsfunn teller ikke som regler: en bong med bare «Uvanlig bong» er ren
   const an2 = Object.assign({}, an, { [items[1].transactionId]: ['Uvanlig bong (maskinlæring)'] });
   assert.strictEqual(L.mlSelf(items, an2, {}, ml, w8, c5).neg, 380);
+  // eget flagg uten vurdering teller heller ikke som regel
+  const an3 = Object.assign({}, an, { [items[1].transactionId]: [L.MANUAL_FLAG] });
+  assert.strictEqual(L.mlSelf(items, an3, {}, ml, w8, c5).neg, 380);
 }
 
 // ---- «Vurder disse neste»: mest usikre først, høyst N per kasserer; uten modell etter poeng
